@@ -49,6 +49,8 @@ export type LlamadaClaude = {
   maxBusquedas?: number
   /** Urls publicas de imagenes que el modelo tiene que mirar, antes del texto. */
   imagenes?: string[]
+  /** Limite de tiempo propio, para respuestas largas (un guion de video). */
+  timeoutMs?: number
 }
 
 /** Lo que costo la llamada. Sirve para ver el gasto real por paso. */
@@ -147,7 +149,7 @@ export async function llamarClaude(opciones: LlamadaClaude): Promise<ResultadoCl
       body: JSON.stringify(body),
       // Con busqueda web la llamada hace varias busquedas antes de escribir: los
       // estilos de datos llegaron a pasar de 120 s y se cortaban.
-      signal: AbortSignal.timeout(opciones.buscarWeb ? TIMEOUT_MS_BUSQUEDA : TIMEOUT_MS),
+      signal: AbortSignal.timeout(opciones.timeoutMs ?? (opciones.buscarWeb ? TIMEOUT_MS_BUSQUEDA : TIMEOUT_MS)),
     })
 
     const cuerpo = await response.text()

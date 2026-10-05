@@ -17,7 +17,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { BotIcon, ChefHatIcon, GalleryHorizontalEndIcon, KanbanIcon, LayersIcon, LightbulbIcon, SendIcon, SettingsIcon } from "lucide-react"
+import { BotIcon, ChefHatIcon, ClapperboardIcon, GalleryHorizontalEndIcon, KanbanIcon, LayersIcon, LightbulbIcon, SendIcon, SettingsIcon } from "lucide-react"
 
 import { AGENTES } from "@/lib/agentes-catalogo"
 
@@ -80,6 +80,15 @@ export function AppSidebar({
       url: "/publicacion",
       icon: <SendIcon />,
       isActive: pathname.startsWith("/publicacion"),
+      items: [],
+    },
+    {
+      // Los videos: un pipeline aparte, a medias entre el agente (idea y guion)
+      // y una persona (clips en Flow y montaje en Canva).
+      title: "Video studio",
+      url: "/videos",
+      icon: <ClapperboardIcon />,
+      isActive: pathname.startsWith("/videos"),
       items: [],
     },
     {

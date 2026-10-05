@@ -342,3 +342,44 @@ begin
   perform cron.schedule('engine_hancel_studio_tick', '*/10 * * * *', 'select public.fire_studio_tick();');
 end
 $$;
+
+-- ------------------------------------------------------------ video studio
+--
+-- El tick de videos: genera guiones (modo automatico), exporta de Canva los
+-- videos que una persona dejo en la etapa Video y los programa en Buffer. Cada
+-- diez minutos, desfasado cinco del tick del estudio para no pisarse.
+create or replace function public.fire_videos_tick()
+returns bigint
+language plpgsql
+security definer
+set search_path to ''
+as $$
+declare
+  v_url        text;
+  v_secret     text;
+  v_request_id bigint;
+begin
+  select decrypted_secret into v_url    from vault.decrypted_secrets where name = 'content_tick_url';
+  select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'ingest_secret';
+  if v_url is null or v_secret is null then
+    raise warning 'engine-hancel: falta content_tick_url/ingest_secret para el tick de videos';
+    return null;
+  end if;
+  select net.http_post(
+    url := replace(v_url, '/api/content/tick', '/api/videos/tick'),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer ' || v_secret),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 300000
+  ) into v_request_id;
+  return v_request_id;
+end;
+$$;
+
+revoke all on function public.fire_videos_tick() from public, anon, authenticated;
+
+do $$
+begin
+  perform cron.unschedule(jobid) from cron.job where jobname = 'engine_hancel_videos_tick';
+  perform cron.schedule('engine_hancel_videos_tick', '5-59/10 * * * *', 'select public.fire_videos_tick();');
+end
+$$;

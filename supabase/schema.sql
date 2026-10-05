@@ -1127,3 +1127,71 @@ set score_threshold_updated_at = coalesce(score_threshold_updated_at, now());
 -- `raw_news.status` gana 'discarded_date': la noticia se guarda igual pero no
 -- entra al analisis porque el hecho ya es viejo (ver content/frescura.ts). Es
 -- texto libre, no hay constraint que tocar.
+
+-- ------------------------------------------------------------ video studio
+--
+-- El pipeline de videos: una idea, su guion por escenas (lo escribe el agente),
+-- los clips y el montaje (los hace una persona en Flow y en Canva) y la
+-- publicacion (el sistema exporta el MP4 de Canva y lo sube a cada red).
+create table if not exists public.video_settings (
+  account_id        uuid primary key references public.accounts (id) on delete cascade,
+  modo              text        not null default 'manual',
+  horas             integer[]   not null default '{}',
+  pillar_id         uuid        references public.content_pillars (id) on delete set null,
+  intent_id         uuid        references public.content_intents (id) on delete set null,
+  narrative_id      uuid        references public.content_narratives (id) on delete set null,
+  personaje_tag     text        not null default '@juan',
+  personaje_nombre  text        not null default 'Juan',
+  publicar_activo   boolean     not null default false,
+  redes             text[]      not null default '{instagram,facebook}',
+  model             text,
+  prompt            text,
+  updated_at        timestamptz not null default now(),
+  constraint video_settings_modo_check check (modo in ('manual', 'automatico'))
+);
+
+create table if not exists public.video_items (
+  id              uuid primary key default gen_random_uuid(),
+  account_id      uuid        not null references public.accounts (id) on delete cascade,
+  cartridge_id    uuid        references public.content_cartridges (id) on delete set null,
+  pillar_id       uuid        references public.content_pillars (id) on delete set null,
+  status          text        not null default 'idea',
+  idea            text        not null,
+  capas           jsonb,
+  guion           jsonb,
+  publicar_at     timestamptz,
+  canva_url       text,
+  canva_design_id text,
+  video_url       text,
+  export_status   text,
+  error           text,
+  intentos        integer     not null default 0,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
+  constraint video_items_status_check check (status in ('idea', 'escenas', 'clips', 'video', 'publicado')),
+  constraint video_items_export_check check (export_status is null or export_status in ('pendiente', 'exportando', 'listo', 'error'))
+);
+create index if not exists video_items_account_idx on public.video_items (account_id, created_at desc);
+-- Un video por hueco de publicacion: dos pasadas no crean dos para la misma hora.
+create unique index if not exists video_items_hueco_unico on public.video_items (account_id, publicar_at) where publicar_at is not null;
+
+create table if not exists public.video_publications (
+  id             uuid primary key default gen_random_uuid(),
+  account_id     uuid        not null references public.accounts (id) on delete cascade,
+  video_id       uuid        not null references public.video_items (id) on delete cascade,
+  red            text        not null,
+  status         text        not null default 'programando',
+  due_at         timestamptz,
+  buffer_post_id text,
+  error          text,
+  intentos       integer     not null default 0,
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now(),
+  constraint video_publications_red_check check (red in ('instagram', 'facebook')),
+  constraint video_publications_status_check check (status in ('programando', 'programada', 'publicada', 'error')),
+  constraint video_publications_unico unique (video_id, red)
+);
+
+alter table public.video_settings     enable row level security;
+alter table public.video_items        enable row level security;
+alter table public.video_publications enable row level security;

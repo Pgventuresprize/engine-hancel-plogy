@@ -29,6 +29,7 @@ const ABIERTAS = [
   "/api/ingest",
   "/api/content/tick",
   "/api/studio/tick",
+  "/api/videos/tick",
 ]
 
 function esAbierta(pathname: string): boolean {

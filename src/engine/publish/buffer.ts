@@ -101,19 +101,22 @@ export async function publicarEnBuffer(opciones: {
   imagenes: string[]
   ahora?: boolean
   programarPara?: string
+  /** Un video (url publica de un MP4): sale como reel en vez de post de imagenes. */
+  video?: string
 }): Promise<BufferResult> {
-  const { channelId, red, texto, imagenes, ahora = true, programarPara } = opciones
+  const { channelId, red, texto, imagenes, ahora = true, programarPara, video } = opciones
 
-  if (imagenes.length === 0) {
+  if (!video && imagenes.length === 0) {
     return { ok: false, error: "La publicacion no tiene imagenes." }
   }
 
   // Verificado por introspeccion del esquema de Buffer: `type` es obligatorio en
-  // los dos y en Facebook admite post, reel o story.
+  // los dos y en Facebook admite post, reel o story. Un video va como reel.
+  const tipo = video ? "reel" : "post"
   const metadata =
     red === "instagram"
-      ? { instagram: { type: "post", shouldShareToFeed: true } }
-      : { facebook: { type: "post" } }
+      ? { instagram: { type: tipo, shouldShareToFeed: true } }
+      : { facebook: { type: tipo } }
 
   try {
     const data = await consultar<{
@@ -130,7 +133,7 @@ export async function publicarEnBuffer(opciones: {
         input: {
           channelId,
           text: texto,
-          assets: imagenes.map((url) => ({ image: { url } })),
+          assets: video ? [{ video: { url: video } }] : imagenes.map((url) => ({ image: { url } })),
           mode: programarPara ? "customScheduled" : ahora ? "shareNow" : "addToQueue",
           ...(programarPara ? { dueAt: programarPara } : {}),
           schedulingType: "automatic",
