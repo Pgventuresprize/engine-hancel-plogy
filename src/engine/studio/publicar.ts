@@ -1,6 +1,8 @@
 import { supabaseAdmin } from "../supabase-admin"
 import { dayIn, getSettings } from "../schedule"
-import { publicarEnBuffer, resolverCanal, type RedBuffer } from "../publish/buffer"
+import { publicarEnRed } from "../publish/meta"
+
+export type RedBuffer = "instagram" | "facebook"
 
 /**
  * El agente de publicacion del estudio.
@@ -12,21 +14,18 @@ import { publicarEnBuffer, resolverCanal, type RedBuffer } from "../publish/buff
  * produce es lo que se publica.
  *
  * A cada hueco le toca la pieza mas reciente de su receta que no haya salido, y
- * se deja programada en Buffer a la hora exacta del hueco (`customScheduled`):
- * la hora la cumple Buffer, no el cron. Un carrusel de Instagram sale tambien
- * en Facebook tal cual, con todas sus laminas; una receta propia de Facebook
- * sale solo en Facebook.
+ * se publica cuando llega su hora, con las conexiones de Facebook e Instagram
+ * de la empresa (Composio). Un carrusel de Instagram sale tambien en Facebook
+ * tal cual, con todas sus laminas; una receta propia de Facebook sale solo en
+ * Facebook.
  *
- * Si la pieza de un hueco aun no existe (la receta va tarde), el hueco espera
- * y se programa en cuanto la haya, en el siguiente hueco libre: nunca se
- * amontonan publicaciones atrasadas en el mismo minuto.
+ * Lo corre el tick de publicacion cada cinco minutos, que cae justo en las
+ * horas de los huecos (:00, :15, :30, :45). Cada pasada publica un hueco como
+ * mucho: si se acumularon varios (la receta iba tarde, el sistema estuvo
+ * caido), salen de a uno, nunca varios en el mismo minuto.
  *
- * Programa con una ventana de hora y media por delante (ver VENTANA_MS): Buffer
- * no admite mas de diez programadas por canal.
- *
- * Lo corre el tick del estudio cada diez minutos. Es idempotente: la tabla
- * `studio_publications` tiene un unico por hueco y red, asi que dos pasadas no
- * programan dos veces lo mismo.
+ * Es idempotente: `studio_publications` tiene un unico por hueco y red, asi que
+ * dos pasadas no publican dos veces lo mismo.
  */
 
 export type AjustesPublicacion = {
@@ -109,7 +108,7 @@ type Fila = {
   piece_id: string
   slot: number
   red: RedBuffer
-  status: "programando" | "programada" | "publicada" | "error"
+  status: "programando" | "publicada" | "error"
   due_at: string | null
   intentos: number
   updated_at: string
@@ -119,21 +118,12 @@ export type ResumenPublicacion = {
   activo: boolean
   dia?: string
   huecos?: number
-  programadas?: number
+  publicadas?: number
   esperando?: number
   errores?: string[]
 }
 
 const MAX_INTENTOS = 3
-
-/**
- * Cuanto se adelanta la programacion. Buffer admite como mucho diez
- * publicaciones programadas por canal a la vez (limite del plan), asi que no se
- * puede dejar el dia entero programado de golpe: se programa lo que sale en la
- * proxima hora y media, y como el tick pasa cada diez minutos siempre va por
- * delante.
- */
-export const VENTANA_MS = 90 * 60_000
 
 /** El texto del post: el caption y los hashtags, cada uno con su #. */
 function textoDelPost(payload: { caption?: string; hashtags?: string[] }) {
@@ -145,7 +135,7 @@ function textoDelPost(payload: { caption?: string; hashtags?: string[] }) {
   return [payload.caption?.trim(), tags].filter((p) => p && p.length > 0).join("\n\n")
 }
 
-export async function programarPublicaciones(accountId: string, now = new Date()): Promise<ResumenPublicacion> {
+export async function publicarPendientes(accountId: string, now = new Date()): Promise<ResumenPublicacion> {
   const ajustes = await ajustesPublicacion(accountId)
   if (!ajustes.activo || ajustes.redes.length === 0) return { activo: false }
 
@@ -154,22 +144,10 @@ export async function programarPublicaciones(accountId: string, now = new Date()
   const dia = dayIn(timezone, now)
   const errores: string[] = []
 
-  // Lo que ya paso su hora en Buffer se da por publicado, y la pieza tambien.
-  const { data: salieron } = await supabase
-    .from("studio_publications")
-    .update({ status: "publicada", updated_at: now.toISOString() })
-    .eq("account_id", accountId)
-    .eq("status", "programada")
-    .lte("due_at", now.toISOString())
-    .select("piece_id, due_at")
-  for (const s of (salieron ?? []) as { piece_id: string; due_at: string }[]) {
-    await supabase.from("studio_pieces").update({ status: "published", published_at: s.due_at }).eq("id", s.piece_id).neq("status", "published")
-  }
-
-  // Un reclamo que se quedo a medias (el proceso murio) se vuelve a intentar.
+  // Un reclamo que se quedo a medias (el proceso murio publicando) se reintenta.
   await supabase
     .from("studio_publications")
-    .update({ status: "error", error: "Se interrumpio al programar." })
+    .update({ status: "error", error: "Se interrumpió al publicar." })
     .eq("account_id", accountId)
     .eq("status", "programando")
     .lt("updated_at", new Date(now.getTime() - 10 * 60_000).toISOString())
@@ -189,22 +167,17 @@ export async function programarPublicaciones(accountId: string, now = new Date()
   )
   const filas = (filasR.data ?? []) as Fila[]
   const usadas = new Set(((usadasR.data ?? []) as { piece_id: string }[]).map((u) => u.piece_id))
-  // Las horas ya tomadas hoy: una publicacion atrasada busca un hueco libre.
-  const ocupadas = filas.filter((f) => f.due_at && f.status !== "error").map((f) => new Date(f.due_at!).getTime())
 
-  let programadas = 0
+  let publicadas = 0
   let esperando = 0
-  // Una red que llego al tope de Buffer no se intenta mas en esta pasada.
-  const llenas = new Set<RedBuffer>()
   for (const hueco of plan) {
-    // Fuera de la ventana todavia no se programa (los atrasados si: ya toca).
-    if (hueco.at.getTime() > now.getTime() + VENTANA_MS) break
+    // Lo que aun no llega a su hora espera.
+    if (hueco.at.getTime() > now.getTime()) break
     const suyas = filas.filter((f) => f.slot === hueco.slot)
     // Un carrusel de Instagram sale tambien en Facebook; una receta de
     // Facebook, solo en Facebook.
     const redes = hueco.receta.channel === "facebook" ? ajustes.redes.filter((r) => r === "facebook") : ajustes.redes
     const pendientes = redes.filter((red) => {
-      if (llenas.has(red)) return false
       const f = suyas.find((x) => x.red === red)
       return !f || (f.status === "error" && f.intentos < MAX_INTENTOS)
     })
@@ -225,6 +198,8 @@ export async function programarPublicaciones(accountId: string, now = new Date()
       piezaId = ((candidatas ?? []) as { id: string }[]).find((c) => !usadas.has(c.id))?.id ?? null
     }
     if (!piezaId) {
+      // Su receta aun no tiene pieza: el hueco espera y se publica en cuanto la
+      // haya. Los siguientes no se adelantan por eso.
       esperando++
       continue
     }
@@ -236,21 +211,10 @@ export async function programarPublicaciones(accountId: string, now = new Date()
     }
     const imagenes = payload.imagenes ?? []
     if (imagenes.length === 0) {
-      errores.push(`Hueco ${hueco.slot + 1} (${hueco.receta.name}): la pieza no tiene imagenes.`)
+      errores.push(`Hueco ${hueco.slot + 1} (${hueco.receta.name}): la pieza no tiene imágenes.`)
       usadas.add(piezaId)
       continue
     }
-
-    // La hora: la del hueco, o si ya paso, la primera libre desde ya (con tres
-    // minutos de margen para Buffer), separada `cadaMin` de las demas.
-    let due = suyas.find((f) => f.due_at)?.due_at ? new Date(suyas.find((f) => f.due_at)!.due_at!).getTime() : 0
-    if (!due) {
-      due = Math.max(hueco.at.getTime(), now.getTime() + 3 * 60_000)
-      const paso = ajustes.cadaMin * 60_000
-      while (ocupadas.some((o) => Math.abs(o - due) < paso - 60_000)) due += paso
-      ocupadas.push(due)
-    }
-    const dueIso = new Date(due).toISOString()
 
     for (const red of pendientes) {
       // Reclamo: insertar el hueco (unico por dia, hueco y red) o retomar uno
@@ -260,14 +224,14 @@ export async function programarPublicaciones(accountId: string, now = new Date()
       if (!previa) {
         const { data: nueva } = await supabase
           .from("studio_publications")
-          .insert({ account_id: accountId, piece_id: piezaId, recipe_id: hueco.receta.id, dia, slot: hueco.slot, red, status: "programando", due_at: dueIso, intentos: 1 })
+          .insert({ account_id: accountId, piece_id: piezaId, recipe_id: hueco.receta.id, dia, slot: hueco.slot, red, status: "programando", due_at: now.toISOString(), intentos: 1 })
           .select("id")
           .maybeSingle()
         filaId = (nueva as { id: string } | null)?.id ?? null
       } else {
         const { data: retomada } = await supabase
           .from("studio_publications")
-          .update({ status: "programando", intentos: previa.intentos + 1, due_at: dueIso, updated_at: now.toISOString() })
+          .update({ status: "programando", intentos: previa.intentos + 1, due_at: now.toISOString(), updated_at: now.toISOString() })
           .eq("id", previa.id)
           .eq("status", "error")
           .select("id")
@@ -276,30 +240,25 @@ export async function programarPublicaciones(accountId: string, now = new Date()
       }
       if (!filaId) continue
 
-      const canal = await resolverCanal(accountId, red)
-      const r = canal
-        ? await publicarEnBuffer({ channelId: canal, red, texto: textoDelPost(payload), imagenes, programarPara: dueIso })
-        : { ok: false as const, error: `La cuenta no tiene canal de ${red} en Buffer.` }
-      // El tope de programadas de Buffer no es un fallo de la pieza: se suelta
-      // el hueco sin gastar intento y se reintenta en la proxima pasada.
-      if (!r.ok && /limit reached/i.test(r.error)) {
-        await supabase.from("studio_publications").delete().eq("id", filaId)
-        llenas.add(red)
-        continue
-      }
+      const r = await publicarEnRed(accountId, red, { texto: textoDelPost(payload), imagenes })
       await supabase
         .from("studio_publications")
         .update(
           r.ok
-            ? { status: "programada", buffer_post_id: r.postId, error: null, updated_at: new Date().toISOString() }
+            ? { status: "publicada", buffer_post_id: r.postId, error: null, updated_at: new Date().toISOString() }
             : { status: "error", error: r.error.slice(0, 500), updated_at: new Date().toISOString() }
         )
         .eq("id", filaId)
-      if (r.ok) programadas++
+      if (r.ok) publicadas++
       else errores.push(`Hueco ${hueco.slot + 1} (${hueco.receta.name}, ${red}): ${r.error}`)
     }
-    usadas.add(piezaId)
+    if (publicadas) {
+      await supabase.from("studio_pieces").update({ status: "published", published_at: now.toISOString() }).eq("id", piezaId).neq("status", "published")
+    }
+    // Un hueco por pasada: si habia varios atrasados, el siguiente sale en la
+    // proxima (cinco minutos), no en el mismo minuto.
+    break
   }
 
-  return { activo: true, dia, huecos: plan.length, programadas, esperando, errores }
+  return { activo: true, dia, huecos: plan.length, publicadas, esperando, errores }
 }

@@ -113,7 +113,7 @@ export async function getConfigEstudio(): Promise<ConfigEstudio> {
   const { estadoCanva } = await import("@/engine/studio/canva-conexion")
   const [ajustes, canva] = await Promise.all([
     supabase.from("studio_settings").select("ideas_prompt, content_prompt").eq("account_id", accountId).maybeSingle(),
-    estadoCanva(),
+    estadoCanva(accountId),
   ])
 
   const a = (ajustes.data ?? {}) as { ideas_prompt?: string | null; content_prompt?: string | null }

@@ -41,7 +41,7 @@ export function SerperConnection({ estado }: { estado: EstadoSerper }) {
           ) : estado.configurado ? (
             <>
               Conectado con <code className="text-xs">{estado.vistaPrevia}</code>. Pega otra
-              para reemplazarla, o deja el campo vacio y guarda para volver a la del entorno.
+              para reemplazarla, o deja el campo vacio y guarda para quitarla.
             </>
           ) : (
             <>

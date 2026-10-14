@@ -70,6 +70,7 @@ function chunk<T>(items: T[], size: number): T[][] {
  * pero aqui la falla es visible en vez de silenciosa.
  */
 async function collectCandidates(
+  accountId: string,
   specs: SearchSpec[],
   recorder: EventRecorder,
   signal?: AbortSignal
@@ -80,7 +81,7 @@ async function collectCandidates(
   const results = await mapConLimite(specs, 4, async (spec) => {
       recorder.emit("search.started", `${spec.niche} · ${spec.label}`, { q: spec.q })
       try {
-        const items = await searchNews(spec, signal)
+        const items = await searchNews(accountId, spec, signal)
         const rows = toRows(spec, items)
         recorder.emit("search.done", `${spec.niche} · ${spec.label}`, {
           found: rows.length,
@@ -133,7 +134,7 @@ export async function runIngestion(options: RunOptions): Promise<IngestionSummar
 
   try {
     const specs = await getActiveSearches(accountId)
-    const { searches, candidates } = await collectCandidates(specs, recorder, options.signal)
+    const { searches, candidates } = await collectCandidates(accountId, specs, recorder, options.signal)
 
     // `ignoreDuplicates` es un ON CONFLICT DO NOTHING sobre el UNIQUE de `link`,
     // equivalente al Prefer: resolution=ignore-duplicates de n8n. El .select()
@@ -268,7 +269,7 @@ export async function dryRunIngestion(
 
   recorder.emit("run.started", "Ensayo en seco iniciado")
   const specs = await getActiveSearches(options.accountId)
-  const { searches, candidates } = await collectCandidates(specs, recorder, options.signal)
+  const { searches, candidates } = await collectCandidates(options.accountId, specs, recorder, options.signal)
 
   const known = new Set<string>()
   for (const batch of chunk(candidates.map((row) => row.link), 40)) {

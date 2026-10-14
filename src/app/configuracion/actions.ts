@@ -5,18 +5,55 @@ import { headers } from "next/headers"
 
 import { idDeCuentaActual } from "@/lib/accounts"
 import { supabaseAdmin } from "@/engine/supabase-admin"
-import { enlaceConexionCanva } from "@/engine/studio/canva-conexion"
+import { desconectar, enlaceConexion, type Toolkit } from "@/engine/composio/conexiones"
 
 /**
- * Empieza la conexion con Canva: devuelve la url de Composio donde se inicia
- * sesion. Al terminar, Composio vuelve a Conexiones con `?canva=ok`.
+ * Empieza la conexion de la empresa abierta con un servicio de Composio
+ * (Canva, Facebook o Instagram): devuelve la url donde se inicia sesion. Al
+ * terminar, Composio vuelve a Conexiones con `?<servicio>=ok`.
  */
-export async function conectarCanva(): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+export async function conectarServicio(
+  toolkit: Toolkit
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  if (!["canva", "facebook", "instagram"].includes(toolkit)) return { ok: false, error: "Servicio desconocido." }
   const h = await headers()
   const host = h.get("x-forwarded-host") ?? h.get("host")
   if (!host) return { ok: false, error: "No se pudo saber la direccion de la app." }
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https")
-  return enlaceConexionCanva(`${proto}://${host}/configuracion/conexiones?canva=ok`)
+  return enlaceConexion(await idDeCuentaActual(), toolkit, `${proto}://${host}/configuracion/conexiones?${toolkit}=ok`)
+}
+
+export async function conectarCanva() {
+  return conectarServicio("canva")
+}
+
+/** Desconecta un servicio de Composio de la empresa abierta. */
+export async function desconectarServicio(toolkit: Toolkit): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!["canva", "facebook", "instagram"].includes(toolkit)) return { ok: false, error: "Servicio desconocido." }
+  const accountId = await idDeCuentaActual()
+  const r = await desconectar(accountId, toolkit)
+  if (r.ok && toolkit !== "canva") {
+    const { guardarSecretos } = await import("@/engine/secretos")
+    await guardarSecretos(
+      accountId,
+      toolkit === "facebook" ? { facebook_page_id: null, facebook_page_name: null } : { instagram_user_id: null, instagram_username: null }
+    )
+  }
+  revalidatePath("/configuracion/conexiones")
+  return r
+}
+
+/** La pagina de Facebook en la que publica la empresa abierta. */
+export async function guardarPaginaFacebook(id: string, nombre: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const accountId = await idDeCuentaActual()
+  const { paginasFacebook, elegirPaginaFacebook } = await import("@/engine/publish/meta")
+  // La pagina tiene que ser una de las que maneja la cuenta conectada.
+  const r = await paginasFacebook(accountId)
+  if (!r.ok) return r
+  if (!r.paginas.some((p) => p.id === id)) return { ok: false, error: "Esa página no la maneja la cuenta de Facebook conectada." }
+  await elegirPaginaFacebook(accountId, { id, name: nombre })
+  revalidatePath("/configuracion/conexiones")
+  return { ok: true }
 }
 
 export type ActionResult = { ok: true } | { ok: false; error: string }

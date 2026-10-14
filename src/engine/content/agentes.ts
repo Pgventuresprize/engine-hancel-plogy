@@ -49,6 +49,7 @@ RESPONDE SOLO con este JSON, sin texto alrededor:
 {"angle":"<2-3 frases>","thesis":"<1 frase refutable>","playbook_format":"<uno de los formatos>"}`
 
 export async function generarAngulo(
+  accountId: string,
   input: AngleJobInput,
   model: string,
   system: string = ANGULO_SYSTEM
@@ -64,7 +65,7 @@ export async function generarAngulo(
 VARIABLES
 ${bloqueVariables(input.variables)}`
 
-  const r = await llamarClaude({ model, system, prompt, maxTokens: 800 })
+  const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: 800 })
   if (!r.ok) throw new Error(r.error)
   return { respuesta: parsearJSONDeClaude(r.texto), uso: r.uso }
 }
@@ -108,6 +109,7 @@ Antes de escribir el JSON confirma que ningun parrafo tiene un guion largo ni me
 type LinkedinBruto = { parrafos?: unknown; link_fuente?: unknown; notas?: unknown }
 
 export async function generarLinkedin(
+  accountId: string,
   input: LinkedinJobInput,
   model: string,
   system: string = LINKEDIN_SYSTEM
@@ -127,7 +129,7 @@ NOTICIA
 VARIABLES
 ${bloqueVariables(input.variables)}`
 
-  const r = await llamarClaude({ model, system, prompt, maxTokens: 1800 })
+  const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: 1800 })
   if (!r.ok) throw new Error(r.error)
 
   // El post llega como parrafos y se arma aqui: asi Claude nunca mete saltos de
@@ -230,6 +232,7 @@ RESPONDE SOLO con este JSON, sin texto alrededor:
 El array slides va en orden y tiene 5 elementos: el primero photo_hook, los otros cuatro text. Antes de responder relee y confirma cuatro cosas: que no hay guiones largos, que ningún título pasa de 65 caracteres, que el dato más fuerte está en el hook y no en la lámina 2, y que el texto lleva todas sus tildes y sus eñes.`
 
 export async function generarInstagram(
+  accountId: string,
   input: LinkedinJobInput,
   model: string,
   system: string = INSTAGRAM_SYSTEM
@@ -248,7 +251,7 @@ NOTICIA
 VARIABLES
 ${bloqueVariables(input.variables)}`
 
-  const r = await llamarClaude({ model, system, prompt, maxTokens: 3600 })
+  const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: 3600 })
   if (!r.ok) throw new Error(r.error)
   return { respuesta: parsearJSONDeClaude(r.texto), uso: r.uso }
 }

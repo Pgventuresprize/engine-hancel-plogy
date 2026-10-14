@@ -1,12 +1,11 @@
 import type { ModelosPorPaso, PasoIA } from "@/lib/modelos-ia"
 import { MODELOS_DISPONIBLES } from "@/lib/modelos-ia"
-import { supabaseAdmin } from "../supabase-admin"
+import { guardarSecretos, secretosDe } from "../secretos"
 
 /**
  * Que modelo usa cada paso de IA.
  *
- * Global, no por cuenta: es una sola cuenta de Claude. Se elige desde la
- * interfaz. Cada agente puede sobreescribirlo desde su ficha.
+ * Por empresa: cada una elige los suyos desde la interfaz. Cada agente puede sobreescribirlo desde su ficha.
  * Las constantes (lista y pasos) viven en `@/lib/modelos-ia`, sin service role,
  * para que el selector de cliente las pueda importar.
  */
@@ -27,14 +26,8 @@ const DEFAULTS: ModelosPorPaso = {
   instagram: "claude-sonnet-5",
 }
 
-export async function modelosClaude(): Promise<ModelosPorPaso> {
-  const { data } = await supabaseAdmin()
-    .from("engine_secrets")
-    .select("model_analisis, model_angulo, model_linkedin, model_instagram")
-    .eq("id", true)
-    .maybeSingle()
-
-  const fila = (data ?? {}) as Partial<Record<string, string>>
+export async function modelosClaude(accountId: string): Promise<ModelosPorPaso> {
+  const fila = (await secretosDe(accountId)) as unknown as Partial<Record<string, string>>
 
   // Filas viejas pueden traer el prefijo `claude/` o `gemini/` del router de
   // proveedores que hubo un tiempo. Se recorta: la API quiere el id pelado.
@@ -53,15 +46,10 @@ export async function modelosClaude(): Promise<ModelosPorPaso> {
 }
 
 /** Escribe el modelo de un paso. La red/paso y el modelo se validan. */
-export async function guardarModelo(paso: PasoIA, modelo: string): Promise<void> {
+export async function guardarModelo(accountId: string, paso: PasoIA, modelo: string): Promise<void> {
   const columna = COLUMNAS[paso]
   if (!columna) throw new Error("Paso desconocido.")
   if (!MODELOS_DISPONIBLES.some((m) => m.id === modelo)) throw new Error("Modelo no permitido.")
 
-  const { error } = await supabaseAdmin()
-    .from("engine_secrets")
-    .update({ [columna]: modelo, updated_at: new Date().toISOString() })
-    .eq("id", true)
-
-  if (error) throw new Error(`No se pudo guardar el modelo: ${error.message}`)
+  await guardarSecretos(accountId, { [columna]: modelo })
 }

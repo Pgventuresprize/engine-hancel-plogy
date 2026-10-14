@@ -3,12 +3,17 @@ import { supabaseAdmin } from "./supabase-admin"
 /**
  * Las cuentas del motor.
  *
- * Una cuenta es un espacio de trabajo completo: su taxonomia, sus noticias, su
- * contenido, su LinkedIn y su Instagram. Lo unico que comparten todas son las
- * credenciales de las herramientas —Serper, Pexels, la app de LinkedIn, las
- * agentes— porque son la misma maquinaria trabajando para clientes
- * distintos. De ahi que esas vivan en el entorno y todo lo demas en la base,
- * colgando de `account_id`.
+ * Una cuenta es una empresa: un espacio de trabajo completo e independiente
+ * de los demas, con sus miembros, su taxonomia, sus noticias, su contenido y
+ * sus conexiones (Claude, Serper, LinkedIn, Canva, Facebook, Instagram; ver
+ * `secretos.ts`). Lo unico de la plataforma son las credenciales de las
+ * herramientas que no son de nadie en particular: la organizacion de
+ * Composio, Pexels y la app de LinkedIn.
+ *
+ * Cada empresa tiene un plan:
+ * - basic: las noticias y sus agentes.
+ * - advance: todo lo anterior mas el estudio (capas, ideas, recetas,
+ *   carruseles, publicacion) y Video studio.
  *
  * Este modulo es el lado del motor: corre sin usuario delante, tanto desde los
  * endpoints que dispara Postgres como desde `npm run ingest`. Por eso no importa
@@ -16,16 +21,19 @@ import { supabaseAdmin } from "./supabase-admin"
  * El lado con sesion vive en `src/lib/accounts.ts`.
  */
 
+export type Plan = "basic" | "advance"
+
 export type Cuenta = {
   id: string
   name: string
   slug: string
-  /** Canales en Buffer. `null` mientras nadie los haya configurado. */
-  buffer_instagram_channel_id: string | null
-  buffer_facebook_channel_id: string | null
+  plan: Plan
 }
 
-const CAMPOS = "id, name, slug, buffer_instagram_channel_id, buffer_facebook_channel_id"
+const CAMPOS = "id, name, slug, plan"
+
+/** Si el plan de la empresa incluye el estudio, la publicacion y los videos. */
+export const esAdvance = (c: Pick<Cuenta, "plan">) => c.plan === "advance"
 
 /** Todas las cuentas, en orden de creacion. Es sobre lo que itera el motor. */
 export async function todasLasCuentas(): Promise<Cuenta[]> {

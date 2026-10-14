@@ -19,5 +19,5 @@ export async function modeloDe(accountId: string, agent: AgenteConPrompt): Promi
   // mano— se ignora en vez de reventar la pasada con un 404 de la API.
   if (elegido && MODELOS_DISPONIBLES.some((m) => m.id === elegido)) return elegido
 
-  return (await modelosClaude())[agent]
+  return (await modelosClaude(accountId))[agent]
 }

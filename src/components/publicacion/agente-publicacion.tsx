@@ -22,7 +22,8 @@ const REDES = [
  *
  * El plan sale de las recetas encendidas: cada una publica tantas piezas al dia
  * como genera, en huecos que se turnan entre recetas e intercalan pilares. Cada
- * pieza queda programada en Buffer a la hora de su hueco; un carrusel de
+ * pieza se publica a la hora de su hueco con las conexiones de Facebook e
+ * Instagram de la empresa; un carrusel de
  * Instagram sale igual en Facebook, con todas sus laminas.
  */
 export function Publicacion({ vista }: { vista: PublicacionVista }) {
@@ -52,7 +53,7 @@ export function Publicacion({ vista }: { vista: PublicacionVista }) {
           <p className="text-muted-foreground mt-1 text-sm">
             Cada receta publica al día las piezas que genera. Las publicaciones salen una cada tantos
             minutos desde la hora de inicio, turnando recetas e intercalando pilares, y quedan
-            programadas en Buffer a su hora exacta.
+            publican a su hora con las conexiones de Facebook e Instagram de la empresa (Configuración → Conexiones).
           </p>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -101,9 +102,8 @@ export function Publicacion({ vista }: { vista: PublicacionVista }) {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Plan de hoy</CardTitle>
           <p className="text-muted-foreground mt-1 text-sm">
-            {vista.huecos.length} publicaciones · {programadas} ya programadas en Buffer. Buffer admite como
-            mucho diez programadas por red, así que el agente programa cada una hora y media antes de su
-            hora; revisa cada diez minutos.
+            {vista.huecos.length} publicaciones · {programadas} ya salieron o se están publicando. El agente
+            revisa cada cinco minutos y publica cada hueco a su hora.
           </p>
         </CardHeader>
         <CardContent>
@@ -137,7 +137,7 @@ export function Publicacion({ vista }: { vista: PublicacionVista }) {
                     </TableCell>
                     {h.pendiente?.tipo === "prevista" ? (
                       <TableCell colSpan={2} className="text-muted-foreground text-xs">
-                        Lista. Se programa en Buffer {h.pendiente.seProgramaA}
+                        Lista. Se publica {h.pendiente.seProgramaA}
                       </TableCell>
                     ) : (
                       <>

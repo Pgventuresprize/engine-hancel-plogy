@@ -1,4 +1,5 @@
 import { DashboardShell } from "@/components/dashboard-shell"
+import { exigirAdvance } from "@/lib/accounts"
 import { Publicacion } from "@/components/publicacion/agente-publicacion"
 import { getPublicacion } from "@/lib/publicacion-data"
 
@@ -11,6 +12,7 @@ export const metadata = { title: "Publicación · Engine Hancel" }
  * del agente de publicacion de las noticias, que vive en Agentes.
  */
 export default async function PublicacionPage() {
+  await exigirAdvance()
   const vista = await getPublicacion()
   return (
     <DashboardShell title="Publicación">

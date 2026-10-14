@@ -15,9 +15,8 @@ import { Label } from "@/components/ui/label"
 /**
  * La conexion con Claude: el token que corre toda la IA del motor.
  *
- * Vale para todas las cuentas, no solo la abierta, porque es una unica cuenta de
- * Claude la que mueve el analisis y la escritura. Se pega aqui como los IDs de
- * Buffer; el valor guardado nunca vuelve entero, solo enmascarado.
+ * Es de la empresa abierta: cada empresa usa su propio token y paga su propio
+ * consumo. El valor guardado nunca vuelve entero, solo enmascarado.
  */
 export function ClaudeConnection({ estado }: { estado: EstadoTokenClaude }) {
   const [valor, setValor] = React.useState("")
@@ -36,7 +35,7 @@ export function ClaudeConnection({ estado }: { estado: EstadoTokenClaude }) {
         <CardTitle className="text-base">Conexion con Claude · IA</CardTitle>
         <p className="text-muted-foreground mt-1 text-sm">
           El token que corre <strong>todos los pasos de IA</strong> (analizar, angulo, LinkedIn,
-          Instagram) de <strong>todas las cuentas</strong>. Lo generas una vez con{" "}
+          Instagram, carruseles, videos) de <strong>esta empresa</strong>. Lo generas una vez con{" "}
           <code className="text-[11px]">claude setup-token</code> y lo pegas aqui.
         </p>
       </CardHeader>

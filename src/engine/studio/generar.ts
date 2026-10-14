@@ -133,6 +133,7 @@ function graficoDe(v: unknown): Grafico | null {
 
 /** Pide a Claude la pieza y la normaliza a una forma estable. */
 async function redactar(
+  accountId: string,
   cartucho: CartuchoFila,
   ctx: Contexto,
   formatId: string,
@@ -170,7 +171,7 @@ Recuerda: todo lo que escribas lleva sus tildes y sus eñes, aunque la idea de a
   // Data-viz necesita datos reales: el agente los busca en la web en la misma
   // llamada y los cita. Los demas estilos no buscan nada.
   const buscar = Boolean(estilo && conEstilo && (estilo.tipo === "dataviz" || estilo.tipo === "infodatos"))
-  const r = await llamarClaude({ model, system, prompt, maxTokens: buscar ? 6000 : 4000, buscarWeb: buscar, maxBusquedas: 5 })
+  const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: buscar ? 6000 : 4000, buscarWeb: buscar, maxBusquedas: 5 })
   if (!r.ok) throw new Error(r.error)
 
   const bruto = parsearJSONDeClaude(r.texto) as Record<string, unknown>
@@ -259,7 +260,7 @@ Recuerda: todo lo que escribas lleva sus tildes y sus eñes, aunque la idea de a
       ...(s.recurso?.items ?? []).map((_, i) => ({ leer: () => s.recurso!.items![i], poner: (t: string) => (s.recurso!.items![i] = t) })),
     ]),
   ]
-  const corregidos = await corregirTextos(huecos.map((h) => h.leer()))
+  const corregidos = await corregirTextos(accountId, huecos.map((h) => h.leer()))
   huecos.forEach((h, i) => h.poner(corregidos[i]))
 
   return { payload, uso: r.uso }
@@ -358,7 +359,7 @@ async function generarPieza(
 
   let payload: PiezaPayload
   try {
-    const r = await redactar(cartucho, ctx, receta.format, system, model, estilo)
+    const r = await redactar(receta.account_id, cartucho, ctx, receta.format, system, model, estilo)
     payload = r.payload
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)

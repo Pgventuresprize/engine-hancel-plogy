@@ -91,7 +91,7 @@ function overrideFromForm(form: FormData): Partial<Variables> | null {
 
 /** El aviso de que nadie va a procesar lo que se acaba de encolar. */
 async function avisoSiFaltaToken(): Promise<string | undefined> {
-  if ((await tokenClaude()) === null) {
+  if ((await tokenClaude(await idDeCuentaActual())) === null) {
     return (
       "Encolado, pero falta conectar Claude: pega el token en la configuracion " +
       "o se quedara pendiente."
@@ -168,9 +168,10 @@ async function hechoYaCubierto(news: RawNews): Promise<string | null> {
   if (yaCubiertas.length === 0) return null
 
   const veredicto = await elegirPorHecho(
+    news.account_id,
     [{ id: news.id, title: news.title, score: news.relevance_score, created_at: news.created_at }],
     yaCubiertas,
-    (await modelosClaude()).angulo
+    (await modelosClaude(news.account_id)).angulo
   )
 
   const duena = veredicto.repetidas.get(news.id)

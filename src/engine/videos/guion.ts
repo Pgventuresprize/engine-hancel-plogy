@@ -174,6 +174,7 @@ export async function escribirGuion(videoId: string): Promise<{ ok: true } | { o
   // Un guion de siete escenas detalladas es una respuesta larga: hasta cuatro
   // minutos y tokens de sobra.
   const r = await llamarClaude({
+    accountId: v.account_id,
     model: a.model,
     system: promptGuion(a),
     prompt: entradaDelGuion(v, capas, a),

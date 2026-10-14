@@ -1,4 +1,5 @@
 import { getLinkedinStatus } from "../publish/linkedin"
+import { redesMetaListas } from "../publish/meta"
 import { supabaseAdmin } from "../supabase-admin"
 import { ajustesDe, type Agente } from "./settings"
 
@@ -21,16 +22,7 @@ export type RedPosible = (typeof REDES_POSIBLES)[number]
 export async function redesActivas(accountId: string): Promise<RedPosible[]> {
   const supabase = supabaseAdmin()
 
-  const { data: cuenta } = await supabase
-    .from("accounts")
-    .select("buffer_instagram_channel_id, buffer_facebook_channel_id")
-    .eq("id", accountId)
-    .maybeSingle()
-
-  const canales = (cuenta ?? {}) as {
-    buffer_instagram_channel_id: string | null
-    buffer_facebook_channel_id: string | null
-  }
+  const canales = await redesMetaListas(accountId)
 
   // Expirada cuenta como no conectada: un token caducado no publica, y seguir
   // escribiendo para esa red solo acumula piezas que no van a salir.
@@ -38,8 +30,8 @@ export async function redesActivas(accountId: string): Promise<RedPosible[]> {
 
   const conectada: Record<RedPosible, boolean> = {
     linkedin: linkedin.connected && !linkedin.expired,
-    instagram: Boolean(canales.buffer_instagram_channel_id),
-    facebook: Boolean(canales.buffer_facebook_channel_id),
+    instagram: canales.instagram,
+    facebook: canales.facebook,
   }
 
   const activas: RedPosible[] = []

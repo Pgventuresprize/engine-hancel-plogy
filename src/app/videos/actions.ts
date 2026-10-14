@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 
 import { supabaseAdmin } from "@/engine/supabase-admin"
 import { crearVideo, escribirGuion } from "@/engine/videos/guion"
-import { exportarVideo, idDeDisenoCanva, programarVideo } from "@/engine/videos/publicar"
+import { exportarVideo, idDeDisenoCanva } from "@/engine/videos/publicar"
 import { idDeCuentaActual } from "@/lib/accounts"
 
 /**
@@ -88,7 +88,7 @@ export async function entregarVideo(id: string, canvaUrl: string): Promise<Resul
   if (error) return fallo(error.message)
   const ex = await exportarVideo(id)
   if (!ex.ok) return fallo(`Quedó en Video, pero la exportación de Canva falló: ${ex.error}. Se reintenta sola en la próxima pasada.`)
-  return listo("Video exportado de Canva. Sale a su hora.")
+  return listo("Video exportado de Canva. Sale a su hora (o pulsa Publicar ahora).")
 }
 
 export async function reintentarExportacion(id: string): Promise<ResultadoVideo> {
@@ -98,7 +98,11 @@ export async function reintentarExportacion(id: string): Promise<ResultadoVideo>
   return r.ok ? listo("Video exportado.") : fallo(r.error)
 }
 
-/** Publica ya (en tres minutos) en las redes de la configuracion. */
+/**
+ * Publica ya: el video queda para la proxima pasada del tick de publicacion
+ * (como mucho cinco minutos). Publicar un reel tarda minutos en procesarse y no
+ * cabe en una accion del navegador.
+ */
 export async function publicarVideoAhora(id: string): Promise<ResultadoVideo> {
   const v = await videoDeLaCuenta(id)
   if (!v || !["video", "publicado"].includes(v.status)) return fallo("Solo se publica un video entregado.")
@@ -106,8 +110,15 @@ export async function publicarVideoAhora(id: string): Promise<ResultadoVideo> {
     const ex = await exportarVideo(id)
     if (!ex.ok) return fallo(ex.error)
   }
-  const r = await programarVideo(id, { ahora: true })
-  return r.ok ? listo("Programado para publicarse en unos minutos.") : fallo(r.error)
+  const supabase = supabaseAdmin()
+  if (v.status === "video") {
+    const { error } = await supabase.from("video_items").update({ publicar_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", id)
+    if (error) return fallo(error.message)
+  } else {
+    // Ya publicado en alguna red: se reintentan las que fallaron, con un intento nuevo.
+    await supabase.from("video_publications").update({ intentos: 0 }).eq("video_id", id).eq("status", "error")
+  }
+  return listo("Sale en la próxima pasada de publicación (como mucho cinco minutos).")
 }
 
 /** Descarta el video; si no se publico, su idea vuelve al banco. */

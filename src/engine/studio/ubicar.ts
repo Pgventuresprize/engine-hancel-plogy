@@ -18,9 +18,10 @@ RESPONDE SOLO con este JSON: {"puntos":[{"x":<0-1>,"y":<0-1>} o null, ...]} con 
 
 export type Punto = { x: number; y: number }
 
-export async function ubicarPartes(imagen: string, partes: string[], contexto: string): Promise<(Punto | null)[]> {
+export async function ubicarPartes(accountId: string, imagen: string, partes: string[], contexto: string): Promise<(Punto | null)[]> {
   if (partes.length === 0) return []
   const r = await llamarClaude({
+    accountId,
     model: MODELO,
     system: SYSTEM,
     prompt: `La imagen muestra: ${contexto}\n\nPARTES\n${partes.map((p, i) => `${i + 1}. ${p}`).join("\n")}`,

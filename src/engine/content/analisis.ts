@@ -138,7 +138,7 @@ export async function analizarPendientes(
   if (pendientes.length === 0)
     return { analizadas: 0, fallidas: 0, errores: [], uso: { entrada: 0, salida: 0 } }
 
-  const model = (await modelosClaude()).analisis
+  const model = (await modelosClaude(accountId)).analisis
   let analizadas = 0
   let fallidas = 0
   const errores: string[] = []
@@ -167,6 +167,7 @@ MATERIAL RECOLECTADO DE LA WEB
 ${material ? material.slice(0, MAX_MATERIAL) : "(no se pudo recolectar material; trabaja con el titular y el snippet)"}`
 
           const r = await llamarClaude({
+            accountId,
             model,
             system: ANALISIS_SYSTEM,
             prompt,

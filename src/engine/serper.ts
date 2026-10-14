@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "./supabase-admin"
+import { secretosDe } from "./secretos"
 import { FRESHNESS, RESULTS_PER_SEARCH, type SearchSpec } from "./config"
 
 const SERPER_NEWS_URL = "https://google.serper.dev/news"
@@ -14,21 +14,11 @@ export type SerperNewsItem = {
 }
 
 /**
- * La clave de Serper.
- *
- * Primero la que este guardada en la aplicacion, que es donde se cambia sin
- * redesplegar; el entorno queda de respaldo para no dejar la ingesta muerta en
- * una instalacion que aun no la haya pegado.
+ * La clave de Serper de una empresa. Cada una paga sus propias busquedas: no
+ * hay clave compartida ni de respaldo en el entorno.
  */
-async function apiKey(): Promise<string> {
-  const { data } = await supabaseAdmin()
-    .from("engine_secrets")
-    .select("serper_api_key")
-    .eq("id", true)
-    .maybeSingle()
-
-  const guardada = (data as { serper_api_key: string | null } | null)?.serper_api_key?.trim()
-  const key = guardada || process.env.SERPER_API_KEY
+async function apiKey(accountId: string): Promise<string> {
+  const key = (await secretosDe(accountId)).serper_api_key?.trim()
   if (!key) {
     throw new Error("Falta la clave de Serper. Ponla en Configuracion, en Conexiones.")
   }
@@ -42,10 +32,11 @@ async function apiKey(): Promise<string> {
  * tumba la corrida entera o solo se salta (ver `ingest.ts`, que las aisla).
  */
 export async function searchNews(
+  accountId: string,
   spec: SearchSpec,
   signal?: AbortSignal
 ): Promise<SerperNewsItem[]> {
-  const key = await apiKey()
+  const key = await apiKey(accountId)
 
   // Serper corta a 5 peticiones por segundo y devuelve 429. Aun con la
   // concurrencia limitada de la ingesta, una rafaga puede rozar el limite, asi
@@ -108,13 +99,14 @@ export type ImagenEncontrada = {
  * ampliarlas y las muy apaisadas no encajan en un circulo.
  */
 export async function searchImage(
+  accountId: string,
   consulta: string,
   signal?: AbortSignal
 ): Promise<ImagenEncontrada[]> {
   const response = await fetch(SERPER_IMAGES_URL, {
     method: "POST",
     headers: {
-      "X-API-KEY": await apiKey(),
+      "X-API-KEY": await apiKey(accountId),
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ q: consulta, num: 10 }),

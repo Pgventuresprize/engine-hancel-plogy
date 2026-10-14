@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "../supabase-admin"
-import { claveComposio, COMPOSIO_USER } from "./canva-conexion"
+import { claveComposio } from "../composio/conexiones"
+import { usuarioComposio } from "../secretos"
 
 /**
  * Imagenes generadas para los estilos Ilustracion e Infografia.
@@ -74,6 +75,8 @@ export function proporcionPara(ancho: number, alto: number): Proporcion {
  * fallo: una pieza sin una imagen sigue saliendo, con el hueco resuelto.
  */
 export async function generarImagen(opciones: {
+  /** La empresa que la pide: Gemini corre bajo su usuario de Composio. */
+  accountId: string
   prompt: string
   estiloVisual: string
   colores: string[]
@@ -102,7 +105,7 @@ export async function generarImagen(opciones: {
         method: "POST",
         headers: { "x-api-key": clave, "Content-Type": "application/json" },
         body: JSON.stringify({
-          user_id: COMPOSIO_USER,
+          user_id: await usuarioComposio(opciones.accountId),
           arguments: { model: "gemini-2.5-flash-image", aspect_ratio: opciones.proporcion, prompt },
         }),
         signal: AbortSignal.timeout(150_000),

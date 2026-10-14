@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "../supabase-admin"
-import type { RedBuffer } from "../publish/buffer"
+import type { RedBuffer } from "../studio/publicar"
 import { GUION_SYSTEM } from "./prompt"
 
 /**

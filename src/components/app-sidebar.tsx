@@ -32,8 +32,11 @@ export function AppSidebar({
   cuenta: Cuenta
 } & React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
+  // El estudio, la publicacion y los videos son del plan advance; una empresa
+  // basic solo ve las noticias, sus agentes y la configuracion.
+  const advance = cuenta.plan === "advance"
 
-  const navMain = [
+  const todo = [
     {
       // Sin subsecciones: el estudio es una sola pantalla, el tablero, y
       // colgarle hijos que no existen solo añadiria un desplegable vacio.
@@ -125,9 +128,16 @@ export function AppSidebar({
           url: "/configuracion/marca",
           isActive: pathname === "/configuracion/marca",
         },
+        {
+          title: "Empresa",
+          url: "/configuracion/empresa",
+          isActive: pathname === "/configuracion/empresa",
+        },
       ],
     },
   ]
+  const SOLO_ADVANCE = ["/capas", "/ideas", "/estudio/pilares", "/recetas", "/publicacion", "/videos"]
+  const navMain = todo.filter((item) => advance || !SOLO_ADVANCE.includes(item.url))
 
   return (
     <Sidebar variant="inset" {...props}>

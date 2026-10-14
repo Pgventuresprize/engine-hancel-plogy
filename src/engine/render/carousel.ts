@@ -289,7 +289,7 @@ export async function generarCarrusel(
   // El elemento de la portada: la cosa concreta de la que habla la noticia,
   // buscada en internet y no en el banco de fotos. Es opcional de verdad: si no
   // aparece nada utilizable la portada sale como siempre, sin hueco raro.
-  const hallado = await buscarInserto(elemento)
+  const hallado = news?.account_id ? await buscarInserto(elemento, news.account_id) : null
   const inserto = hallado?.imagen ?? null
   // Un logo apaisado recortado a cuadro pierde las puntas y deja de leerse:
   // "Asocolflores" salia como "socolflore". Lo cuadrado se rellena, que luce
@@ -454,13 +454,14 @@ export { MAX_SLIDES, MIN_SLIDES }
  * aleje la imagen de esa forma peor queda, se recorte o se encaje.
  */
 async function buscarInserto(
-  consulta: string
+  consulta: string,
+  accountId: string
 ): Promise<{ imagen: string; proporcion: number } | null> {
   if (!consulta) return null
 
   try {
     const { searchImage } = await import("../serper")
-    const candidatas = await searchImage(consulta)
+    const candidatas = await searchImage(accountId, consulta)
     if (candidatas.length === 0) return null
 
     // Primero las que mejor encajan en un hueco cuadrado. Una muy apaisada hay

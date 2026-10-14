@@ -200,6 +200,7 @@ export async function dibujarConCanva(opciones: {
               : `${base}. The subject is large and fills most of the frame, with its parts clearly visible and separated. Full-bleed, no frame, no border, no inset picture.`
           const proporcion = proporcionPara(caja.w, caja.h)
           const r = await generarImagen({
+            accountId: opciones.accountId,
             prompt,
             estiloVisual: estilo.estilo.estiloVisual,
             colores: [c.fondo, c.acento, c.texto],
@@ -217,7 +218,7 @@ export async function dibujarConCanva(opciones: {
           // Las etiquetas de la infografia senalan lo que de verdad se ve: se
           // ubica cada parte en la imagen ya generada.
           if (estilo.tipo === "infografia" && l.etiquetas.length) {
-            l.puntos = await ubicarPartes(r.url, l.etiquetas, l.pedido.visual || l.titulo)
+            l.puntos = await ubicarPartes(opciones.accountId, r.url, l.etiquetas, l.pedido.visual || l.titulo)
             if (l.puntos.every((p) => !p)) avisos.push(`Lamina ${idx + 1}: no se pudieron ubicar las etiquetas en la imagen.`)
           }
         })
@@ -266,6 +267,7 @@ export async function dibujarConCanva(opciones: {
   // ------------------------------------------------------- 3. Canva
   const tipoCanva = formatId.startsWith("ig_") ? "instagram_post" : formatId.startsWith("fb_") ? "facebook_post" : undefined
   const imp = await canvaMcp<{ job?: { result?: { designs?: { id: string; urls?: { edit_url?: string } }[] } } }>(
+    opciones.accountId,
     "CANVA_MCP_IMPORT_DESIGN_FROM_URL",
     { url: urlHtml, name: opciones.titulo.slice(0, 200), ...(tipoCanva ? { intended_design_type: tipoCanva } : {}) },
     180_000
@@ -275,6 +277,7 @@ export async function dibujarConCanva(opciones: {
   if (!diseno?.id) return { ok: false, error: "Canva no devolvio el diseno importado." }
 
   const exportacion = await canvaMcp<{ job?: { urls?: string[] } }>(
+    opciones.accountId,
     "CANVA_MCP_EXPORT_DESIGN",
     { design_id: diseno.id, format: { type: "png", width: W, height: H } },
     180_000

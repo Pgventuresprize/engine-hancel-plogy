@@ -9,7 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CANALES } from "@/lib/canales-catalogo"
 import { getIntenciones, getListas, getPilares, getSimples } from "@/lib/capas-data"
 import { getPlantillas } from "@/lib/plantillas-data"
-import { cuentaActual } from "@/lib/accounts"
+import { cuentaActual, exigirAdvance } from "@/lib/accounts"
+import { redesMetaListas } from "@/engine/publish/meta"
 import { getLinkedinStatus } from "@/engine/publish/linkedin"
 
 export const dynamic = "force-dynamic"
@@ -27,6 +28,7 @@ export const metadata = { title: "Capas · Engine Hancel" }
  * cualquier receta. Fuente queda de placeholder.
  */
 export default async function CapasPage() {
+  await exigirAdvance()
   const [pilares, intenciones, narrativas, ctas, cuenta, plantillas, listas] = await Promise.all([
     getPilares(),
     getIntenciones(),
@@ -37,11 +39,11 @@ export default async function CapasPage() {
     getListas(),
   ])
 
-  const linkedin = await getLinkedinStatus(cuenta.id)
+  const [linkedin, meta] = await Promise.all([getLinkedinStatus(cuenta.id), redesMetaListas(cuenta.id)])
   const conectados = {
     linkedin: linkedin.connected && !linkedin.expired,
-    instagram: Boolean(cuenta.buffer_instagram_channel_id),
-    facebook: Boolean(cuenta.buffer_facebook_channel_id),
+    instagram: meta.instagram,
+    facebook: meta.facebook,
   }
 
   return (

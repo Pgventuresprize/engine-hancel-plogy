@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "../supabase-admin"
+import { secretosDe } from "../secretos"
 
 /**
  * Llamada directa a Claude con el token de tu cuenta.
@@ -32,6 +32,8 @@ const TIMEOUT_MS = 120_000
 const TIMEOUT_MS_BUSQUEDA = 180_000
 
 export type LlamadaClaude = {
+  /** La empresa que hace la llamada: se usa su token de Claude. */
+  accountId: string
   /** Id de modelo. Haiku para volumen barato, Sonnet/Opus para escribir. */
   model: string
   /** Las instrucciones del paso: el rol, el tono, el formato de salida. */
@@ -60,16 +62,12 @@ export type ResultadoClaude =
   | { ok: true; texto: string; uso: UsoClaude }
   | { ok: false; error: string }
 
-/** Lee el token guardado. `null` si nadie lo ha pegado todavia. */
-export async function tokenClaude(): Promise<string | null> {
-  const { data, error } = await supabaseAdmin()
-    .from("engine_secrets")
-    .select("claude_oauth_token")
-    .eq("id", true)
-    .maybeSingle()
-
-  if (error) throw new Error(`No se pudo leer el token de Claude: ${error.message}`)
-  const token = (data as { claude_oauth_token: string | null } | null)?.claude_oauth_token
+/**
+ * El token de Claude de una empresa. `null` si nadie lo ha pegado todavia.
+ * Cada empresa usa el suyo: lo que gasta una no sale de la cuenta de otra.
+ */
+export async function tokenClaude(accountId: string): Promise<string | null> {
+  const token = (await secretosDe(accountId)).claude_oauth_token
   return token && token.trim().length > 0 ? token.trim() : null
 }
 
@@ -78,7 +76,7 @@ export async function tokenClaude(): Promise<string | null> {
  * de sobra, para que un tropiezo no tumbe la pasada que ya hizo trabajo.
  */
 export async function llamarClaude(opciones: LlamadaClaude): Promise<ResultadoClaude> {
-  const token = await tokenClaude()
+  const token = await tokenClaude(opciones.accountId)
   if (!token) {
     return {
       ok: false,

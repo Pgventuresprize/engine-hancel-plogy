@@ -62,7 +62,7 @@ export type EstadoIA = {
 }
 
 export async function getEstadoIA(): Promise<EstadoIA> {
-  return { tokenConfigurado: (await tokenClaude()) !== null }
+  return { tokenConfigurado: (await tokenClaude(await idDeCuentaActual())) !== null }
 }
 
 export type ContentCounts = {

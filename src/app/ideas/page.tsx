@@ -1,4 +1,5 @@
 import { DashboardShell } from "@/components/dashboard-shell"
+import { exigirAdvance } from "@/lib/accounts"
 import { PanelPilar } from "@/components/ideas/panel-pilar"
 import { getIdeasPorPilar } from "@/lib/ideas-data"
 
@@ -15,6 +16,7 @@ export const metadata = { title: "Ideas · Engine Hancel" }
  * contenido la convierta en pieza.
  */
 export default async function IdeasPage() {
+  await exigirAdvance()
   const pilares = await getIdeasPorPilar()
 
   return (

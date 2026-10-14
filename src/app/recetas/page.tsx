@@ -1,4 +1,5 @@
 import { DashboardShell } from "@/components/dashboard-shell"
+import { exigirAdvance } from "@/lib/accounts"
 import { ConfigEstudio } from "@/components/recetas/config-estudio"
 import { EditorRecetas } from "@/components/recetas/editor-recetas"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -16,6 +17,7 @@ export const metadata = { title: "Recetas · Engine Hancel" }
  * agentes que lo hacen.
  */
 export default async function RecetasPage() {
+  await exigirAdvance()
   const [recetas, pilares, config, plantillas] = await Promise.all([
     getRecetas(),
     getPilaresSimple(),

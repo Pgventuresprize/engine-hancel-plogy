@@ -5,8 +5,8 @@ import { IDEAS_SYSTEM } from "../ideas/generar"
 /**
  * La configuracion de las dos agentes del pipeline nuevo.
  *
- * Los modelos y la conexion de Canva son maquinaria compartida y viven en el
- * singleton `engine_secrets`, junto a los modelos de los otros agentes. Los
+ * Los modelos son de cada empresa y viven en `account_secrets`, junto a los
+ * modelos de los otros agentes. Los
  * prompts son de cada cuenta —la voz de una marca no es la de otra— y viven en
  * `studio_settings`, una fila por cuenta. En ambos sitios, vacio significa "usa
  * lo que trae el codigo".
@@ -23,7 +23,7 @@ export async function studioConfig(accountId: string): Promise<StudioConfig> {
   const supabase = supabaseAdmin()
 
   const [secretos, ajustes] = await Promise.all([
-    supabase.from("engine_secrets").select("model_ideas, model_contenido").eq("id", true).maybeSingle(),
+    supabase.from("account_secrets").select("model_ideas, model_contenido").eq("account_id", accountId).maybeSingle(),
     supabase.from("studio_settings").select("ideas_prompt, content_prompt").eq("account_id", accountId).maybeSingle(),
   ])
 

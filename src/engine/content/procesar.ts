@@ -141,6 +141,7 @@ export async function procesarBuzones(
   const resultados = [
     await procesarBuzon("jobs_angle", "angulo", async (input, cuenta) =>
       generarAngulo(
+        cuenta,
         input as AngleJobInput,
         await modeloDe(cuenta, "angulo"),
         await promptDe(cuenta, "angulo")
@@ -148,6 +149,7 @@ export async function procesarBuzones(
     ),
     await procesarBuzon("jobs_linkedin", "linkedin", async (input, cuenta) =>
       generarLinkedin(
+        cuenta,
         input as LinkedinJobInput,
         await modeloDe(cuenta, "linkedin"),
         await promptDe(cuenta, "linkedin")
@@ -155,6 +157,7 @@ export async function procesarBuzones(
     ),
     await procesarBuzon("jobs_instagram", "instagram", async (input, cuenta) =>
       generarInstagram(
+        cuenta,
         input as LinkedinJobInput,
         await modeloDe(cuenta, "instagram"),
         await promptDe(cuenta, "instagram")

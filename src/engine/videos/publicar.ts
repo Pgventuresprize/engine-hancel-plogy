@@ -1,8 +1,8 @@
 import { supabaseAdmin } from "../supabase-admin"
 import { dayIn, getSettings } from "../schedule"
-import { publicarEnBuffer, resolverCanal, type RedBuffer } from "../publish/buffer"
+import { publicarEnRed } from "../publish/meta"
 import { canvaMcp } from "../studio/canva-mcp"
-import { instanteLocal } from "../studio/publicar"
+import { instanteLocal, type RedBuffer } from "../studio/publicar"
 import { ajustesVideo } from "./ajustes"
 import { crearVideo, escribirGuion, type Guion } from "./guion"
 
@@ -21,7 +21,6 @@ import { crearVideo, escribirGuion, type Guion } from "./guion"
 const BUCKET = "carousels"
 const MAX_INTENTOS = 3
 /** Como en el estudio: Buffer admite diez programadas por canal, se programa con hora y media de antelacion. */
-const VENTANA_MS = 90 * 60_000
 
 /** El id de diseno de un enlace de Canva (https://www.canva.com/design/DAG.../edit). */
 export function idDeDisenoCanva(url: string): string | null {
@@ -54,6 +53,7 @@ export async function exportarVideo(videoId: string): Promise<{ ok: true } | { o
   }
 
   const ex = await canvaMcp<{ job?: { urls?: string[]; status?: string; error?: { message?: string } } }>(
+    v.account_id,
     "CANVA_MCP_EXPORT_DESIGN",
     { design_id: v.canva_design_id, format: { type: "mp4", quality: "vertical_1080p" }, user_intent: "Exportar el video terminado para publicarlo" },
     240_000
@@ -81,23 +81,21 @@ export async function exportarVideo(videoId: string): Promise<{ ok: true } | { o
 }
 
 /**
- * Programa un video en Buffer en cada red. `ahora` lo publica de inmediato (en
- * tres minutos); si no, a la hora de su hueco, o de inmediato si ya paso.
+ * Publica un video ya exportado en cada red de la configuracion, con las
+ * conexiones de Facebook e Instagram de la empresa (Composio): reel en
+ * Instagram, video en la pagina de Facebook. Publica en el acto; quien llama
+ * decide cuando (el tick de publicacion, a la hora de su hueco).
  */
-export async function programarVideo(videoId: string, opciones: { ahora?: boolean; now?: Date } = {}) {
+export async function publicarVideo(videoId: string, now = new Date()) {
   const supabase = supabaseAdmin()
-  const now = opciones.now ?? new Date()
   const { data } = await supabase.from("video_items").select("*").eq("id", videoId).maybeSingle()
   const v = data as Video | null
   if (!v) return { ok: false as const, error: "No existe ese video." }
   if (!v.video_url) return { ok: false as const, error: "El video todavía no está exportado de Canva." }
   const a = await ajustesVideo(v.account_id)
   if (a.redes.length === 0) return { ok: false as const, error: "No hay redes elegidas en la configuración." }
-
-  const hueco = v.publicar_at ? new Date(v.publicar_at).getTime() : 0
-  const due = opciones.ahora || !hueco ? now.getTime() + 3 * 60_000 : Math.max(hueco, now.getTime() + 3 * 60_000)
-  const dueIso = new Date(due).toISOString()
   const texto = v.guion?.descripcion?.trim() ?? ""
+  const titulo = v.guion?.escenas?.[0]?.titulo ?? undefined
 
   const { data: previas } = await supabase.from("video_publications").select("id, red, status, intentos").eq("video_id", v.id)
   const filas = (previas ?? []) as { id: string; red: RedBuffer; status: string; intentos: number }[]
@@ -110,14 +108,14 @@ export async function programarVideo(videoId: string, opciones: { ahora?: boolea
     if (!previa) {
       const { data: nueva } = await supabase
         .from("video_publications")
-        .insert({ account_id: v.account_id, video_id: v.id, red, status: "programando", due_at: dueIso, intentos: 1 })
+        .insert({ account_id: v.account_id, video_id: v.id, red, status: "programando", due_at: now.toISOString(), intentos: 1 })
         .select("id")
         .maybeSingle()
       filaId = (nueva as { id: string } | null)?.id ?? null
     } else {
       const { data: retomada } = await supabase
         .from("video_publications")
-        .update({ status: "programando", due_at: dueIso, intentos: previa.intentos + 1, updated_at: now.toISOString() })
+        .update({ status: "programando", due_at: now.toISOString(), intentos: previa.intentos + 1, updated_at: now.toISOString() })
         .eq("id", previa.id)
         .eq("status", "error")
         .select("id")
@@ -126,37 +124,72 @@ export async function programarVideo(videoId: string, opciones: { ahora?: boolea
     }
     if (!filaId) continue
 
-    const canal = await resolverCanal(v.account_id, red)
-    const r = canal
-      ? await publicarEnBuffer({ channelId: canal, red, texto, imagenes: [], video: v.video_url, programarPara: dueIso })
-      : { ok: false as const, error: `La cuenta no tiene canal de ${red} en Buffer.` }
-    // El tope de programadas de Buffer no gasta intento: se reintenta en la
-    // siguiente pasada.
-    if (!r.ok && /limit reached/i.test(r.error)) {
-      await supabase.from("video_publications").delete().eq("id", filaId)
-      errores.push(`${red}: Buffer está al tope de publicaciones programadas; se reintenta en la próxima pasada.`)
-      continue
-    }
+    const r = await publicarEnRed(v.account_id, red, { texto, video: v.video_url, titulo })
     await supabase
       .from("video_publications")
       .update(
         r.ok
-          ? { status: "programada", buffer_post_id: r.postId, error: null, updated_at: new Date().toISOString() }
+          ? { status: "publicada", buffer_post_id: r.postId, error: null, updated_at: new Date().toISOString() }
           : { status: "error", error: r.error.slice(0, 500), updated_at: new Date().toISOString() }
       )
       .eq("id", filaId)
     if (!r.ok) errores.push(`${red}: ${r.error}`)
   }
 
-  // Con al menos una red programada, el video pasa a Publicacion; ahi se ve
-  // cada red con su estado.
+  // Con al menos una red publicada, el video pasa a Publicacion; ahi se ve
+  // cada red con su estado (y las que fallaron se reintentan).
   const { count } = await supabase
     .from("video_publications")
     .select("id", { count: "exact", head: true })
     .eq("video_id", v.id)
-    .in("status", ["programada", "publicada"])
+    .eq("status", "publicada")
   if ((count ?? 0) > 0) await supabase.from("video_items").update({ status: "publicado", updated_at: now.toISOString() }).eq("id", v.id)
   return errores.length ? { ok: false as const, error: errores.join(" · ") } : { ok: true as const }
+}
+
+/**
+ * Publica el video que toca, como mucho uno por pasada (un reel tarda minutos
+ * en procesarse): el que ya llego a su hora, o el que tiene redes con error que
+ * reintentar. Lo llama el tick de publicacion cada cinco minutos.
+ */
+export async function publicarVideosPendientes(accountId: string, now = new Date()): Promise<ResumenVideos> {
+  const supabase = supabaseAdmin()
+  const a = await ajustesVideo(accountId)
+  const acciones: string[] = []
+  const errores: string[] = []
+  if (!a.publicarActivo) return { acciones, errores }
+
+  // Un reclamo que se quedo a medias se vuelve a intentar.
+  await supabase
+    .from("video_publications")
+    .update({ status: "error", error: "Se interrumpió al publicar." })
+    .eq("account_id", accountId)
+    .eq("status", "programando")
+    .lt("updated_at", new Date(now.getTime() - 10 * 60_000).toISOString())
+
+  const { data: listos } = await supabase
+    .from("video_items")
+    .select("id")
+    .eq("account_id", accountId)
+    .eq("status", "video")
+    .eq("export_status", "listo")
+    .not("publicar_at", "is", null)
+    .lte("publicar_at", now.toISOString())
+    .order("publicar_at", { ascending: true })
+    .limit(1)
+  const { data: conError } = await supabase
+    .from("video_publications")
+    .select("video_id")
+    .eq("account_id", accountId)
+    .eq("status", "error")
+    .lt("intentos", MAX_INTENTOS)
+    .limit(1)
+  const id = ((listos ?? []) as { id: string }[])[0]?.id ?? ((conError ?? []) as { video_id: string }[])[0]?.video_id
+  if (!id) return { acciones, errores }
+  const r = await publicarVideo(id, now)
+  if (r.ok) acciones.push(`Publicado ${id}`)
+  else errores.push(r.error)
+  return { acciones, errores }
 }
 
 /** Los huecos de publicacion de hoy y manana (los que aun no pasaron). */
@@ -171,59 +204,15 @@ export function huecosProximos(horas: number[], timezone: string, now: Date): Da
 export type ResumenVideos = { acciones: string[]; errores: string[] }
 
 /**
- * Una pasada de Video studio para una cuenta. Lo rapido primero (marcar lo
- * publicado, programar lo listo) y despues, como mucho, una tarea larga
- * (exportar un video o escribir un guion): cada una puede llevar minutos y la
- * pasada tiene cinco.
+ * Una pasada de Video studio para una cuenta: como mucho una tarea larga
+ * (exportar un video entregado o escribir un guion), que puede llevar minutos.
+ * Publicar lo hace aparte el tick de publicacion.
  */
 export async function tickVideos(accountId: string, now = new Date()): Promise<ResumenVideos> {
   const supabase = supabaseAdmin()
   const a = await ajustesVideo(accountId)
   const acciones: string[] = []
   const errores: string[] = []
-
-  // 1. Lo que paso su hora en Buffer se da por publicado.
-  await supabase
-    .from("video_publications")
-    .update({ status: "publicada", updated_at: now.toISOString() })
-    .eq("account_id", accountId)
-    .eq("status", "programada")
-    .lte("due_at", now.toISOString())
-  // Un reclamo que se quedo a medias se vuelve a intentar.
-  await supabase
-    .from("video_publications")
-    .update({ status: "error", error: "Se interrumpió al programar." })
-    .eq("account_id", accountId)
-    .eq("status", "programando")
-    .lt("updated_at", new Date(now.getTime() - 10 * 60_000).toISOString())
-
-  // 2. Programar: los videos listos cuyo hueco entra en la ventana, y las
-  // redes que fallaron (con intentos).
-  if (a.publicarActivo) {
-    const { data: listos } = await supabase
-      .from("video_items")
-      .select("id, publicar_at")
-      .eq("account_id", accountId)
-      .eq("status", "video")
-      .eq("export_status", "listo")
-      .not("publicar_at", "is", null)
-      .lte("publicar_at", new Date(now.getTime() + VENTANA_MS).toISOString())
-    const { data: conError } = await supabase
-      .from("video_publications")
-      .select("video_id")
-      .eq("account_id", accountId)
-      .eq("status", "error")
-      .lt("intentos", MAX_INTENTOS)
-    const ids = new Set([
-      ...((listos ?? []) as { id: string }[]).map((x) => x.id),
-      ...((conError ?? []) as { video_id: string }[]).map((x) => x.video_id),
-    ])
-    for (const id of ids) {
-      const r = await programarVideo(id, { now })
-      if (r.ok) acciones.push(`Programado ${id}`)
-      else errores.push(r.error)
-    }
-  }
 
   // 3. Una tarea larga: exportar lo entregado (lo mas urgente: tiene hora) o
   // escribir un guion.

@@ -71,6 +71,7 @@ type Par = { id?: unknown; mismo_hecho_que?: unknown }
  * lleguen las candidatas a esta funcion.
  */
 export async function elegirPorHecho(
+  accountId: string,
   aspirantes: Aspirante[],
   yaCubiertas: YaCubierta[],
   model: string
@@ -114,7 +115,7 @@ ${cubiertos || "(ninguno)"}
 CANDIDATOS
 ${candidatos}`
 
-  const r = await llamarClaude({ model, system: SYSTEM, prompt, maxTokens: 1000 })
+  const r = await llamarClaude({ accountId, model, system: SYSTEM, prompt, maxTokens: 1000 })
   if (!r.ok) throw new Error(`No se pudo comparar los hechos: ${r.error}`)
 
   const bruto = parsearJSONDeClaude(r.texto) as Bruto

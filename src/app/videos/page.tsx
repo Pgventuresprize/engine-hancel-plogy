@@ -1,4 +1,5 @@
 import { DashboardShell } from "@/components/dashboard-shell"
+import { exigirAdvance } from "@/lib/accounts"
 import { ConfigVideos } from "@/components/videos/config-videos"
 import { TableroVideos } from "@/components/videos/tablero-videos"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -17,6 +18,7 @@ export const metadata = { title: "Video studio · Engine Hancel" }
  * clips en Flow y monta el video en Canva; el sistema lo exporta y lo publica.
  */
 export default async function VideosPage() {
+  await exigirAdvance()
   const vista = await getVideoStudio()
   return (
     <DashboardShell title="Video studio">

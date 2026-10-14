@@ -1,4 +1,5 @@
 import { DashboardShell } from "@/components/dashboard-shell"
+import { exigirAdvance } from "@/lib/accounts"
 import { GaleriaPilar } from "@/components/estudio/galeria-pilar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { getEstudio } from "@/lib/estudio-data"
@@ -15,6 +16,7 @@ export const metadata = { title: "Estudio de pilares · Engine Hancel" }
  * sus recetas. Las noticias siguen en su propio tablero (Estudio).
  */
 export default async function EstudioPilaresPage() {
+  await exigirAdvance()
   const pilares = await getEstudio()
 
   return (

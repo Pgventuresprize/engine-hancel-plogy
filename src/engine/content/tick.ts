@@ -768,6 +768,7 @@ export async function runContentTick(
       }))
 
       const veredicto = await elegirPorHecho(
+        cuenta.id,
         aspirantes.map((n) => ({
           id: n.id,
           title: n.title,
@@ -775,7 +776,7 @@ export async function runContentTick(
           created_at: n.created_at,
         })),
         yaCubiertas,
-        (await modelosClaude()).angulo
+        (await modelosClaude(cuenta.id)).angulo
       )
 
       // La repetida no se borra: se marca y se enlaza con la que se quedo con el

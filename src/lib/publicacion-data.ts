@@ -2,7 +2,7 @@ import "server-only"
 
 import { supabaseAdmin } from "@/engine/supabase-admin"
 import { dayIn, getSettings } from "@/engine/schedule"
-import { ajustesPublicacion, planDelDia, VENTANA_MS, type AjustesPublicacion } from "@/engine/studio/publicar"
+import { ajustesPublicacion, planDelDia, type AjustesPublicacion } from "@/engine/studio/publicar"
 import { idDeCuentaActual } from "@/lib/accounts"
 
 /**
@@ -19,9 +19,9 @@ export type HuecoVista = {
   receta: string
   pieza: string | null
   /**
-   * Un hueco que aun no esta en Buffer: "prevista" si su receta ya tiene la
-   * pieza (sale en la proxima vuelta del agente, cuando entre en la ventana),
-   * "sinPieza" si la receta todavia no la genero. null si ya esta programado.
+   * Un hueco que aun no salio: "prevista" si su receta ya tiene la pieza (sale
+   * a su hora), "sinPieza" si la receta todavia no la genero. null si ya salio
+   * o se esta publicando.
    */
   pendiente: { tipo: "prevista"; seProgramaA: string } | { tipo: "sinPieza"; generaA: string } | null
   instagram: EstadoRed
@@ -113,8 +113,7 @@ export async function getPublicacion(): Promise<PublicacionVista> {
         const siguiente = porReceta.get(h.receta.id)?.shift()
         if (siguiente) {
           pieza = tituloDePayload(siguiente.payload)
-          const cuando = h.at.getTime() - VENTANA_MS
-          pendiente = { tipo: "prevista", seProgramaA: cuando <= ahora ? "en la próxima vuelta" : `hacia las ${hora(new Date(cuando))}` }
+          pendiente = { tipo: "prevista", seProgramaA: h.at.getTime() <= ahora ? "en la próxima pasada (máx. 5 min)" : `a las ${hora(h.at)}` }
         } else {
           const hs = runAt.get(h.receta.id) ?? []
           pendiente = { tipo: "sinPieza", generaA: hs.length ? hs.map((x) => `${x}:00`).join(" y ") : "sin horario" }

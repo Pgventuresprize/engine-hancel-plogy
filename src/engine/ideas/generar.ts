@@ -206,7 +206,7 @@ export async function generarRonda(
         : ""
 
     const prompt = `COMBINACIONES\n${lote.map((c) => c.linea).join("\n")}${evita}`
-    const r = await llamarClaude({ model, system, prompt, maxTokens: 3000 })
+    const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: 3000 })
     if (!r.ok) return { pillarId, generadas: aInsertar.length, ronda, uso, error: r.error }
 
     uso.entrada += r.uso.entrada

@@ -36,7 +36,7 @@ RESPONDE SOLO con este JSON, sin texto alrededor:
 Exactamente el mismo número de textos y en el mismo orden.`
 
 /** Corrige una lista de textos. Nunca lanza: ante cualquier fallo, la red fija. */
-export async function corregirTextos(textos: string[]): Promise<string[]> {
+export async function corregirTextos(accountId: string, textos: string[]): Promise<string[]> {
   const conRed = (lista: string[]) => lista.map(arreglarOrtografia)
   const indices = textos.map((t, i) => (t.trim() ? i : -1)).filter((i) => i >= 0)
   if (indices.length === 0) return textos
@@ -44,6 +44,7 @@ export async function corregirTextos(textos: string[]): Promise<string[]> {
   const aCorregir = indices.map((i) => textos[i])
   try {
     const r = await llamarClaude({
+      accountId,
       model: MODELO_CORRECTOR,
       system: CORRECTOR_SYSTEM,
       prompt: JSON.stringify({ textos: aCorregir }),

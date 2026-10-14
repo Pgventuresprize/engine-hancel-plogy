@@ -383,3 +383,44 @@ begin
   perform cron.schedule('engine_hancel_videos_tick', '5-59/10 * * * *', 'select public.fire_videos_tick();');
 end
 $$;
+
+-- ------------------------------------------------------------ publicacion
+--
+-- El tick de publicacion: publica en Facebook e Instagram (Composio) lo que
+-- llego a su hora, en cada empresa advance. Cada cinco minutos, que cae justo
+-- en las horas de los huecos (:00, :15, :30, :45).
+create or replace function public.fire_publicacion_tick()
+returns bigint
+language plpgsql
+security definer
+set search_path to ''
+as $$
+declare
+  v_url        text;
+  v_secret     text;
+  v_request_id bigint;
+begin
+  select decrypted_secret into v_url    from vault.decrypted_secrets where name = 'content_tick_url';
+  select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'ingest_secret';
+  if v_url is null or v_secret is null then
+    raise warning 'engine-hancel: falta content_tick_url/ingest_secret para el tick de publicacion';
+    return null;
+  end if;
+  select net.http_post(
+    url := replace(v_url, '/api/content/tick', '/api/publicacion/tick'),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer ' || v_secret),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 300000
+  ) into v_request_id;
+  return v_request_id;
+end;
+$$;
+
+revoke all on function public.fire_publicacion_tick() from public, anon, authenticated;
+
+do $$
+begin
+  perform cron.unschedule(jobid) from cron.job where jobname = 'engine_hancel_publicacion_tick';
+  perform cron.schedule('engine_hancel_publicacion_tick', '*/5 * * * *', 'select public.fire_publicacion_tick();');
+end
+$$;
