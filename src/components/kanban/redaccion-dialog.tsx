@@ -329,6 +329,7 @@ function PanelRedaccion({ ficha, datos, cargando }: { ficha: FichaRedaccion; dat
   return (
     <div className="flex flex-col gap-3">
       <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
+        {ficha.redaccion?.nicho_nombre ? <Badge>Nicho: {ficha.redaccion.nicho_nombre}</Badge> : <Badge variant="outline">Sin nicho</Badge>}
         <Badge variant="secondary">{r.word_count} palabras</Badge>
         {datos?.model ? <span>{datos.model}</span> : null}
         {datos?.redactadaAt ? <span>· {formatDateTime(datos.redactadaAt)}</span> : null}
@@ -341,7 +342,7 @@ function PanelRedaccion({ ficha, datos, cargando }: { ficha: FichaRedaccion; dat
           // eslint-disable-next-line @next/next/no-img-element
           <img src={datos.imagen} alt="" className="mb-5 aspect-[16/9] w-full rounded object-cover" />
         ) : null}
-        <p className="text-muted-foreground mb-2 font-sans text-xs tracking-wide uppercase">{ficha.tema}</p>
+        <p className="text-muted-foreground mb-2 font-sans text-xs tracking-wide uppercase">{ficha.redaccion?.nicho_nombre ?? ficha.tema}</p>
         <h1 className="mb-4 text-2xl leading-tight font-bold sm:text-3xl">{r.titular}</h1>
         <div className="space-y-4 text-[15px] leading-relaxed sm:text-base">
           {r.entrada.parrafos.map((p, i) => (

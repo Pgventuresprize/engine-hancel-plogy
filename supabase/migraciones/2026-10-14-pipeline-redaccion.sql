@@ -65,3 +65,8 @@ alter table public.generation_config
 alter table public.agent_settings drop constraint if exists agent_settings_agent_check;
 alter table public.agent_settings add constraint agent_settings_agent_check
   check (agent in ('extraccion', 'analisis', 'angulo', 'instagram', 'linkedin', 'publicacion', 'redaccion'));
+
+-- El nicho (tema del portal) de cada noticia redactada.
+alter table public.news_redacciones
+  add column if not exists nicho_slug text,
+  add column if not exists nicho_nombre text;

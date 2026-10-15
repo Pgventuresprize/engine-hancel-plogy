@@ -37,6 +37,9 @@ export type RedaccionResumen = {
   promovida_a_mano: boolean
   redactada_at: string | null
   model: string | null
+  /** El nicho de la noticia: el tema bajo el que sale en el portal. */
+  nicho_slug: string | null
+  nicho_nombre: string | null
 }
 
 export type FichaRedaccion = {
@@ -110,7 +113,7 @@ export async function getTableroRedaccion(): Promise<TableroRedaccion> {
       .limit(MAX_FILAS),
     supabase
       .from("news_redacciones")
-      .select("raw_news_id, status, titular, word_count, imagen_url, error, intentos, promovida_a_mano, redactada_at, model")
+      .select("raw_news_id, status, titular, word_count, imagen_url, error, intentos, promovida_a_mano, redactada_at, model, nicho_slug, nicho_nombre")
       .eq("account_id", accountId),
     supabase.from("generation_config").select("redaccion_score_threshold").eq("account_id", accountId).maybeSingle(),
   ])

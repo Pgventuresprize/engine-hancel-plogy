@@ -10,6 +10,7 @@ import { supabaseAdmin } from "../supabase-admin"
 import { fuentesParaElAgente, redactarNoticia } from "./agente"
 import { fechaAbsoluta, investigarNoticia } from "./fuentes"
 import { imagenDeNoticia } from "./imagen"
+import { nichoDeNoticia } from "./nicho"
 
 /**
  * El pipeline de redaccion: de una noticia analizada a una noticia redactada.
@@ -49,6 +50,7 @@ type Noticia = {
   snippet: string | null
   source: string | null
   tema: string
+  niche: string
   date_serper: string | null
   image_url: string | null
   relevance_score: number | null
@@ -169,7 +171,7 @@ async function redactarUna(
   try {
     const { data } = await supabase
       .from("raw_news")
-      .select("id, title, link, snippet, source, tema, date_serper, image_url, relevance_score, created_at, status")
+      .select("id, title, link, snippet, source, tema, niche, date_serper, image_url, relevance_score, created_at, status")
       .eq("id", newsId)
       .single()
     const news = data as Noticia & { status: string }
@@ -199,6 +201,12 @@ async function redactarUna(
       system
     )
     const estado = redaccion.status === "ok" ? "redactada" : "material_insuficiente"
+    // El nicho (el tema en el portal): por lo que cuenta la noticia, siempre
+    // uno de los de la cuenta.
+    const nicho =
+      estado === "redactada"
+        ? await nichoDeNoticia(accountId, { titular: redaccion.titular, entrada: redaccion.entrada.parrafos.join(" "), nichoBusqueda: news.niche })
+        : null
     await supabase
       .from("news_redacciones")
       .update({
@@ -211,6 +219,8 @@ async function redactarUna(
         model,
         error: estado === "material_insuficiente" ? `Falta: ${redaccion.faltantes.join("; ") || "material verificable"}` : null,
         redactada_at: new Date().toISOString(),
+        nicho_slug: nicho?.slug ?? null,
+        nicho_nombre: nicho?.nombre ?? null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", filaId)

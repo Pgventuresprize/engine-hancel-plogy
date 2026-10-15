@@ -236,7 +236,7 @@ function Columna({
                 <p className="line-clamp-3 text-sm leading-snug font-medium">{f.titulo}</p>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Badge variant="outline" className="font-normal">
-                    {f.tema}
+                    {f.redaccion?.nicho_nombre ?? f.tema}
                   </Badge>
                   {f.analizada && f.score !== null ? <Badge variant={f.score >= 8 ? "default" : "secondary"}>{f.score}/10</Badge> : null}
                   {f.bajoUmbral ? (

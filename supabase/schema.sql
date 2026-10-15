@@ -1289,3 +1289,8 @@ alter table public.news_redacciones enable row level security;
 alter table public.generation_config
   add column if not exists redaccion_score_threshold integer,
   add column if not exists redaccion_threshold_updated_at timestamptz not null default now();
+
+-- El nicho (tema del portal) de cada noticia redactada.
+alter table public.news_redacciones
+  add column if not exists nicho_slug text,
+  add column if not exists nicho_nombre text;
