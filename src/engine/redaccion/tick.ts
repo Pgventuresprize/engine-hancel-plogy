@@ -3,6 +3,7 @@ import { promptDe } from "../agents/prompts"
 import { ajustesDe, marcarCorrida } from "../agents/settings"
 import { leToca } from "../agents/turno"
 import { modelosClaude } from "../claude/modelos"
+import { DIAS_DE_FRESCURA, diasDeAntiguedad, esVieja } from "../content/frescura"
 import { elegirPorHecho } from "../content/repetidas"
 import { getSettings } from "../schedule"
 import { supabaseAdmin } from "../supabase-admin"
@@ -35,6 +36,8 @@ export type ResumenRedaccion = {
   seleccionadas: number
   redactadas: number
   sinMaterial: number
+  /** Apartadas por viejas antes de escribirlas. */
+  viejas: number
   fallidas: number
   errores: string[]
 }
@@ -148,17 +151,39 @@ export async function pedirRedaccion(accountId: string, newsId: string): Promise
 }
 
 /** Redacta una noticia: investiga, busca la imagen y llama al agente. */
-async function redactarUna(accountId: string, filaId: string, newsId: string, intentos: number): Promise<"redactada" | "material_insuficiente" | "error"> {
+async function redactarUna(
+  accountId: string,
+  filaId: string,
+  newsId: string,
+  intentos: number
+): Promise<"redactada" | "material_insuficiente" | "vieja" | "error"> {
   const supabase = supabaseAdmin()
+  // Una noticia vieja no se redacta nunca, la haya pedido quien la haya pedido.
+  const apartarPorVieja = async (motivo: string) => {
+    await supabase
+      .from("news_redacciones")
+      .update({ status: "descartada", error: `Noticia vieja: ${motivo}`, updated_at: new Date().toISOString() })
+      .eq("id", filaId)
+    return "vieja" as const
+  }
   try {
     const { data } = await supabase
       .from("raw_news")
-      .select("id, title, link, snippet, source, tema, date_serper, image_url, relevance_score, created_at")
+      .select("id, title, link, snippet, source, tema, date_serper, image_url, relevance_score, created_at, status")
       .eq("id", newsId)
       .single()
-    const news = data as Noticia
+    const news = data as Noticia & { status: string }
+    if (news.status === "discarded_date" || esVieja(news.date_serper)) {
+      return await apartarPorVieja(`el buscador la fecha "${news.date_serper ?? "sin fecha"}".`)
+    }
     const { fuentes, imagenArticulo } = await investigarNoticia(accountId, news)
     const original = fuentes.find((f) => f.origen === "noticia")
+    // La fecha que declara el propio articulo manda: el buscador a veces la
+    // da relativa o no la da.
+    const diasArticulo = original?.fecha && /\d{4}/.test(original.fecha) ? diasDeAntiguedad(original.fecha) : null
+    if (diasArticulo !== null && diasArticulo > DIAS_DE_FRESCURA) {
+      return await apartarPorVieja(`el artículo original es del ${original!.fecha!.slice(0, 10)}.`)
+    }
     const fecha = fechaAbsoluta(original?.fecha ?? news.date_serper, news.created_at)
     if (original && fecha && original.fecha !== fecha) original.fecha = fecha
     const entrada = fuentesParaElAgente(fuentes)
@@ -211,7 +236,7 @@ export async function tickRedaccion(
   const supabase = supabaseAdmin()
   const limite = opciones.limite ?? 3
   const paralelo = opciones.paralelo ?? 3
-  const resumen: ResumenRedaccion = { seleccionadas: 0, redactadas: 0, sinMaterial: 0, fallidas: 0, errores: [] }
+  const resumen: ResumenRedaccion = { seleccionadas: 0, redactadas: 0, sinMaterial: 0, viejas: 0, fallidas: 0, errores: [] }
 
   await supabase
     .from("news_redacciones")
@@ -255,6 +280,7 @@ export async function tickRedaccion(
         const r = await redactarUna(accountId, fila.id, fila.raw_news_id, fila.intentos)
         if (r === "redactada") resumen.redactadas++
         else if (r === "material_insuficiente") resumen.sinMaterial++
+        else if (r === "vieja") resumen.viejas++
         else resumen.fallidas++
       })
     )

@@ -1,7 +1,9 @@
 import { llamarClaude, parsearJSONDeClaude } from "../claude/messages"
 import { modelosClaude } from "../claude/modelos"
 import { supabaseAdmin } from "../supabase-admin"
+import { getSettings } from "../schedule"
 import { guardarBusqueda, guardarFuenteNoticia } from "../redaccion/fuentes"
+import { DIAS_DE_FRESCURA, diasDeAntiguedad, esVieja } from "./frescura"
 import { investigarEnLaWeb } from "./composio"
 
 /**
@@ -48,12 +50,28 @@ NO ENTRA EN EL VETO, son noticias normales del sector:
 
 LA PRUEBA: si el sujeto de la noticia es una persona senalada, esta vetada. Si el sujeto es un hecho del sector, no lo esta. "Finagro amplio la linea de credito rural" no esta vetada; "Finagro dio credito de pequeno productor al gerente de un gremio" si lo esta.
 
+NOTICIA VIEJA: SCORE 1, SIEMPRE
+Se te da la fecha de hoy y la fecha que reporta el buscador. Decide la fecha del hecho: cuando paso lo que cuenta ESTA noticia, con el titulo, el snippet y el material. Es vieja si:
+- el hecho ocurrio hace mas de 5 dias, o la noticia es de un año anterior;
+- o el material muestra que lo anunciado ya paso (un paro convocado para una fecha que ya paso, un evento ya celebrado, un plazo ya vencido).
+Una noticia vieja lleva "vieja": true y relevance_score = 1, sin importar lo demas. Cuidado: el material de la web puede traer cobertura reciente de un tema viejo. Lo que cuenta es la fecha del hecho de esta noticia, no si el tema sigue vivo. Si no hay ninguna forma de saber la fecha, no la marques vieja por eso.
+
+POLITICA: SCORE 1, SIEMPRE
+Esta cuenta no cubre politica. Si el eje de la noticia es politico, lleva "politica": true y relevance_score = 1, sin importar lo demas:
+- elecciones, campañas, candidatos, encuestas, partidos, coaliciones;
+- el Congreso como pugna: quorum, votaciones, choques entre bancadas, debates de control;
+- paros, marchas y movilizaciones convocadas para presionar decisiones politicas;
+- declaraciones, alocuciones o peleas de politicos y funcionarios cuando lo noticioso es lo que dicen, no una medida concreta;
+- gobierno contra oposicion, cortes contra gobierno, acusaciones al gobierno anterior.
+NO es politica (se califica normal): una medida concreta ya adoptada o con fecha y monto (decreto, resolucion, arancel, subsidio, linea de credito, precio, programa), contada por lo que cambia para el productor; cifras oficiales; informes de gremios.
+LA PRUEBA: si lo noticioso es una decision que ya cambia algo para el sector, es sector. Si lo noticioso es la disputa, la presion o el posicionamiento, es politica.
+
 FILTRO DURO: si NO es un hecho verificable (opinion, prediccion sin gatillo, listicle generico), relevance_score = 1-2 sin importar lo demas.
 
 content_fetch_status: "success" si el material recolectado era sustancioso, "partial" si apenas habia mas que el snippet, "failed" si no llego nada.
 
 RESPONDE SOLO con este JSON, sin texto alrededor, sin saltos de linea y sin comillas dobles dentro de ninguna cadena (usa comillas simples y separa ideas con espacios dentro de full_content):
-{"vetada":<true|false>,"motivo_veto":"<una frase, solo si vetada es true>","full_content":"<el texto consolidado, en un solo bloque sin saltos de linea>","content_fetch_status":"success|partial|failed","relevance_score":<entero 1-10>,"keywords_matched":["<4 a 6 keywords en minuscula>"],"analysis_notes":"<2-3 frases: primero el score global y por que; luego el angulo editorial mas prometedor si lo hay>"}`
+{"vetada":<true|false>,"motivo_veto":"<una frase, solo si vetada es true>","fecha_hecho":"<YYYY-MM-DD o null si no se puede saber>","vieja":<true|false>,"politica":<true|false>,"full_content":"<el texto consolidado, en un solo bloque sin saltos de linea>","content_fetch_status":"success|partial|failed","relevance_score":<entero 1-10>,"keywords_matched":["<4 a 6 keywords en minuscula>"],"analysis_notes":"<2-3 frases: primero el score global y por que; luego el angulo editorial mas prometedor si lo hay>"}`
 
 type ResultadoAnalisis = {
   /**
@@ -65,6 +83,10 @@ type ResultadoAnalisis = {
    */
   vetada: boolean
   motivoVeto: string
+  /** Cuando paso el hecho, segun el agente. */
+  fechaHecho: string | null
+  vieja: boolean
+  politica: boolean
   full_content: string | null
   content_fetch_status: string
   relevance_score: number
@@ -78,6 +100,9 @@ function normaliza(bruto: unknown): ResultadoAnalisis {
   return {
     vetada: o.vetada === true,
     motivoVeto: typeof o.motivo_veto === "string" ? o.motivo_veto.trim().slice(0, 300) : "",
+    fechaHecho: typeof o.fecha_hecho === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.fecha_hecho) ? o.fecha_hecho : null,
+    vieja: o.vieja === true,
+    politica: o.politica === true,
     full_content:
       typeof o.full_content === "string" && o.full_content.trim()
         ? o.full_content.trim().slice(0, 8000)
@@ -102,6 +127,7 @@ type Pendiente = {
   niche: string
   tema: string
   date_serper: string | null
+  created_at: string
   image_url: string | null
 }
 
@@ -128,7 +154,7 @@ export async function analizarPendientes(
 
   let consulta = supabase
     .from("raw_news")
-    .select("id, title, link, snippet, source, niche, tema, date_serper, image_url")
+    .select("id, title, link, snippet, source, niche, tema, date_serper, image_url, created_at")
     .eq("account_id", accountId)
     .eq("status", "pending_analysis")
 
@@ -142,6 +168,8 @@ export async function analizarPendientes(
     return { analizadas: 0, fallidas: 0, errores: [], uso: { entrada: 0, salida: 0 } }
 
   const model = (await modelosClaude(accountId)).analisis
+  const { timezone } = await getSettings(accountId)
+  const hoy = new Date().toLocaleDateString("es-CO", { timeZone: timezone, weekday: "long", day: "numeric", month: "long", year: "numeric" })
   let analizadas = 0
   let fallidas = 0
   const errores: string[] = []
@@ -154,6 +182,17 @@ export async function analizarPendientes(
     await Promise.all(
       grupo.map(async (noticia) => {
         try {
+          // Una noticia vieja no se analiza: se aparta como en la extraccion.
+          // Llega aqui si se trajo antes de que se entendiera su fecha.
+          if (esVieja(noticia.date_serper, new Date())) {
+            await supabase
+              .from("raw_news")
+              .update({ status: "discarded_date", analysis_notes: `Vieja: el buscador la fecha "${noticia.date_serper}".` })
+              .eq("id", noticia.id)
+              .eq("status", "pending_analysis")
+            return
+          }
+
           // Composio sale a la web; el modelo no. Si no trae nada se analiza con
           // el snippet: una noticia sin material no es un fallo, es una noticia
           // con menos contexto, y el propio agente la marca 'failed'.
@@ -166,6 +205,8 @@ export async function analizarPendientes(
 - enlace: ${noticia.link}
 - nicho al que pertenece (para el FIT): ${noticia.niche} / ${noticia.tema}
 - snippet original: ${noticia.snippet ?? "(sin snippet)"}
+- fecha que reporta el buscador: ${noticia.date_serper ?? "(sin fecha)"} (traida el ${new Date(noticia.created_at).toISOString().slice(0, 10)})
+- hoy es: ${hoy}
 
 MATERIAL RECOLECTADO DE LA WEB
 ${material ? material.slice(0, MAX_MATERIAL) : "(no se pudo recolectar material; trabaja con el titular y el snippet)"}`
@@ -182,6 +223,16 @@ ${material ? material.slice(0, MAX_MATERIAL) : "(no se pudo recolectar material;
           uso.salida += r.uso.salida
 
           const res = normaliza(parsearJSONDeClaude(r.texto))
+          // Vieja por lo que dice el agente o por la fecha del hecho que dio.
+          const diasHecho = res.fechaHecho ? diasDeAntiguedad(res.fechaHecho) : null
+          const vieja = res.vieja || (diasHecho !== null && diasHecho > DIAS_DE_FRESCURA)
+          // Vieja o politica: score 1, diga lo que diga el resto del analisis.
+          if (vieja || res.politica) res.relevance_score = 1
+          const motivo = vieja
+            ? `Vieja${res.fechaHecho ? ` (hecho del ${res.fechaHecho})` : ""}: `
+            : res.politica
+              ? "Politica: "
+              : ""
           const { error: errUpdate } = await supabase
             .from("raw_news")
             .update({
@@ -192,11 +243,11 @@ ${material ? material.slice(0, MAX_MATERIAL) : "(no se pudo recolectar material;
               keywords_matched: res.keywords_matched,
               analysis_notes: res.vetada
                 ? `Vetada: ${res.motivoVeto || "tema que esta cuenta no cubre"}`
-                : res.analysis_notes,
+                : `${motivo}${res.analysis_notes}`,
               // Vetada no es "analizada con mala nota": es un tema que no se
               // cubre. Con su propio estado no entra en la seleccion, no se
               // puede arrastrar y queda a la vista para poder revisarlo.
-              status: res.vetada ? "vetada" : "analyzed",
+              status: res.vetada ? "vetada" : vieja ? "discarded_date" : "analyzed",
               analyzed_at: new Date().toISOString(),
             })
             .eq("id", noticia.id)
