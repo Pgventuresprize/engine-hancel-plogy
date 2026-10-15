@@ -350,13 +350,16 @@ alter table public.studio_pieces   enable row level security;
 alter table public.studio_settings enable row level security;
 
 -- La publicacion del estudio: cuando y donde sale cada pieza. El agente de
--- publicacion arma el plan del dia (un hueco cada publicar_cada_min minutos
--- desde publicar_desde, alternando pilares y recetas) y deja cada pieza
--- programada en Buffer a la hora de su hueco, en cada red de publicar_redes.
+-- publicacion arma el plan del dia (cada pilar publica a las publicar_horas:
+-- su primera pieza a la primera hora, etc.; sin horas, un hueco cada
+-- publicar_cada_min minutos desde publicar_desde, alternando pilares y
+-- recetas) y publica cada pieza a la hora de su hueco en cada red de
+-- publicar_redes (Composio).
 alter table public.studio_settings
   add column if not exists publicar_activo boolean not null default false,
   add column if not exists publicar_desde text not null default '09:30',
   add column if not exists publicar_cada_min integer not null default 15,
+  add column if not exists publicar_horas text[] not null default '{}',
   add column if not exists publicar_redes text[] not null default '{instagram,facebook}';
 
 create table if not exists public.studio_publications (

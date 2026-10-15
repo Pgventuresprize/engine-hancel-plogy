@@ -7,11 +7,14 @@ export type RedBuffer = "instagram" | "facebook"
 /**
  * El agente de publicacion del estudio.
  *
- * Cada dia arma un plan: un hueco cada `cadaMin` minutos desde `desde`, y en
- * cada hueco una receta. Las recetas de cada pilar se turnan (v1, v2, v3... y
- * otra vuelta), los pilares se intercalan (Agro, Cultivos, Agro...), y cada
- * receta aparece tantas veces como piezas genera al dia (`per_day`): lo que se
- * produce es lo que se publica.
+ * Cada dia arma un plan con una receta en cada hueco. Las recetas de cada
+ * pilar se turnan (v1, v2, v3... y otra vuelta), los pilares se intercalan
+ * (Agro, Cultivos, Agro...), y cada receta aparece tantas veces como piezas
+ * genera al dia (`per_day`): lo que se produce es lo que se publica.
+ *
+ * Las horas: con `horas` (09:00, 09:30, 12:00...) la primera publicacion de
+ * cada pilar sale a la primera hora, la segunda a la segunda, etc.; todos los
+ * pilares a la vez. Sin `horas`, un hueco cada `cadaMin` minutos desde `desde`.
  *
  * A cada hueco le toca la pieza mas reciente de su receta que no haya salido, y
  * se publica cuando llega su hora, con las conexiones de Facebook e Instagram
@@ -33,23 +36,39 @@ export type AjustesPublicacion = {
   /** "09:30", hora local de la cuenta. */
   desde: string
   cadaMin: number
+  /**
+   * Las horas locales de las publicaciones de cada pilar ("09:00", "12:30"...),
+   * en orden. Si un pilar tiene mas publicaciones que horas, las de mas siguen
+   * despues de la ultima, cada `cadaMin` minutos.
+   */
+  horas: string[]
   redes: RedBuffer[]
 }
 
-const POR_DEFECTO: AjustesPublicacion = { activo: false, desde: "09:30", cadaMin: 15, redes: ["instagram", "facebook"] }
+const POR_DEFECTO: AjustesPublicacion = { activo: false, desde: "09:30", cadaMin: 15, horas: [], redes: ["instagram", "facebook"] }
+
+const HORA = /^([01]?\d|2[0-3]):[0-5]\d$/
+
+/** "9:00, 12:30 18:00" -> ["09:00", "12:30", "18:00"], ordenadas y sin repetidas; null si alguna no es una hora. */
+export function leerHoras(texto: string | string[]): string[] | null {
+  const partes = (Array.isArray(texto) ? texto : texto.split(/[\s,;]+/)).map((h) => h.trim()).filter(Boolean)
+  if (partes.some((h) => !HORA.test(h))) return null
+  return [...new Set(partes.map((h) => h.padStart(5, "0")))].sort()
+}
 
 export async function ajustesPublicacion(accountId: string): Promise<AjustesPublicacion> {
   const { data } = await supabaseAdmin()
     .from("studio_settings")
-    .select("publicar_activo, publicar_desde, publicar_cada_min, publicar_redes")
+    .select("publicar_activo, publicar_desde, publicar_cada_min, publicar_horas, publicar_redes")
     .eq("account_id", accountId)
     .maybeSingle()
-  const d = data as { publicar_activo: boolean; publicar_desde: string; publicar_cada_min: number; publicar_redes: string[] } | null
+  const d = data as { publicar_activo: boolean; publicar_desde: string; publicar_cada_min: number; publicar_horas: string[] | null; publicar_redes: string[] } | null
   if (!d) return POR_DEFECTO
   return {
     activo: d.publicar_activo,
     desde: /^\d{1,2}:\d{2}$/.test(d.publicar_desde) ? d.publicar_desde : POR_DEFECTO.desde,
     cadaMin: Math.max(5, d.publicar_cada_min || POR_DEFECTO.cadaMin),
+    horas: leerHoras(d.publicar_horas ?? []) ?? [],
     redes: (d.publicar_redes ?? []).filter((r): r is RedBuffer => r === "instagram" || r === "facebook"),
   }
 }
@@ -97,10 +116,21 @@ export function planDelDia(recetas: RecetaPlan[], pilares: string[], ajustes: Aj
       return cola
     })
     .filter((c) => c.length)
-  const orden: RecetaPlan[] = []
-  for (let i = 0; colas.some((c) => i < c.length); i++) for (const c of colas) if (i < c.length) orden.push(c[i])
+  // Cada publicacion con su vuelta: la i-esima de cada pilar.
+  const orden: { receta: RecetaPlan; vuelta: number }[] = []
+  for (let i = 0; colas.some((c) => i < c.length); i++) for (const c of colas) if (i < c.length) orden.push({ receta: c[i], vuelta: i })
+  const paso = ajustes.cadaMin * 60_000
+  if (ajustes.horas.length) {
+    const horas = ajustes.horas.map((h) => instanteLocal(dia, h, timezone).getTime())
+    const ultima = horas[horas.length - 1]
+    return orden.map(({ receta, vuelta }, slot) => ({
+      slot,
+      at: new Date(vuelta < horas.length ? horas[vuelta] : ultima + (vuelta - horas.length + 1) * paso),
+      receta,
+    }))
+  }
   const inicio = instanteLocal(dia, ajustes.desde, timezone).getTime()
-  return orden.map((receta, slot) => ({ slot, at: new Date(inicio + slot * ajustes.cadaMin * 60_000), receta }))
+  return orden.map(({ receta }, slot) => ({ slot, at: new Date(inicio + slot * paso), receta }))
 }
 
 type Fila = {
@@ -257,8 +287,9 @@ export async function publicarPendientes(accountId: string, now = new Date()): P
     if (publicadas) {
       await supabase.from("studio_pieces").update({ status: "published", published_at: now.toISOString() }).eq("id", piezaId).neq("status", "published")
     }
-    // Un hueco por pasada: si habia varios atrasados, el siguiente sale en la
-    // proxima (cinco minutos), no en el mismo minuto.
+    // Un hueco por pasada: si habia varios atrasados o a la misma hora (un
+    // pilar y otro), el siguiente sale en la proxima (cinco minutos), no en el
+    // mismo minuto.
     break
   }
 

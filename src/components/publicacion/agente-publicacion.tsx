@@ -21,7 +21,7 @@ const REDES = [
  * El agente de publicacion: sus ajustes y el plan de hoy.
  *
  * El plan sale de las recetas encendidas: cada una publica tantas piezas al dia
- * como genera, en huecos que se turnan entre recetas e intercalan pilares. Cada
+ * como genera, turnando recetas; cada pilar publica a las horas fijadas. Cada
  * pieza se publica a la hora de su hueco con las conexiones de Facebook e
  * Instagram de la empresa; un carrusel de
  * Instagram sale igual en Facebook, con todas sus laminas.
@@ -29,8 +29,7 @@ const REDES = [
 export function Publicacion({ vista }: { vista: PublicacionVista }) {
   const a = vista.ajustes
   const [activo, setActivo] = React.useState(a.activo)
-  const [desde, setDesde] = React.useState(a.desde)
-  const [cada, setCada] = React.useState(String(a.cadaMin))
+  const [horas, setHoras] = React.useState(a.horas.join(", "))
   const [redes, setRedes] = React.useState<string[]>(a.redes)
   const [aviso, setAviso] = React.useState<{ ok: boolean; texto: string } | null>(null)
   const [pending, startTransition] = React.useTransition()
@@ -38,7 +37,7 @@ export function Publicacion({ vista }: { vista: PublicacionVista }) {
   const guardar = () => {
     setAviso(null)
     startTransition(async () => {
-      const r = await guardarPublicacion({ activo, desde, cadaMin: Number(cada), redes })
+      const r = await guardarPublicacion({ activo, horas, redes })
       setAviso(r.ok ? { ok: true, texto: "Publicación guardada." } : { ok: false, texto: r.error })
     })
   }
@@ -51,9 +50,10 @@ export function Publicacion({ vista }: { vista: PublicacionVista }) {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Agente de publicación</CardTitle>
           <p className="text-muted-foreground mt-1 text-sm">
-            Cada receta publica al día las piezas que genera. Las publicaciones salen una cada tantos
-            minutos desde la hora de inicio, turnando recetas e intercalando pilares, y quedan
-            publican a su hora con las conexiones de Facebook e Instagram de la empresa (Configuración → Conexiones).
+            Cada receta publica al día las piezas que genera, turnando recetas. Cada pilar publica a
+            las horas de abajo: su primera pieza a la primera hora, la segunda a la segunda… Si dos
+            pilares coinciden, el segundo sale cinco minutos después. Se publica con las conexiones de
+            Facebook e Instagram de la empresa (Configuración → Conexiones).
           </p>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -62,13 +62,9 @@ export function Publicacion({ vista }: { vista: PublicacionVista }) {
             <span className="text-sm">{activo ? "Activa" : "Apagada"}</span>
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="pub-desde">Desde (hora local)</Label>
-              <Input id="pub-desde" type="time" value={desde} disabled={pending} onChange={(e) => setDesde(e.target.value)} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="pub-cada">Cada (minutos)</Label>
-              <Input id="pub-cada" type="number" min={5} max={240} value={cada} disabled={pending} onChange={(e) => setCada(e.target.value)} />
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <Label htmlFor="pub-horas">Horas de cada pilar (hora local)</Label>
+              <Input id="pub-horas" value={horas} disabled={pending} onChange={(e) => setHoras(e.target.value)} placeholder="09:00, 09:30, 12:00, 12:30, 18:00" />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>Redes</Label>
