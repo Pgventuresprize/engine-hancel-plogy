@@ -2,7 +2,7 @@ import "server-only"
 
 import { supabaseAdmin } from "@/engine/supabase-admin"
 import { dayIn, getSettings } from "@/engine/schedule"
-import { ajustesPublicacion, planDelDia, type AjustesPublicacion } from "@/engine/studio/publicar"
+import { ajustesPublicacion, MAX_INTENTOS, planDelDia, type AjustesPublicacion } from "@/engine/studio/publicar"
 import { idDeCuentaActual } from "@/lib/accounts"
 
 /**
@@ -61,7 +61,7 @@ export async function getPublicacion(): Promise<PublicacionVista> {
   // reciente de su receta que no se haya usado, en el orden del plan (igual
   // que hace el agente).
   const [{ data: usadas }, { data: libres }, { data: horas }] = await Promise.all([
-    supabase.from("studio_publications").select("piece_id").eq("account_id", accountId),
+    supabase.from("studio_publications").select("piece_id").eq("account_id", accountId).or(`status.neq.error,intentos.lt.${MAX_INTENTOS}`),
     supabase
       .from("studio_pieces")
       .select("id, recipe_id, payload, created_at")

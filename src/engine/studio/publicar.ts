@@ -123,7 +123,7 @@ export type ResumenPublicacion = {
   errores?: string[]
 }
 
-const MAX_INTENTOS = 3
+export const MAX_INTENTOS = 3
 
 /** El texto del post: el caption y los hashtags, cada uno con su #. */
 function textoDelPost(payload: { caption?: string; hashtags?: string[] }) {
@@ -156,7 +156,9 @@ export async function publicarPendientes(accountId: string, now = new Date()): P
     supabase.from("content_recipes").select("id, name, pillar_id, per_day, channel, created_at").eq("account_id", accountId).eq("enabled", true),
     supabase.from("content_pillars").select("id").eq("account_id", accountId).order("position").order("name"),
     supabase.from("studio_publications").select("id, piece_id, slot, red, status, due_at, intentos, updated_at").eq("account_id", accountId).eq("dia", dia),
-    supabase.from("studio_publications").select("piece_id").eq("account_id", accountId),
+    // Una pieza cuyo hueco fallo del todo (sin mas intentos) queda libre para
+    // otro hueco: no se pierde porque la red no estuviera conectada.
+    supabase.from("studio_publications").select("piece_id").eq("account_id", accountId).or(`status.neq.error,intentos.lt.${MAX_INTENTOS}`),
   ])
   const plan = planDelDia(
     (recetasR.data ?? []) as RecetaPlan[],
