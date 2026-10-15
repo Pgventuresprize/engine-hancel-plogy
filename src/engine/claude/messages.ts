@@ -121,7 +121,10 @@ export async function llamarClaude(opciones: LlamadaClaude): Promise<ResultadoCl
       // sale en 764 y el JSON llega entero. Estos agentes piden formato estricto
       // a partir de material ya recolectado, que es justo lo que no necesita
       // deliberacion larga.
-      thinking: { type: "disabled" },
+      //
+      // La familia 5.5 no acepta "disabled": ahi apagarlo se dice
+      // "between_tools" (no piensa antes de responder).
+      thinking: opciones.model.includes("-5-5") ? { type: "between_tools" } : { type: "disabled" },
       system,
       messages: [
         {

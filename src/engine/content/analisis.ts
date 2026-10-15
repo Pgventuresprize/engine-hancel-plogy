@@ -1,7 +1,8 @@
 import { llamarClaude, parsearJSONDeClaude } from "../claude/messages"
 import { modelosClaude } from "../claude/modelos"
 import { supabaseAdmin } from "../supabase-admin"
-import { buscarEnLaWeb } from "./composio"
+import { guardarBusqueda, guardarFuenteNoticia } from "../redaccion/fuentes"
+import { investigarEnLaWeb } from "./composio"
 
 /**
  * El analisis: puntua la noticia con el material que le traen.
@@ -100,6 +101,8 @@ type Pendiente = {
   source: string | null
   niche: string
   tema: string
+  date_serper: string | null
+  image_url: string | null
 }
 
 /** Tope de material web por noticia: mas que esto es pagar contexto de mas. */
@@ -125,7 +128,7 @@ export async function analizarPendientes(
 
   let consulta = supabase
     .from("raw_news")
-    .select("id, title, link, snippet, source, niche, tema")
+    .select("id, title, link, snippet, source, niche, tema, date_serper, image_url")
     .eq("account_id", accountId)
     .eq("status", "pending_analysis")
 
@@ -154,7 +157,8 @@ export async function analizarPendientes(
           // Composio sale a la web; el modelo no. Si no trae nada se analiza con
           // el snippet: una noticia sin material no es un fallo, es una noticia
           // con menos contexto, y el propio agente la marca 'failed'.
-          const material = await buscarEnLaWeb(`${noticia.title} ${noticia.tema}`.trim())
+          const busqueda = await investigarEnLaWeb(`${noticia.title} ${noticia.tema}`.trim())
+          const material = busqueda?.texto ?? null
 
           const prompt = `NOTICIA A CONSOLIDAR Y CALIFICAR
 - titulo: ${noticia.title}
@@ -199,6 +203,16 @@ ${material ? material.slice(0, MAX_MATERIAL) : "(no se pudo recolectar material;
             .eq("status", "pending_analysis")
 
           if (errUpdate) throw new Error(errUpdate.message)
+
+          // Las fuentes de la busqueda se guardan: la redaccion cita cada dato
+          // con su fuente, y antes se tiraban y solo quedaba el texto. Que esto
+          // falle no invalida el analisis.
+          try {
+            await guardarFuenteNoticia(accountId, noticia)
+            if (busqueda) await guardarBusqueda(accountId, noticia.id, busqueda)
+          } catch {
+            // La redaccion vuelve a buscar si no encuentra fuentes guardadas.
+          }
           analizadas++
         } catch (e) {
           fallidas++

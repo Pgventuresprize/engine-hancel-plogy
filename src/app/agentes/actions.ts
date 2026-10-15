@@ -96,6 +96,12 @@ export async function guardarModo(
 async function arrancar(agent: Agente): Promise<void> {
   try {
     if (agent === "extraccion") return
+    if (agent === "redaccion") {
+      const { cuentaActual } = await import("@/lib/accounts")
+      const { despertarRedaccion } = await import("@/lib/redaccion-despertar")
+      await despertarRedaccion((await cuentaActual()).slug)
+      return
+    }
     const { runContentTick } = await import("@/engine/content/tick")
     await runContentTick({ trigger: "manual", forzar: [agent], presupuesto: 1 })
   } catch {
@@ -216,6 +222,21 @@ export async function ejecutarAgente(
       const r = await runIngestion({ accountId })
       refresh(clave)
       return { ok: true, resumen: `${r.inserted} noticias nuevas.` }
+    }
+
+    if (agent === "redaccion") {
+      // Redactar tarda mas de lo que aguanta esta accion: se seleccionan las
+      // que pasan el umbral y el tick de redaccion las escribe por su cuenta.
+      const { seleccionarParaRedaccion } = await import("@/engine/redaccion/tick")
+      const { cuentaActual } = await import("@/lib/accounts")
+      const { despertarRedaccion } = await import("@/lib/redaccion-despertar")
+      const sel = await seleccionarParaRedaccion(accountId, "manual")
+      await despertarRedaccion((await cuentaActual()).slug)
+      refresh(clave)
+      return {
+        ok: true,
+        resumen: `${sel.seleccionadas} noticias nuevas a redacción; el agente escribe la cola en segundo plano.`,
+      }
     }
 
     const { runContentTick } = await import("@/engine/content/tick")

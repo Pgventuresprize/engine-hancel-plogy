@@ -473,7 +473,7 @@ function Tarjeta({
  * esta columna: pulsar en "Angulo" anguliza lo que esta en "Analizadas". Es lo
  * mismo que haria la pasada automatica; cambia solo quien aprieta.
  */
-function IndicadorModo({ modo, redes }: { modo: ModoDeEtapa; redes: string[] }) {
+export function IndicadorModo({ modo, redes }: { modo: ModoDeEtapa; redes: string[] }) {
   const [pending, startTransition] = React.useTransition()
   const [aviso, setAviso] = React.useState<string | null>(null)
 

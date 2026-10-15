@@ -150,6 +150,11 @@ export type GenerationConfig = {
   score_threshold: number | null
   /** Cuando se fijo el umbral: solo rige para noticias traidas despues. */
   score_threshold_updated_at: string
+  /**
+   * El liston del pipeline de redaccion. Las noticias y su score son los mismos
+   * que en redes; lo que cambia es a partir de que nota se redactan.
+   */
+  redaccion_score_threshold: number | null
   generation_mode: "auto" | "manual"
   /**
    * Para que redes genera el modo automatico.

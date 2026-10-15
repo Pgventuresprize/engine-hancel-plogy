@@ -17,6 +17,7 @@ export const AGENTES = [
   "instagram",
   "linkedin",
   "publicacion",
+  "redaccion",
 ] as const
 
 export type Agente = (typeof AGENTES)[number]

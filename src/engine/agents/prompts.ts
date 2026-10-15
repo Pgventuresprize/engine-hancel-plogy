@@ -1,5 +1,6 @@
 import { ANALISIS_SYSTEM } from "../content/analisis"
 import { ANGULO_SYSTEM, INSTAGRAM_SYSTEM, LINKEDIN_SYSTEM } from "../content/agentes"
+import { REDACCION_SYSTEM } from "../redaccion/agente"
 import { ajustesDe, type Agente } from "./settings"
 
 /**
@@ -17,7 +18,7 @@ import { ajustesDe, type Agente } from "./settings"
  */
 
 /** Los agentes que hablan con Claude. Extraccion y publicacion no tienen prompt. */
-export const AGENTES_CON_PROMPT = ["analisis", "angulo", "instagram", "linkedin"] as const
+export const AGENTES_CON_PROMPT = ["analisis", "angulo", "instagram", "linkedin", "redaccion"] as const
 export type AgenteConPrompt = (typeof AGENTES_CON_PROMPT)[number]
 
 export const PROMPT_DE_FABRICA: Record<AgenteConPrompt, string> = {
@@ -25,6 +26,7 @@ export const PROMPT_DE_FABRICA: Record<AgenteConPrompt, string> = {
   angulo: ANGULO_SYSTEM,
   instagram: INSTAGRAM_SYSTEM,
   linkedin: LINKEDIN_SYSTEM,
+  redaccion: REDACCION_SYSTEM,
 }
 
 export function tienePrompt(agent: Agente): agent is AgenteConPrompt {

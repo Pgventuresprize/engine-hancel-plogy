@@ -1,5 +1,6 @@
 import { modelosClaude } from "../claude/modelos"
 import { MODELOS_DISPONIBLES } from "@/lib/modelos-ia"
+import { MODELO_REDACCION } from "../redaccion/agente"
 import { ajustesDe } from "./settings"
 import type { AgenteConPrompt } from "./prompts"
 
@@ -19,5 +20,7 @@ export async function modeloDe(accountId: string, agent: AgenteConPrompt): Promi
   // mano— se ignora en vez de reventar la pasada con un 404 de la API.
   if (elegido && MODELOS_DISPONIBLES.some((m) => m.id === elegido)) return elegido
 
+  // La redaccion no tiene modelo global de cuenta: nace con el suyo.
+  if (agent === "redaccion") return MODELO_REDACCION
   return (await modelosClaude(accountId))[agent]
 }

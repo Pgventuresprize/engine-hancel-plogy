@@ -795,12 +795,33 @@ export async function updateGenerationConfig(form: FormData): Promise<ActionResu
       .maybeSingle()
     const cambioElUmbral = (previa as { score_threshold: number | null } | null)?.score_threshold !== umbral
 
+    // El umbral de redaccion viaja solo desde la tarjeta de seleccion: si el
+    // formulario no lo trae (la pantalla de Marca), no se toca.
+    const extraRedaccion: Record<string, unknown> = {}
+    if (form.has("redaccion_score_threshold")) {
+      const t = text(form, "redaccion_score_threshold")
+      const nuevo = t.length > 0 ? Number(t) : null
+      if (nuevo !== null && (!Number.isInteger(nuevo) || nuevo < 0 || nuevo > 10)) {
+        return { ok: false, error: "El umbral de redacción tiene que ser un entero entre 0 y 10." }
+      }
+      const { data: antes } = await supabaseAdmin()
+        .from("generation_config")
+        .select("redaccion_score_threshold")
+        .eq("account_id", accountId)
+        .maybeSingle()
+      extraRedaccion.redaccion_score_threshold = nuevo
+      if ((antes as { redaccion_score_threshold: number | null } | null)?.redaccion_score_threshold !== nuevo) {
+        extraRedaccion.redaccion_threshold_updated_at = new Date().toISOString()
+      }
+    }
+
     const { error } = await supabaseAdmin()
       .from("generation_config")
       .update({
         variables: parseVariables(variables),
         score_threshold: umbral,
         ...(cambioElUmbral ? { score_threshold_updated_at: new Date().toISOString() } : {}),
+        ...extraRedaccion,
         updated_at: new Date().toISOString(),
       })
       .eq("account_id", accountId)

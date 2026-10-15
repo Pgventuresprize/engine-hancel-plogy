@@ -17,6 +17,7 @@ export type ClaveAgente =
   | "facebook"
   | "linkedin"
   | "publicacion"
+  | "redaccion"
 
 export type Conexion = {
   nombre: string
@@ -118,6 +119,16 @@ export const AGENTES: FichaAgente[] = [
     porCanal: true,
     conexiones: [],
     etapa: "Publicado",
+  },
+  {
+    clave: "redaccion",
+    nombre: "Redaccion",
+    resumen:
+      "Pipeline de redaccion: decide como contar la noticia y la redacta completa, citando las fuentes investigadas. Usa las mismas noticias traidas y analizadas que el de redes, con su propio umbral.",
+    usaIA: true,
+    modos: ["manual", "programado", "automatico"],
+    conexiones: [CLAUDE],
+    etapa: "Redactadas (pipeline de redaccion)",
   },
 ]
 

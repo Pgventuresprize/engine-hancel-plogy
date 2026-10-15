@@ -19,6 +19,9 @@ export const MODELOS_DISPONIBLES: { id: string; nombre: string }[] = [
   { id: "claude-haiku-4-5-20251001", nombre: "Haiku 4.5 (rapido, barato)" },
   { id: "claude-sonnet-5", nombre: "Sonnet 5 (equilibrado)" },
   { id: "claude-opus-5", nombre: "Opus 5 (maxima calidad)" },
+  { id: "claude-haiku-5-5", nombre: "Haiku 5.5 (rapido, barato)" },
+  { id: "claude-sonnet-5-5", nombre: "Sonnet 5.5 (equilibrado)" },
+  { id: "claude-opus-5-5", nombre: "Opus 5.5 (maxima calidad)" },
 ]
 
 export type ModelosPorPaso = Record<PasoIA, string>

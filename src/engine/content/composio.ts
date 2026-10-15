@@ -29,6 +29,58 @@ async function claveComposio(): Promise<string | null> {
   return clave?.trim() || null
 }
 
+/** Una fuente que cita la busqueda: de donde sale cada dato del texto. */
+export type CitaWeb = {
+  url: string
+  titulo: string | null
+  autor: string | null
+  fecha: string | null
+  imagen: string | null
+}
+
+/**
+ * Busca en la web y devuelve el texto sintetizado con sus citas.
+ *
+ * El texto trae marcas [1], [2]... que apuntan a `citas` en el mismo orden.
+ * Antes solo se guardaba el texto y las fuentes se perdian; la redaccion las
+ * necesita para atribuir cada dato.
+ */
+export async function investigarEnLaWeb(consulta: string): Promise<{ texto: string; citas: CitaWeb[] } | null> {
+  const clave = await claveComposio()
+  if (!clave) return null
+
+  try {
+    const res = await fetch(EJECUTAR, {
+      method: "POST",
+      headers: { "x-api-key": clave, "Content-Type": "application/json" },
+      body: JSON.stringify({ entity_id: "default", arguments: { query: consulta } }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+    if (!res.ok) return null
+
+    const json = (await res.json()) as {
+      data?: {
+        answer?: string
+        citations?: { url?: string; id?: string; title?: string; author?: string; publishedDate?: string; image?: string }[]
+      }
+    }
+    const texto = json.data?.answer?.trim()
+    if (!texto) return null
+    const citas = (json.data?.citations ?? [])
+      .map((c) => ({
+        url: (c.url || c.id || "").trim(),
+        titulo: c.title?.trim() || null,
+        autor: c.author?.trim() || null,
+        fecha: c.publishedDate?.trim() || null,
+        imagen: c.image?.trim() || null,
+      }))
+      .filter((c) => /^https?:\/\//.test(c.url))
+    return { texto, citas }
+  } catch {
+    return null
+  }
+}
+
 /**
  * Busca en la web y devuelve el texto sintetizado.
  *
