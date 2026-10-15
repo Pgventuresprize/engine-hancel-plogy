@@ -1294,3 +1294,53 @@ alter table public.generation_config
 alter table public.news_redacciones
   add column if not exists nicho_slug text,
   add column if not exists nicho_nombre text;
+-- El portal de noticias de cada empresa (aplicada el 2026-10-15): la URL del
+-- webhook y el secreto con que se firman los envios, el switch de envio
+-- automatico, el estado del envio de cada redaccion y el registro de entregas.
+alter table public.account_secrets
+  add column if not exists web_webhook_url text,
+  add column if not exists web_webhook_secret text;
+
+alter table public.generation_config
+  add column if not exists web_envio_auto boolean not null default true,
+  add column if not exists web_auto_desde timestamptz not null default now();
+
+alter table public.news_redacciones
+  add column if not exists version integer not null default 1,
+  add column if not exists slug text,
+  add column if not exists imagen_credito jsonb,
+  add column if not exists imagen_ancho integer,
+  add column if not exists imagen_alto integer,
+  add column if not exists web_status text,
+  add column if not exists web_version integer not null default 0,
+  add column if not exists web_url text,
+  add column if not exists web_id_externo text,
+  add column if not exists web_publicada_at timestamptz,
+  add column if not exists web_enviada_at timestamptz,
+  add column if not exists web_error text,
+  add column if not exists web_intentos integer not null default 0,
+  add column if not exists web_proximo_at timestamptz,
+  add column if not exists web_evento_id text;
+
+alter table public.news_redacciones drop constraint if exists news_redacciones_web_status_check;
+alter table public.news_redacciones add constraint news_redacciones_web_status_check
+  check (web_status is null or web_status in ('pendiente', 'enviando', 'enviada', 'error', 'retirada'));
+
+create unique index if not exists news_redacciones_slug_idx on public.news_redacciones (account_id, slug) where slug is not null;
+create index if not exists news_redacciones_web_idx on public.news_redacciones (account_id, web_status);
+
+create table if not exists public.web_entregas (
+  id           uuid primary key default gen_random_uuid(),
+  account_id   uuid not null references public.accounts (id) on delete cascade,
+  redaccion_id uuid references public.news_redacciones (id) on delete set null,
+  evento_id    text not null,
+  tipo         text not null,
+  intento      integer not null default 1,
+  status_code  integer,
+  respuesta    text,
+  error        text,
+  ms           integer,
+  created_at   timestamptz not null default now()
+);
+create index if not exists web_entregas_account_idx on public.web_entregas (account_id, created_at desc);
+alter table public.web_entregas enable row level security;

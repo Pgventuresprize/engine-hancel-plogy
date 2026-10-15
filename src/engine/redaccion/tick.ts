@@ -11,6 +11,7 @@ import { fuentesParaElAgente, redactarNoticia } from "./agente"
 import { fechaAbsoluta, investigarNoticia } from "./fuentes"
 import { imagenDeNoticia } from "./imagen"
 import { nichoDeNoticia } from "./nicho"
+import { procesarWeb, type ResumenWeb } from "../web/webhook"
 
 /**
  * El pipeline de redaccion: de una noticia analizada a una noticia redactada.
@@ -39,6 +40,8 @@ export type ResumenRedaccion = {
   sinMaterial: number
   /** Apartadas por viejas antes de escribirlas. */
   viejas: number
+  /** Lo enviado al portal de noticias en esta pasada. */
+  web?: ResumenWeb
   fallidas: number
   errores: string[]
 }
@@ -192,7 +195,12 @@ async function redactarUna(
     const [model, system, imagen] = await Promise.all([
       modeloDe(accountId, "redaccion"),
       promptDe(accountId, "redaccion"),
-      imagenDeNoticia(accountId, news.id, [imagenArticulo, news.image_url, ...fuentes.map((f) => f.imagen)]),
+      // Cada candidata con su credito: la foto sale con el medio del que vino.
+      imagenDeNoticia(accountId, news.id, [
+        { url: imagenArticulo, medio: original?.medio ?? news.source, autor: null, url_origen: original?.url ?? news.link },
+        { url: news.image_url, medio: original?.medio ?? news.source, autor: null, url_origen: original?.url ?? news.link },
+        ...fuentes.map((f) => ({ url: f.imagen, medio: f.medio, autor: null, url_origen: f.url })),
+      ]),
     ])
     const { redaccion } = await redactarNoticia(
       accountId,
@@ -201,6 +209,8 @@ async function redactarUna(
       system
     )
     const estado = redaccion.status === "ok" ? "redactada" : "material_insuficiente"
+    const { data: previaData } = await supabase.from("news_redacciones").select("version, web_version").eq("id", filaId).maybeSingle()
+    const previa = previaData as { version: number; web_version: number } | null
     // El nicho (el tema en el portal): por lo que cuenta la noticia, siempre
     // uno de los de la cuenta.
     const nicho =
@@ -214,7 +224,15 @@ async function redactarUna(
         titular: redaccion.titular || null,
         payload: redaccion,
         fuentes: entrada.map(({ contenido, ...resto }) => ({ ...resto, caracteres: contenido.length })),
-        imagen_url: imagen,
+        imagen_url: imagen?.url ?? null,
+        imagen_credito: imagen?.credito ?? null,
+        imagen_ancho: imagen?.ancho ?? null,
+        imagen_alto: imagen?.alto ?? null,
+        // Si ya estaba en el portal, esto es una version nueva de la misma
+        // noticia: sale como actualizacion (mismo id y slug, version + 1).
+        ...(estado === "redactada" && previa && previa.web_version > 0
+          ? { version: previa.version + 1, web_status: "pendiente", web_intentos: 0, web_error: null }
+          : {}),
         word_count: redaccion.word_count,
         model,
         error: estado === "material_insuficiente" ? `Falta: ${redaccion.faltantes.join("; ") || "material verificable"}` : null,
@@ -262,7 +280,10 @@ export async function tickRedaccion(
   // Las pedidas a mano corren aunque el agente este en manual; las de la
   // seleccion automatica solo llegan aqui si al agente le tocaba.
   const suyo = await ajustesDe(accountId, "redaccion")
-  if (!suyo.enabled) return resumen
+  if (!suyo.enabled) {
+    resumen.web = await procesarWeb(accountId)
+    return resumen
+  }
 
   const { data } = await supabase
     .from("news_redacciones")
@@ -294,6 +315,12 @@ export async function tickRedaccion(
         else resumen.fallidas++
       })
     )
+  }
+  // Lo recien redactado sale al portal en la misma pasada.
+  try {
+    resumen.web = await procesarWeb(accountId)
+  } catch (e) {
+    resumen.errores.push(`web: ${e instanceof Error ? e.message : String(e)}`)
   }
   return resumen
 }

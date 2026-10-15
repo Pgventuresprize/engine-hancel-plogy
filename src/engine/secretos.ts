@@ -29,6 +29,9 @@ export type SecretosCuenta = {
   facebook_page_name: string | null
   instagram_user_id: string | null
   instagram_username: string | null
+  /** El portal de noticias de la empresa: a donde se envian las redactadas. */
+  web_webhook_url: string | null
+  web_webhook_secret: string | null
 }
 
 const VACIO: SecretosCuenta = {
@@ -46,6 +49,8 @@ const VACIO: SecretosCuenta = {
   facebook_page_name: null,
   instagram_user_id: null,
   instagram_username: null,
+  web_webhook_url: null,
+  web_webhook_secret: null,
 }
 
 /** Las conexiones de una empresa. Si aun no tiene fila, todo vacio. */

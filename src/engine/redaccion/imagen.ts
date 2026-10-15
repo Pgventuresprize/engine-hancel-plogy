@@ -2,22 +2,32 @@ import { supabaseAdmin } from "../supabase-admin"
 
 const BUCKET = "carousels"
 
+/** De donde salio la foto: se publica como "Foto: <medio>". */
+export type CreditoImagen = { medio: string | null; autor: string | null; url_origen: string | null }
+
+export type CandidataImagen = { url: string | null | undefined } & CreditoImagen
+
+export type ImagenNoticia = { url: string; ancho: number | null; alto: number | null; credito: CreditoImagen }
+
 /**
  * La imagen de la noticia redactada. Es proceso, no IA: la imagen principal del
  * articulo original (og:image), y si no se deja bajar, la miniatura que trajo
- * la extraccion o la de alguna de las fuentes.
+ * la extraccion o la de alguna de las fuentes. Cada candidata trae su credito:
+ * la foto se publica con el medio del que salio.
  *
  * Se copia a nuestro storage en JPEG: el enlace del medio puede caducar o
  * bloquear que se muestre desde otro sitio, y la noticia redactada no puede
  * quedarse sin foto por eso.
  */
-export async function imagenDeNoticia(accountId: string, newsId: string, candidatas: (string | null | undefined)[]): Promise<string | null> {
+export async function imagenDeNoticia(accountId: string, newsId: string, candidatas: CandidataImagen[]): Promise<ImagenNoticia | null> {
   const sharp = (await import("sharp")).default
   const supabase = supabaseAdmin()
   const vistas = new Set<string>()
-  for (const url of candidatas) {
+  for (const c of candidatas) {
+    const url = c.url
     if (!url || vistas.has(url) || !/^https?:\/\//.test(url)) continue
     vistas.add(url)
+    const credito: CreditoImagen = { medio: c.medio, autor: c.autor, url_origen: c.url_origen }
     try {
       const res = await fetch(url, {
         headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0 Safari/537.36", Accept: "image/*" },
@@ -30,11 +40,21 @@ export async function imagenDeNoticia(accountId: string, newsId: string, candida
       const info = await img.metadata()
       // Una miniatura o un icono no sirven de foto de la noticia.
       if (!info.width || info.width < 400) continue
-      const jpg = await img.rotate().resize({ width: 1600, withoutEnlargement: true }).flatten({ background: "#ffffff" }).jpeg({ quality: 86 }).toBuffer()
+      const { data: jpg, info: salida } = await img
+        .rotate()
+        .resize({ width: 1600, withoutEnlargement: true })
+        .flatten({ background: "#ffffff" })
+        .jpeg({ quality: 86 })
+        .toBuffer({ resolveWithObject: true })
       const ruta = `redaccion/${accountId}/${newsId}.jpg`
       const { error } = await supabase.storage.from(BUCKET).upload(ruta, jpg, { contentType: "image/jpeg", upsert: true })
-      if (error) return url
-      return `${supabase.storage.from(BUCKET).getPublicUrl(ruta).data.publicUrl}?v=${Date.now().toString(36)}`
+      if (error) return { url, ancho: info.width ?? null, alto: info.height ?? null, credito }
+      return {
+        url: `${supabase.storage.from(BUCKET).getPublicUrl(ruta).data.publicUrl}?v=${Date.now().toString(36)}`,
+        ancho: salida.width,
+        alto: salida.height,
+        credito,
+      }
     } catch {
       continue
     }

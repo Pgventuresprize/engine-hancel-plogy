@@ -3,6 +3,7 @@ import { LinkedinConnection } from "@/components/contenido/linkedin-connection"
 import { CanvaConnection } from "@/components/configuracion/canva-connection"
 import { MetaConnection } from "@/components/configuracion/meta-connection"
 import { SerperConnection } from "@/components/configuracion/serper-connection"
+import { WebConnection } from "@/components/configuracion/web-connection"
 import { DashboardShell } from "@/components/dashboard-shell"
 import { estadoSerper, estadoTokenClaude } from "@/app/cuenta/actions"
 import { getLinkedinStatus } from "@/engine/publish/linkedin"
@@ -80,6 +81,11 @@ export default async function ConexionesPage({
             paginas={paginas?.ok ? paginas.paginas : []}
             paginaActual={secretos.facebook_page_id}
             recienConectado={first("facebook") === "ok"}
+          />
+          <WebConnection
+            url={secretos.web_webhook_url}
+            conectado={Boolean(secretos.web_webhook_url && secretos.web_webhook_secret)}
+            esOwner={cuenta.rol === "owner"}
           />
         </section>
 

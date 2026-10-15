@@ -1,10 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { CheckIcon, CopyIcon, ExternalLinkIcon, PenLineIcon, RefreshCwIcon, XIcon } from "lucide-react"
+import { CheckIcon, CopyIcon, ExternalLinkIcon, PenLineIcon, RefreshCwIcon, SendIcon, XIcon } from "lucide-react"
 
 import { contenidoDeNoticia } from "@/app/estudio/actions"
-import { moverEnRedaccion, redaccionCompleta, type RedaccionCompleta } from "@/app/estudio/redaccion-actions"
+import { moverEnRedaccion, publicarEnWeb, redaccionCompleta, type RedaccionCompleta } from "@/app/estudio/redaccion-actions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -249,8 +249,48 @@ function PanelRedaccion({ ficha, datos, cargando }: { ficha: FichaRedaccion; dat
       }
     })
 
+  const web = ficha.redaccion
+  const publicarWeb = () =>
+    start(async () => {
+      setAviso(null)
+      try {
+        const res = await publicarEnWeb(ficha.newsId)
+        setAviso(res.ok ? { ok: true, texto: res.aviso ?? "Hecho." } : { ok: false, texto: res.error })
+      } catch {
+        setAviso({ ok: false, texto: "La acción no respondió." })
+      }
+    })
+
   const barra = (
     <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+      {status === "redactada" && web ? (
+        <span className="flex w-full flex-wrap items-center gap-2 text-xs">
+          <span className="text-muted-foreground">Portal de noticias:</span>
+          {web.web_status === "enviada" ? (
+            <Badge className="bg-emerald-600 text-white">Publicada{web.web_version > 1 ? ` (v${web.web_version})` : ""}</Badge>
+          ) : web.web_status === "pendiente" || web.web_status === "enviando" ? (
+            <Badge variant="secondary">Enviando…</Badge>
+          ) : web.web_status === "error" ? (
+            <Badge variant="destructive" title={web.web_error ?? ""}>
+              Error
+            </Badge>
+          ) : (
+            <Badge variant="outline">Sin enviar</Badge>
+          )}
+          {web.web_url ? (
+            <a href={web.web_url} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground underline underline-offset-2">
+              Ver en el portal
+            </a>
+          ) : null}
+          {web.web_status === "error" && web.web_error ? <span className="text-destructive">{web.web_error}</span> : null}
+          {web.web_status !== "pendiente" && web.web_status !== "enviando" ? (
+            <Button size="sm" variant="outline" disabled={pending} onClick={publicarWeb}>
+              <SendIcon />
+              {web.web_status === "enviada" ? "Reenviar" : web.web_status === "error" ? "Reintentar" : "Publicar en la web"}
+            </Button>
+          ) : null}
+        </span>
+      ) : null}
       {status === "redactada" && r ? (
         <Button
           size="sm"
@@ -340,7 +380,22 @@ function PanelRedaccion({ ficha, datos, cargando }: { ficha: FichaRedaccion; dat
       <article className="bg-background mx-auto w-full max-w-2xl rounded-lg border p-5 font-serif sm:p-8">
         {datos?.imagen ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={datos.imagen} alt="" className="mb-5 aspect-[16/9] w-full rounded object-cover" />
+          <figure className="mb-5">
+            <img src={datos.imagen} alt="" className="aspect-[16/9] w-full rounded object-cover" />
+            {datos.imagenCredito?.medio ? (
+              <figcaption className="text-muted-foreground mt-1 font-sans text-[11px]">
+                Foto:{" "}
+                {datos.imagenCredito.url_origen ? (
+                  <a href={datos.imagenCredito.url_origen} target="_blank" rel="noreferrer" className="hover:text-foreground underline underline-offset-2">
+                    {datos.imagenCredito.medio.replace(/^www\./, "")}
+                  </a>
+                ) : (
+                  datos.imagenCredito.medio
+                )}
+                {datos.imagenCredito.autor ? ` / ${datos.imagenCredito.autor}` : ""}
+              </figcaption>
+            ) : null}
+          </figure>
         ) : null}
         <p className="text-muted-foreground mb-2 font-sans text-xs tracking-wide uppercase">{ficha.redaccion?.nicho_nombre ?? ficha.tema}</p>
         <h1 className="mb-4 text-2xl leading-tight font-bold sm:text-3xl">{r.titular}</h1>

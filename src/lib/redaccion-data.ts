@@ -21,6 +21,7 @@ export type EtapaRedaccion =
   | "analizada"
   | "en_redaccion"
   | "redactada"
+  | "en_web"
   | "sin_material"
   | "descartado"
   | "descartado_fecha"
@@ -40,6 +41,13 @@ export type RedaccionResumen = {
   /** El nicho de la noticia: el tema bajo el que sale en el portal. */
   nicho_slug: string | null
   nicho_nombre: string | null
+  /** El envio al portal: null (nunca), pendiente, enviando, enviada, error, retirada. */
+  web_status: string | null
+  web_url: string | null
+  web_error: string | null
+  web_enviada_at: string | null
+  web_version: number
+  version: number
 }
 
 export type FichaRedaccion = {
@@ -69,6 +77,8 @@ export type TableroRedaccion = {
   conteos: Record<EtapaRedaccion, number>
   modos: Partial<Record<EtapaRedaccion, ModoDeEtapa>>
   umbral: number | null
+  /** El portal de noticias: si esta conectado y si el envio es automatico. */
+  web: { conectado: boolean; auto: boolean }
 }
 
 const VISIBLES = 60
@@ -79,6 +89,7 @@ const VACIO = (): Record<EtapaRedaccion, FichaRedaccion[]> => ({
   analizada: [],
   en_redaccion: [],
   redactada: [],
+  en_web: [],
   sin_material: [],
   descartado: [],
   descartado_fecha: [],
@@ -89,7 +100,7 @@ const VACIO = (): Record<EtapaRedaccion, FichaRedaccion[]> => ({
 function etapaDe(estadoNoticia: string, r: RedaccionResumen | null): EtapaRedaccion {
   // Lo ya redactado manda: si se escribio, se ve aunque despues la noticia se
   // marcara de otra forma en el otro pipeline.
-  if (r?.status === "redactada") return "redactada"
+  if (r?.status === "redactada") return r.web_status === "enviada" ? "en_web" : "redactada"
   if (estadoNoticia === "discarded_date") return "descartado_fecha"
   if (estadoNoticia === "vetada") return "vetada"
   if (estadoNoticia === "duplicate") return "repetida"
@@ -113,10 +124,12 @@ export async function getTableroRedaccion(): Promise<TableroRedaccion> {
       .limit(MAX_FILAS),
     supabase
       .from("news_redacciones")
-      .select("raw_news_id, status, titular, word_count, imagen_url, error, intentos, promovida_a_mano, redactada_at, model, nicho_slug, nicho_nombre")
+      .select("raw_news_id, status, titular, word_count, imagen_url, error, intentos, promovida_a_mano, redactada_at, model, nicho_slug, nicho_nombre, web_status, web_url, web_error, web_enviada_at, web_version, version")
       .eq("account_id", accountId),
-    supabase.from("generation_config").select("redaccion_score_threshold").eq("account_id", accountId).maybeSingle(),
+    supabase.from("generation_config").select("redaccion_score_threshold, web_envio_auto").eq("account_id", accountId).maybeSingle(),
   ])
+  const { conexionWeb } = await import("@/engine/web/webhook")
+  const web = { conectado: Boolean(await conexionWeb(accountId)), auto: (config as { web_envio_auto?: boolean } | null)?.web_envio_auto !== false }
   if (error) throw new Error(`No se pudo cargar el tablero: ${error.message}`)
 
   const umbral = (config as { redaccion_score_threshold: number | null } | null)?.redaccion_score_threshold ?? null
@@ -174,7 +187,7 @@ export async function getTableroRedaccion(): Promise<TableroRedaccion> {
     fichas[etapa] = porEtapa[etapa].slice(0, VISIBLES)
   }
 
-  return { fichas, conteos, modos: await modosDeEtapa(accountId), umbral }
+  return { fichas, conteos, modos: await modosDeEtapa(accountId), umbral, web }
 }
 
 const AGENTE_DE_ETAPA: Partial<Record<EtapaRedaccion, { agente: Agente; nombre: string }>> = {

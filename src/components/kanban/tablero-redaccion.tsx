@@ -2,10 +2,11 @@
 
 import * as React from "react"
 
-import { moverEnRedaccion } from "@/app/estudio/redaccion-actions"
+import { guardarEnvioWebAuto, moverEnRedaccion } from "@/app/estudio/redaccion-actions"
 import { IndicadorModo } from "@/components/kanban/tablero"
 import { RedaccionDialog } from "@/components/kanban/redaccion-dialog"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
 import type { EtapaRedaccion, FichaRedaccion, TableroRedaccion as Datos } from "@/lib/redaccion-data"
 
 /**
@@ -35,6 +36,7 @@ const GRUPOS: Grupo[] = [
     etapas: [
       { id: "en_redaccion", titulo: "En redacción", pista: "Investigando y escribiendo" },
       { id: "redactada", titulo: "Redactadas", pista: "Noticia escrita, con sus fuentes" },
+      { id: "en_web", titulo: "En la web", pista: "Publicadas en el portal de noticias" },
     ],
   },
   {
@@ -50,11 +52,12 @@ const GRUPOS: Grupo[] = [
 ]
 
 /** A donde se puede soltar cada tarjeta, y que pide eso. */
-function destino(origen: EtapaRedaccion, etapa: EtapaRedaccion): "analizada" | "redaccion" | "descartado" | null {
+function destino(origen: EtapaRedaccion, etapa: EtapaRedaccion): "analizada" | "redaccion" | "descartado" | "web" | null {
+  if (etapa === "en_web" && origen === "redactada") return "web"
   if (etapa === "analizada" && origen === "sin_analizar") return "analizada"
   if (etapa === "redactada" && (origen === "analizada" || origen === "sin_material" || origen === "descartado")) return "redaccion"
   if (etapa === "en_redaccion" && (origen === "analizada" || origen === "sin_material")) return "redaccion"
-  if (etapa === "descartado" && ["analizada", "en_redaccion", "redactada", "sin_material"].includes(origen)) return "descartado"
+  if (etapa === "descartado" && ["analizada", "en_redaccion", "redactada", "en_web", "sin_material"].includes(origen)) return "descartado"
   return null
 }
 
@@ -106,7 +109,11 @@ export function TableroRedaccion({ datos }: { datos: Datos }) {
       ) : null}
 
       <div className="flex items-start gap-5 overflow-x-auto pb-2">
-        {GRUPOS.map((grupo) => {
+        {GRUPOS.map((g) => ({
+          ...g,
+          // Como una red: la columna existe cuando el portal esta conectado.
+          etapas: g.etapas.filter((e) => e.id !== "en_web" || datos.web.conectado),
+        })).map((grupo) => {
           const total = grupo.etapas.reduce((n, e) => n + datos.conteos[e.id], 0)
           return (
             <section key={grupo.titulo} className="shrink-0">
@@ -124,6 +131,7 @@ export function TableroRedaccion({ datos }: { datos: Datos }) {
                     fichas={datos.fichas[etapa.id]}
                     total={datos.conteos[etapa.id]}
                     modo={datos.modos[etapa.id]}
+                    extra={etapa.id === "en_web" ? <SwitchWeb auto={datos.web.auto} onAviso={setAviso} /> : null}
                     moviendo={moviendo}
                     acepta={arrastrando !== null && destino(arrastrando.etapa, etapa.id) !== null}
                     onAbrir={(f) => {
@@ -152,6 +160,7 @@ function Columna({
   fichas,
   total,
   modo,
+  extra,
   moviendo,
   acepta,
   onAbrir,
@@ -164,6 +173,8 @@ function Columna({
   fichas: FichaRedaccion[]
   total: number
   modo?: Datos["modos"][EtapaRedaccion]
+  /** Algo propio de la columna en su cabecera (el switch de En la web). */
+  extra?: React.ReactNode
   moviendo: string | null
   acepta: boolean
   onAbrir: (f: FichaRedaccion) => void
@@ -196,6 +207,7 @@ function Columna({
           <h3 className="text-xs font-medium">{titulo}</h3>
           <div className="flex items-center gap-1">
             {modo ? <IndicadorModo modo={modo} redes={[]} /> : null}
+            {extra}
             <span className="text-muted-foreground text-xs tabular-nums">{total}</span>
           </div>
         </div>
@@ -248,6 +260,15 @@ function Columna({
                     <Badge variant="secondary">{f.redaccion.word_count} palabras</Badge>
                   ) : null}
                   {f.redaccion?.status === "pendiente" ? <Badge variant="secondary">En cola</Badge> : null}
+                  {f.redaccion?.web_status === "pendiente" || f.redaccion?.web_status === "enviando" ? (
+                    <Badge variant="secondary">{f.redaccion.web_version > 0 ? "Actualizando en la web…" : "Enviando a la web…"}</Badge>
+                  ) : null}
+                  {f.redaccion?.web_status === "error" ? (
+                    <Badge variant="destructive" title={f.redaccion.web_error ?? ""}>
+                      Error web
+                    </Badge>
+                  ) : null}
+                  {f.etapa === "en_web" && f.redaccion && f.redaccion.version > 1 ? <Badge variant="outline">v{f.redaccion.version}</Badge> : null}
                   {f.redaccion?.status === "redactando" ? <Badge variant="secondary">Redactando…</Badge> : null}
                   {f.redaccion?.status === "error" ? (
                     <Badge variant="destructive" title={f.redaccion.error ?? ""}>
@@ -265,5 +286,27 @@ function Columna({
         {ocultas > 0 ? <p className="text-muted-foreground px-1 py-2 text-center text-xs">y {ocultas} más</p> : null}
       </div>
     </div>
+  )
+}
+
+/** Automatico (por defecto): cada redactada sale sola al portal. Apagado: a mano. */
+function SwitchWeb({ auto, onAviso }: { auto: boolean; onAviso: (a: { tipo: "error" | "ok"; texto: string }) => void }) {
+  const [pending, start] = React.useTransition()
+  return (
+    <span className="flex items-center gap-1" title={auto ? "Automático: cada redactada sale sola" : "Manual: arrastra para publicar"}>
+      <Switch
+        checked={auto}
+        disabled={pending}
+        onCheckedChange={(v) =>
+          start(async () => {
+            const r = await guardarEnvioWebAuto(v)
+            onAviso(r.ok ? { tipo: "ok", texto: r.aviso ?? "Guardado." } : { tipo: "error", texto: r.error })
+          })
+        }
+        aria-label="Envío automático al portal"
+        className="scale-75"
+      />
+      <span className="text-muted-foreground text-[10px]">{auto ? "Automático" : "Manual"}</span>
+    </span>
   )
 }
