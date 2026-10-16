@@ -4,7 +4,7 @@ import * as React from "react"
 import { SparklesIcon, Trash2Icon } from "lucide-react"
 
 import { generarIdeas, limpiarDisponibles } from "@/app/ideas/actions"
-import type { PilarConIdeas } from "@/lib/ideas-data"
+import type { Cartucho, PilarConIdeas } from "@/lib/ideas-data"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,6 +19,25 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 export function PanelPilar({ pilar }: { pilar: PilarConIdeas }) {
   const [pending, startTransition] = React.useTransition()
   const [aviso, setAviso] = React.useState<{ ok: boolean; texto: string } | null>(null)
+  // null = todas. Una intencion y una narracion a la vez, o todas.
+  const [intencion, setIntencion] = React.useState<string | null>(null)
+  const [narrativa, setNarrativa] = React.useState<string | null>(null)
+
+  const cumple = (c: Cartucho, i: string | null, n: string | null) =>
+    (i === null || c.intencion === i) && (n === null || c.narrativa === n)
+  const visibles = pilar.disponibles.filter((c) => cumple(c, intencion, narrativa))
+  // Las opciones salen de las ideas del pilar, con cuantas hay de cada una
+  // segun el otro filtro: asi se ve antes de pulsar que combinaciones existen.
+  const opciones = (campo: "intencion" | "narrativa") => {
+    const cuenta = new Map<string, number>()
+    for (const c of pilar.disponibles) {
+      const valor = c[campo]
+      if (!valor) continue
+      const pasa = campo === "intencion" ? cumple(c, null, narrativa) : cumple(c, intencion, null)
+      cuenta.set(valor, (cuenta.get(valor) ?? 0) + (pasa ? 1 : 0))
+    }
+    return [...cuenta.entries()].sort((a, b) => a[0].localeCompare(b[0], "es"))
+  }
 
   const generar = () => {
     setAviso(null)
@@ -88,7 +107,34 @@ export function PanelPilar({ pilar }: { pilar: PilarConIdeas }) {
           </p>
         ) : (
           <div className="flex flex-col gap-2">
-            {pilar.disponibles.map((c) => (
+            <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3">
+              <Filtro titulo="Intención" valor={intencion} opciones={opciones("intencion")} onCambio={setIntencion} />
+              <Filtro titulo="Narración" valor={narrativa} opciones={opciones("narrativa")} onCambio={setNarrativa} />
+              <p className="text-muted-foreground text-xs">
+                Mostrando {visibles.length} de {pilar.disponibles.length}
+                {intencion !== null || narrativa !== null ? (
+                  <>
+                    {" · "}
+                    <button
+                      type="button"
+                      className="hover:text-foreground underline underline-offset-2"
+                      onClick={() => {
+                        setIntencion(null)
+                        setNarrativa(null)
+                      }}
+                    >
+                      quitar filtros
+                    </button>
+                  </>
+                ) : null}
+              </p>
+            </div>
+            {visibles.length === 0 ? (
+              <p className="text-muted-foreground rounded-md border border-dashed px-4 py-8 text-center text-sm">
+                No hay ideas con esa combinación de intención y narración.
+              </p>
+            ) : null}
+            {visibles.map((c) => (
               <div key={c.id} className="rounded-lg border p-3">
                 <p className="text-sm font-medium">{c.idea}</p>
                 {c.notes ? <p className="text-muted-foreground mt-1 text-sm">{c.notes}</p> : null}
@@ -107,5 +153,46 @@ export function PanelPilar({ pilar }: { pilar: PilarConIdeas }) {
         )}
       </CardContent>
     </Card>
+  )
+}
+
+/** Una fila de filtro: "Todas" o una sola opcion, con cuantas ideas tiene cada una. */
+function Filtro({
+  titulo,
+  valor,
+  opciones,
+  onCambio,
+}: {
+  titulo: string
+  valor: string | null
+  opciones: [string, number][]
+  onCambio: (v: string | null) => void
+}) {
+  const chip = (activo: boolean, vacio = false) =>
+    `rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+      activo
+        ? "border-primary bg-primary text-primary-foreground"
+        : vacio
+          ? "border-dashed text-muted-foreground/60 hover:bg-accent"
+          : "border-input text-muted-foreground hover:bg-accent"
+    }`
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="w-20 shrink-0 text-xs font-medium">{titulo}</span>
+      <button type="button" className={chip(valor === null)} onClick={() => onCambio(null)} aria-pressed={valor === null}>
+        Todas
+      </button>
+      {opciones.map(([nombre, n]) => (
+        <button
+          key={nombre}
+          type="button"
+          className={chip(valor === nombre, n === 0)}
+          onClick={() => onCambio(valor === nombre ? null : nombre)}
+          aria-pressed={valor === nombre}
+        >
+          {nombre} <span className="tabular-nums opacity-70">{n}</span>
+        </button>
+      ))}
+    </div>
   )
 }

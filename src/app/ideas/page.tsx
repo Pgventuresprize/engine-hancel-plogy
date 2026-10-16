@@ -1,6 +1,6 @@
 import { DashboardShell } from "@/components/dashboard-shell"
 import { exigirAdvance } from "@/lib/accounts"
-import { PanelPilar } from "@/components/ideas/panel-pilar"
+import { IdeasPorPilar } from "@/components/ideas/ideas-por-pilar"
 import { getIdeasPorPilar } from "@/lib/ideas-data"
 
 export const dynamic = "force-dynamic"
@@ -11,8 +11,8 @@ export const metadata = { title: "Ideas · Engine Hancel" }
 /**
  * Los cartuchos: las ideas que produce el bloque 1.
  *
- * Una tarjeta por pilar, con sus cartuchos disponibles y el boton que genera
- * una ronda nueva. Un cartucho es una idea lista para que un agente de
+ * Una pestaña por pilar, con sus cartuchos disponibles, los filtros de
+ * intencion y narracion y el boton que genera una ronda nueva. Un cartucho es una idea lista para que un agente de
  * contenido la convierta en pieza.
  */
 export default async function IdeasPage() {
@@ -28,7 +28,7 @@ export default async function IdeasPage() {
             hablar.
           </p>
         ) : (
-          pilares.map((p) => <PanelPilar key={p.id} pilar={p} />)
+          <IdeasPorPilar pilares={pilares} />
         )}
       </div>
     </DashboardShell>
