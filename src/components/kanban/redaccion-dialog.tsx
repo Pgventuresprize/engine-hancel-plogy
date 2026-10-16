@@ -373,7 +373,8 @@ function PanelRedaccion({ ficha, datos, cargando }: { ficha: FichaRedaccion; dat
         <Badge variant="secondary">{r.word_count} palabras</Badge>
         {datos?.model ? <span>{datos.model}</span> : null}
         {datos?.redactadaAt ? <span>· {formatDateTime(datos.redactadaAt)}</span> : null}
-        {r.word_count < 600 ? <Badge variant="destructive">Menos de 600 palabras</Badge> : null}
+        {r.word_count < 250 ? <Badge variant="destructive">Menos de 250 palabras</Badge> : null}
+        {r.word_count > 400 ? <Badge variant="destructive">Más de 400 palabras</Badge> : null}
       </div>
 
       {/* El preview: la noticia como se leeria publicada. */}

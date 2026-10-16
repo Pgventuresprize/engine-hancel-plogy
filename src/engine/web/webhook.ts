@@ -162,13 +162,6 @@ async function asegurarSlug(fila: FilaRedaccion): Promise<string> {
   return slug
 }
 
-function resumenDe(texto: string): string {
-  const limpio = texto.replace(/\s+/g, " ").trim()
-  if (limpio.length <= 160) return limpio
-  const corte = limpio.slice(0, 157)
-  return `${corte.slice(0, corte.lastIndexOf(" ")).replace(/[,;:.]$/, "")}...`
-}
-
 async function noticiaParaEnviar(fila: FilaRedaccion, publicadaAt: string) {
   const supabase = supabaseAdmin()
   const { data } = await supabase.from("raw_news").select("link, keywords_matched").eq("id", fila.raw_news_id).maybeSingle()
@@ -199,7 +192,9 @@ async function noticiaParaEnviar(fila: FilaRedaccion, publicadaAt: string) {
     slug,
     idioma: "es-CO",
     titular: r.titular,
-    resumen: resumenDe(r.entrada.parrafos[0] ?? r.titular),
+    // El resumen lo escribe el agente. Si no lo hay, no se manda nada: un trozo
+    // del primer parrafo cortado con "..." no es un resumen y se ve mal.
+    resumen: r.resumen ?? null,
     nicho: fila.nicho_slug ? { slug: fila.nicho_slug, nombre: fila.nicho_nombre } : null,
     etiquetas: news.keywords_matched ?? [],
     entrada: r.entrada,

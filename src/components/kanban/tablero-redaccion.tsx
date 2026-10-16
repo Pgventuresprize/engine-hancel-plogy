@@ -42,7 +42,7 @@ const GRUPOS: Grupo[] = [
   {
     titulo: "Descartados",
     etapas: [
-      { id: "sin_material", titulo: "Sin material", pista: "No alcanzó para 600 palabras" },
+      { id: "sin_material", titulo: "Sin material", pista: "No alcanzó para 250 palabras" },
       { id: "descartado", titulo: "A mano", pista: "Rechazadas por ti" },
       { id: "descartado_fecha", titulo: "Por fecha", pista: "Ya eran viejas al llegar" },
       { id: "repetida", titulo: "Repetidas", pista: "Ese hecho ya se contó" },

@@ -19,17 +19,16 @@ Recibes un JSON con:
 Usa únicamente la información de noticia y fuentes. No uses conocimiento propio para datos, cifras, fechas ni citas.
 
 EXTENSIÓN
-- Mínimo 600 palabras en el cuerpo (entrada + secciones), sin contar titular ni subtítulos. Nunca menos.
-- Rango ideal: 600 a 900 palabras.
-- La extensión se alcanza con información verificable de las fuentes: antecedentes, cifras comparadas, reacciones, contexto y próximos pasos. Nunca con relleno, repeticiones ni frases genéricas.
-- Si las fuentes no tienen material verificable suficiente para llegar a 600 palabras sin rellenar, no escribas la noticia. Devuelve status "material_insuficiente" y en faltantes indica qué información concreta haría falta (ej. "respuesta de la empresa", "cifra del mismo periodo del año anterior", "fecha de entrada en vigencia").
+- Entre 250 y 400 palabras en el cuerpo (entrada + secciones), sin contar titular, subtítulos ni resumen. Nunca menos de 250 ni más de 400.
+- Con ese espacio hay que elegir: lo más importante y verificable de las fuentes (el hecho, la cifra comparada, la otra parte y lo que sigue). Nunca relleno, repeticiones ni frases genéricas.
+- Si las fuentes no tienen material verificable suficiente para llegar a 250 palabras sin rellenar, no escribas la noticia. Devuelve status "material_insuficiente" y en faltantes indica qué información concreta haría falta (ej. "respuesta de la empresa", "cifra del mismo periodo del año anterior", "fecha de entrada en vigencia").
 
 ESTRUCTURA
 1. TITULAR: una oración completa con actor, hecho y cifra si la hay. Máximo 20 palabras. Si el hecho depende de una sola fuente, el titular lo dice ("según X").
 2. ENTRADA: dos párrafos.
    - Párrafo 1: qué pasó, quién, cuándo (fecha exacta), dónde y según quién.
    - Párrafo 2: por qué importa, en una o dos oraciones, con el dato que lo demuestra.
-3. SECCIONES: entre 3 y 5, cada una con subtítulo y de 1 a 3 párrafos. Usa las que apliquen, en este orden:
+3. SECCIONES: entre 2 y 3, cada una con subtítulo y de 1 a 2 párrafos. Usa las que más aporten, en este orden:
    - El hecho en detalle: cifras, condiciones, alcance.
    - La otra parte: respuestas, reacciones, desmentidos o "no quiso comentar". Si nadie ha respondido, dilo.
    - El contexto: antecedentes, cifras históricas, comparación con periodos anteriores u otros actores.
@@ -66,10 +65,15 @@ REGLAS DE REDACCIÓN
 - Formato numérico colombiano: punto para miles y coma para decimales (16.800 millones; 4,5 %). "Mil millones" es 10^9 y "billón" es un millón de millones. Moneda siempre explícita (pesos colombianos, dólares).
 - Español de Colombia. Sin emojis, sin preguntas al lector y sin llamados a la acción.
 
+RESUMEN
+- Una o dos oraciones completas que cuenten la noticia entera a quien no la va a leer: qué pasó, quién y por qué importa. Máximo 200 caracteres.
+- Es un resumen escrito para eso, no el comienzo de la entrada recortado. Nunca termina en puntos suspensivos ni deja una frase a medias.
+
 RESPUESTA (JSON)
 {
   "status": "ok" | "material_insuficiente",
   "titular": "<oración completa>",
+  "resumen": "<una o dos oraciones completas, máximo 200 caracteres>",
   "entrada": {
     "parrafos": ["<párrafo 1>", "<párrafo 2>"],
     "fuentes": ["<id>", "<id>"]
@@ -90,8 +94,8 @@ RESPUESTA (JSON)
 Cada bloque lista en fuentes los id que respaldan sus párrafos. Todo id que aparezca en la pieza debe estar en fuentes_usadas.
 
 ANTES DE RESPONDER, VERIFICA
-1. word_count del cuerpo es 600 o más.
-2. No hay ningún — ni –.
+1. word_count del cuerpo está entre 250 y 400.
+2. No hay ningún — ni –, y el resumen es una o dos oraciones completas sin puntos suspensivos.
 3. Cada cifra y cada cita tiene atribución en el texto.
 4. Ningún subtítulo es genérico ni un fragmento con coma.
 5. No hay opinión fuera de inferencias marcadas en la sección de lo que significa.
@@ -101,6 +105,8 @@ Si algo falla, corrígelo antes de responder.`
 export type Redaccion = {
   status: "ok" | "material_insuficiente"
   titular: string
+  /** Escrito por el agente: una o dos oraciones completas, sin cortes. */
+  resumen: string | null
   entrada: { parrafos: string[]; fuentes: string[] }
   secciones: { subtitulo: string; parrafos: string[]; fuentes: string[] }[]
   fuente_principal: string | null
@@ -159,6 +165,8 @@ function normalizar(bruto: unknown): Redaccion {
   const r: Redaccion = {
     status: o.status === "material_insuficiente" ? "material_insuficiente" : "ok",
     titular: typeof o.titular === "string" ? o.titular.trim() : "",
+    // Un resumen que llega cortado (con "..." o "…" al final) no se usa.
+    resumen: typeof o.resumen === "string" && o.resumen.trim() && !/(\.\.\.|…)\s*$/.test(o.resumen.trim()) ? o.resumen.trim() : null,
     entrada: { parrafos: textos(entrada.parrafos), fuentes: textos(entrada.fuentes) },
     secciones: secciones
       .map((s) => ({ subtitulo: typeof s.subtitulo === "string" ? s.subtitulo.trim() : "", parrafos: textos(s.parrafos), fuentes: textos(s.fuentes) }))
