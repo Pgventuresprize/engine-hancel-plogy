@@ -463,3 +463,54 @@ begin
   perform cron.schedule('engine_hancel_redaccion_tick', '*/5 * * * *', 'select public.fire_redaccion_tick();');
 end
 $$;
+
+-- ------------------------------------------------- ingesta (2026-10-16)
+-- La extraccion corre segun el horario de su agente (Agentes > Extraccion).
+-- El cron solo despierta al endpoint cada diez minutos, sin force: antes iba
+-- con ?force=1 y se saltaba el horario del agente y su last_run_at, y la lista
+-- de horas vieja de engine_settings mandaba sobre el agente.
+create or replace function public.fire_ingest()
+returns bigint
+language plpgsql
+security definer
+set search_path to ''
+as $$
+declare
+  v_url    text;
+  v_secret text;
+  v_request_id bigint;
+begin
+  select decrypted_secret into v_url    from vault.decrypted_secrets where name = 'ingest_url';
+  select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'ingest_secret';
+  if v_url is null or v_secret is null then
+    raise warning 'engine-hancel: falta configurar ingest_url/ingest_secret (usa configure_ingest)';
+    return null;
+  end if;
+  select net.http_post(
+    url := v_url,
+    headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer ' || v_secret),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 120000
+  ) into v_request_id;
+  return v_request_id;
+end;
+$$;
+
+create or replace function public.sync_ingest_schedule()
+returns text
+language plpgsql
+security definer
+set search_path to ''
+as $$
+begin
+  perform cron.unschedule(jobid) from cron.job where jobname = 'engine_hancel_ingest';
+  perform cron.schedule('engine_hancel_ingest', '*/10 * * * *', 'select public.fire_ingest();');
+  return '*/10 * * * *';
+end;
+$$;
+
+select public.sync_ingest_schedule();
+
+-- La ventana de Serper de cada segmento tiene que ser valida (qdr:d...): con
+-- "q" Google la ignoraba y traia noticias de cualquier fecha.
+update public.engine_segments set freshness = 'qdr:d' where freshness is null or freshness !~ '^qdr:[hdwmy][0-9]*$';

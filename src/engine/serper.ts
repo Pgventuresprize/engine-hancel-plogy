@@ -1,5 +1,5 @@
 import { secretosDe } from "./secretos"
-import { FRESHNESS, RESULTS_PER_SEARCH, type SearchSpec } from "./config"
+import { RESULTS_PER_SEARCH, type SearchSpec, ventanaValida } from "./config"
 
 const SERPER_NEWS_URL = "https://google.serper.dev/news"
 
@@ -49,7 +49,7 @@ export async function searchNews(
       body: JSON.stringify({
         q: spec.q,
         num: spec.num ?? RESULTS_PER_SEARCH,
-        tbs: spec.freshness ?? FRESHNESS,
+        tbs: ventanaValida(spec.freshness),
         hl: spec.hl,
         gl: spec.gl,
       }),

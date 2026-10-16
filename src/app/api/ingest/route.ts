@@ -4,7 +4,7 @@ import { todasLasCuentas } from "@/engine/accounts"
 import { runIngestion, type IngestionSummary } from "@/engine/ingest"
 import { ajustesDe, marcarCorrida } from "@/engine/agents/settings"
 import { leToca } from "@/engine/agents/turno"
-import { decide, getSettings, marcarIngesta } from "@/engine/schedule"
+import { getSettings, marcarIngesta } from "@/engine/schedule"
 import { authorizeEngineRequest } from "@/lib/api-auth"
 
 export const dynamic = "force-dynamic"
@@ -54,15 +54,13 @@ async function handle(request: Request) {
         // cuenta, solo desde el boton del tablero. No tiene modo automatico
         // porque no hay ningun paso antes que le entregue trabajo.
         const suyo = await ajustesDe(cuenta.id, "extraccion")
+        // Solo manda el horario del agente (Agentes > Extraccion). La lista de
+        // horas vieja de la cuenta ya no cuenta: con las dos, la extraccion
+        // corria a la hora de una y no a la de la otra. El cron pasa cada diez
+        // minutos y `last_run_at` impide repetir una pasada ya hecha.
         const turno = leToca(suyo, settings.timezone, ahora)
         if (!turno.corre) {
           corridas.push({ cuenta: cuenta.slug, skipped: true, reason: turno.motivo })
-          continue
-        }
-
-        const decision = decide(settings, ahora)
-        if (!decision.run) {
-          corridas.push({ cuenta: cuenta.slug, skipped: true, reason: decision.reason })
           continue
         }
       }

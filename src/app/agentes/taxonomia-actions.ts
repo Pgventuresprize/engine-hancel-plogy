@@ -1,5 +1,6 @@
 "use server"
 
+import { ventanaValida } from "@/engine/config"
 import { revalidatePath } from "next/cache"
 
 import { idDeCuentaActual } from "@/lib/accounts"
@@ -145,7 +146,7 @@ export async function createSegment(form: FormData): Promise<ActionResult> {
       hl: text(form, "hl") || "en",
       gl: text(form, "gl") || "us",
       num: Number(text(form, "num")) || 15,
-      freshness: text(form, "freshness") || "qdr:d",
+      freshness: ventanaValida(text(form, "freshness")),
       position: count ?? 0,
     })
 
@@ -181,7 +182,7 @@ export async function updateSegment(form: FormData): Promise<ActionResult> {
         hl: text(form, "hl") || "en",
         gl: text(form, "gl") || "us",
         num: Number(text(form, "num")) || 15,
-        freshness: text(form, "freshness") || "qdr:d",
+        freshness: ventanaValida(text(form, "freshness")),
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)

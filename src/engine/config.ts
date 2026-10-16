@@ -29,6 +29,17 @@ export const RESULTS_PER_SEARCH = 15
 /** `qdr:d` = solo resultados de las ultimas 24 horas. */
 export const FRESHNESS = "qdr:d"
 
+/**
+ * La ventana que se le pasa a Serper, siempre valida (qdr:h, qdr:d, qdr:w,
+ * qdr:m, qdr:y, con numero opcional: qdr:d2 = dos dias). Una ventana que Google
+ * no entiende la ignora y devuelve noticias de cualquier fecha: asi estuvieron
+ * entrando semanas y meses de noticias viejas con la ventana "q".
+ */
+export function ventanaValida(freshness: string | null | undefined): string {
+  const v = (freshness ?? "").trim()
+  return /^qdr:[hdwmy]\d*$/.test(v) ? v : FRESHNESS
+}
+
 /** Estado con el que nace toda noticia recien ingerida. */
 export const INITIAL_STATUS = "pending_analysis"
 
