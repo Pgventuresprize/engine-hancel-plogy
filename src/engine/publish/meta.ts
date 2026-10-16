@@ -61,6 +61,8 @@ export async function publicarFacebook(
 ): Promise<ResultadoPublicacion> {
   const pagina = (await secretosDe(accountId)).facebook_page_id
   if (!pagina) return { ok: false, error: "Falta elegir la página de Facebook en Configuración > Conexiones." }
+  const existente = await yaPublicado(accountId, "facebook", opciones.texto)
+  if (existente) return { ok: true, postId: existente }
 
   if (opciones.video) {
     const r = await ejecutar(accountId, "facebook", "FACEBOOK_CREATE_VIDEO_POST", {
@@ -136,6 +138,8 @@ export async function publicarInstagram(
   if (!cuenta.ok) return cuenta
   const ig = cuenta.id
   const caption = opciones.texto.slice(0, 2200)
+  const existente = await yaPublicado(accountId, "instagram", caption)
+  if (existente) return { ok: true, postId: existente }
 
   let contenedor: string | null = null
   if (opciones.video) {
@@ -170,6 +174,52 @@ export async function publicarInstagram(
   }, 280_000)
   if (!p.ok) return p
   return { ok: true, postId: idDe(p.data) ?? contenedor }
+}
+
+// ---------------------------------------------------------- ya publicado
+
+/** Las primeras palabras de un texto, para reconocer un post por su texto. */
+function huella(texto: string): string {
+  return texto.toLowerCase().replace(/\s+/g, " ").trim().slice(0, 90)
+}
+
+/** Cuanto atras se mira si un texto ya salio. */
+const VENTANA_DUPLICADO_MS = 6 * 3_600_000
+
+/**
+ * Si ese mismo texto ya se publico en la red hace poco, el id del post.
+ *
+ * Publicar en Instagram por Composio tarda: crear el contenedor y esperar a que
+ * Instagram lo procese puede pasar del minuto. Si el proceso se corta con el
+ * post ya fuera, la pieza queda como no publicada y la siguiente pasada la
+ * publicaba otra vez: asi salio dos veces la noticia de los bananeros. Antes de
+ * publicar se mira la red; si ya esta, no se repite.
+ */
+export async function yaPublicado(accountId: string, red: "instagram" | "facebook", texto: string): Promise<string | null> {
+  const buscado = huella(texto)
+  if (buscado.length < 20) return null
+  const desde = Date.now() - VENTANA_DUPLICADO_MS
+  try {
+    if (red === "instagram") {
+      const cuenta = await cuentaInstagram(accountId)
+      if (!cuenta.ok) return null
+      const r = await ejecutar(accountId, "instagram", "INSTAGRAM_GET_IG_USER_MEDIA", { ig_user_id: cuenta.id, limit: 15, fields: "id,timestamp,caption" }, 30_000)
+      if (!r.ok) return null
+      const lista = ((r.data as { data?: { id: string; timestamp?: string; caption?: string }[] }).data ?? [])
+      const igual = lista.find((m) => m.caption && huella(m.caption) === buscado && (!m.timestamp || new Date(m.timestamp).getTime() >= desde))
+      return igual?.id ?? null
+    }
+    const pagina = (await secretosDe(accountId)).facebook_page_id
+    if (!pagina) return null
+    const r = await ejecutar(accountId, "facebook", "FACEBOOK_GET_PAGE_POSTS", { page_id: pagina, limit: 15, fields: "id,created_time,message" }, 30_000)
+    if (!r.ok) return null
+    const lista = ((r.data as { data?: { id: string; created_time?: string; message?: string }[] }).data ?? [])
+    const igual = lista.find((m) => m.message && huella(m.message) === buscado && (!m.created_time || new Date(m.created_time).getTime() >= desde))
+    return igual?.id ?? null
+  } catch {
+    // Si no se puede mirar, se publica: perder un post es peor que no poder comprobarlo.
+    return null
+  }
 }
 
 /** Publica en una red con la conexion de la empresa. */
