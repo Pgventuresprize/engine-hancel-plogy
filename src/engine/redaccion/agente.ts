@@ -9,6 +9,10 @@ import type { Fuente } from "./fuentes"
 
 export const MODELO_REDACCION = "claude-sonnet-5-5"
 
+/** El largo del cuerpo (entrada + secciones), en palabras. */
+export const MIN_PALABRAS = 250
+export const MAX_PALABRAS = 400
+
 export const REDACCION_SYSTEM = `Eres un redactor de noticias. Recibes una noticia y el material de investigación sobre ella, y escribes una noticia explicada: clara, completa, sin opinión y con cada afirmación atribuida a su fuente.
 
 ENTRADA
@@ -198,9 +202,35 @@ export async function redactarNoticia(
     timeoutMs: 240_000,
   })
   if (!r.ok) throw new Error(r.error)
-  const redaccion = normalizar(parsearJSONDeClaude(r.texto))
+  let redaccion = normalizar(parsearJSONDeClaude(r.texto))
   if (redaccion.status === "ok" && (!redaccion.titular || redaccion.secciones.length === 0)) {
     throw new Error("La redacción llegó incompleta (sin titular o sin secciones).")
   }
-  return { redaccion, uso: r.uso }
+  const uso = { ...r.uso }
+
+  // El largo no se deja a la buena fe del modelo: si se paso, se le devuelve
+  // su propia noticia contada en palabras para que la recorte (hasta dos veces).
+  for (let i = 0; i < 2 && redaccion.status === "ok" && redaccion.word_count > MAX_PALABRAS; i++) {
+    const recorte = await llamarClaude({
+      accountId,
+      model,
+      system,
+      prompt: `${JSON.stringify(entrada, null, 1)}
+
+TU REDACCION ANTERIOR (tiene ${redaccion.word_count} palabras en el cuerpo y el maximo es ${MAX_PALABRAS}):
+${JSON.stringify(redaccion)}
+
+Recortala a entre ${MIN_PALABRAS} y ${MAX_PALABRAS - 20} palabras en el cuerpo (entrada + secciones). Quita lo menos importante, junta o elimina secciones si hace falta (minimo 2), y conserva la atribucion de cada dato. Responde con el mismo JSON completo.`,
+      maxTokens: 6000,
+      timeoutMs: 240_000,
+    })
+    if (!recorte.ok) break
+    uso.entrada += recorte.uso.entrada
+    uso.salida += recorte.uso.salida
+    const corta = normalizar(parsearJSONDeClaude(recorte.texto))
+    if (corta.status !== "ok" || !corta.titular || corta.secciones.length === 0) break
+    if (!corta.resumen) corta.resumen = redaccion.resumen
+    redaccion = corta
+  }
+  return { redaccion, uso }
 }
