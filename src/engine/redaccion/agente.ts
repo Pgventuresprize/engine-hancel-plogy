@@ -25,6 +25,7 @@ Usa únicamente la información de noticia y fuentes. No uses conocimiento propi
 EXTENSIÓN
 - Entre 250 y 400 palabras en el cuerpo (entrada + secciones), sin contar titular, subtítulos ni resumen. Nunca menos de 250 ni más de 400.
 - Con ese espacio hay que elegir: lo más importante y verificable de las fuentes (el hecho, la cifra comparada, la otra parte y lo que sigue). Nunca relleno, repeticiones ni frases genéricas.
+- Planea el largo antes de escribir, no después. Apunta a unas 280 palabras: la entrada lleva entre 50 y 70 palabras (los dos párrafos juntos) y cada sección entre 55 y 80. La noticia se escribe completa dentro de ese presupuesto; no se escribe larga para recortarla.
 - Si las fuentes no tienen material verificable suficiente para llegar a 250 palabras sin rellenar, no escribas la noticia. Devuelve status "material_insuficiente" y en faltantes indica qué información concreta haría falta (ej. "respuesta de la empresa", "cifra del mismo periodo del año anterior", "fecha de entrada en vigencia").
 
 ESTRUCTURA
@@ -32,7 +33,7 @@ ESTRUCTURA
 2. ENTRADA: dos párrafos.
    - Párrafo 1: qué pasó, quién, cuándo (fecha exacta), dónde y según quién.
    - Párrafo 2: por qué importa, en una o dos oraciones, con el dato que lo demuestra.
-3. SECCIONES: entre 2 y 3, cada una con subtítulo y de 1 a 2 párrafos. Usa las que más aporten, en este orden:
+3. SECCIONES: 2 o 3, nunca más de 3, cada una con subtítulo y de 1 a 2 párrafos. Elige solo las que más aporten de esta lista, en este orden:
    - El hecho en detalle: cifras, condiciones, alcance.
    - La otra parte: respuestas, reacciones, desmentidos o "no quiso comentar". Si nadie ha respondido, dilo.
    - El contexto: antecedentes, cifras históricas, comparación con periodos anteriores u otros actores.
@@ -94,6 +95,8 @@ RESPUESTA (JSON)
   "word_count": <número de palabras del cuerpo: entrada + secciones>,
   "faltantes": ["<solo si status es material_insuficiente>"]
 }
+
+Dentro de los textos, las citas textuales van entre comillas angulares («así»), nunca entre comillas dobles: unas comillas dobles sin escapar rompen el JSON.
 
 Cada bloque lista en fuentes los id que respaldan sus párrafos. Todo id que aparezca en la pieza debe estar en fuentes_usadas.
 
@@ -193,44 +196,52 @@ export async function redactarNoticia(
   model: string,
   system: string = REDACCION_SYSTEM
 ): Promise<{ redaccion: Redaccion; uso: UsoClaude }> {
-  const r = await llamarClaude({
-    accountId,
-    model,
-    system,
-    prompt: JSON.stringify(entrada, null, 1),
-    maxTokens: 8000,
-    timeoutMs: 240_000,
-  })
+  // Una respuesta con el JSON roto (unas comillas sin escapar dentro de una
+  // cita) es rara pero pasa: se pide otra vez antes de dar la redaccion por
+  // fallida.
+  let r = await llamarClaude({ accountId, model, system, prompt: JSON.stringify(entrada, null, 1), maxTokens: 8000, timeoutMs: 240_000 })
   if (!r.ok) throw new Error(r.error)
-  let redaccion = normalizar(parsearJSONDeClaude(r.texto))
+  let bruto: unknown
+  try {
+    bruto = parsearJSONDeClaude(r.texto)
+  } catch {
+    r = await llamarClaude({ accountId, model, system, prompt: JSON.stringify(entrada, null, 1), maxTokens: 8000, timeoutMs: 240_000 })
+    if (!r.ok) throw new Error(r.error)
+    bruto = parsearJSONDeClaude(r.texto)
+  }
+  let redaccion = normalizar(bruto)
   if (redaccion.status === "ok" && (!redaccion.titular || redaccion.secciones.length === 0)) {
     throw new Error("La redacción llegó incompleta (sin titular o sin secciones).")
   }
   const uso = { ...r.uso }
 
-  // El largo no se deja a la buena fe del modelo: si se paso, se le devuelve
-  // su propia noticia contada en palabras para que la recorte (hasta dos veces).
-  for (let i = 0; i < 2 && redaccion.status === "ok" && redaccion.word_count > MAX_PALABRAS; i++) {
-    const recorte = await llamarClaude({
+  // Si sale fuera de rango no se recorta ni se reescribe sobre la anterior: se
+  // redacta de nuevo desde cero, con las mismas fuentes y el aviso de cuanto se
+  // paso. Hasta tres veces; se queda la que mas se acerque al rango.
+  const fuera = (x: Redaccion) => x.status === "ok" && (x.word_count > MAX_PALABRAS || x.word_count < MIN_PALABRAS)
+  for (let i = 0; i < 3 && fuera(redaccion); i++) {
+    const otra = await llamarClaude({
       accountId,
       model,
       system,
       prompt: `${JSON.stringify(entrada, null, 1)}
 
-TU REDACCION ANTERIOR (tiene ${redaccion.word_count} palabras en el cuerpo y el maximo es ${MAX_PALABRAS}):
-${JSON.stringify(redaccion)}
-
-Recortala a entre ${MIN_PALABRAS} y ${MAX_PALABRAS - 20} palabras en el cuerpo (entrada + secciones). Quita lo menos importante, junta o elimina secciones si hace falta (minimo 2), y conserva la atribucion de cada dato. Responde con el mismo JSON completo.`,
-      maxTokens: 6000,
+AVISO: un intento anterior de esta noticia salio con ${redaccion.word_count} palabras en el cuerpo y tiene que quedar entre ${MIN_PALABRAS} y ${MAX_PALABRAS}. Redactala de nuevo desde cero, planeando el presupuesto de cada bloque antes de escribir (unas 280 palabras: entrada de 50 a 70, 2 o 3 secciones de 55 a 80 cada una).`,
+      maxTokens: 8000,
       timeoutMs: 240_000,
     })
-    if (!recorte.ok) break
-    uso.entrada += recorte.uso.entrada
-    uso.salida += recorte.uso.salida
-    const corta = normalizar(parsearJSONDeClaude(recorte.texto))
-    if (corta.status !== "ok" || !corta.titular || corta.secciones.length === 0) break
-    if (!corta.resumen) corta.resumen = redaccion.resumen
-    redaccion = corta
+    if (!otra.ok) break
+    uso.entrada += otra.uso.entrada
+    uso.salida += otra.uso.salida
+    let nueva: Redaccion
+    try {
+      nueva = normalizar(parsearJSONDeClaude(otra.texto))
+    } catch {
+      continue
+    }
+    if (nueva.status !== "ok" || !nueva.titular || nueva.secciones.length === 0) break
+    const distancia = (x: Redaccion) => Math.max(0, x.word_count - MAX_PALABRAS, MIN_PALABRAS - x.word_count)
+    if (distancia(nueva) < distancia(redaccion)) redaccion = nueva
   }
   return { redaccion, uso }
 }
