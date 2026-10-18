@@ -96,7 +96,7 @@ La infografía explica con la imagen: las etiquetas señalan cosas que SE VEN en
 - "etiquetas": de 2 a 4, en español, CORTAS. En "partes", MÁXIMO 4 palabras y sin dos puntos: el nombre de la parte con lo que importa de ella ("Pulpa que fermenta", "Raíz sin aire", "pH ácido"), nunca una explicación ("Completo: suma micronutrientes y materia orgánica" está prohibido). En "pasos", de 2 a 6 palabras con la acción. Cada etiqueta nombra algo que el "visual" pidió dibujar y que se va a ver. La primera es la clave.
 - "title" arriba, grueso y corto; "body" es un subtítulo breve que da contexto (una línea). Ningún bloque de texto supera dos líneas.`,
   dataviz: `CAMPOS DEL ESTILO DATA-VIZ (en cada lámina):
-- Busca en la web datos REALES y recientes del asunto (precios, producción, exportaciones, áreas, rendimientos) de fuentes confiables: DANE, Fedecafé, ICA, FAO, ministerios, gremios, medios serios. No inventes ningún número.
+- Busca en la web datos REALES y recientes del asunto de fuentes confiables del sector de la marca (organismos oficiales, gremios, informes de las propias empresas, estudios y encuestas serias, medios serios; en agro, por ejemplo, DANE, Fedecafé, ICA o FAO). No inventes ningún número.
 - "grafico": {"tipo":"barras"|"columnas"|"ranking"|"cifras","unidad":"<unidad visible: %, t, US$/kg…>","items":[{"etiqueta":"<nombre junto a su valor>","valor":<número>,"variacion":"sube"|"baja"|"estable" (opcional),"nota":"<opcional, corta>","icono":"<opcional>"}],"destacado":<índice del dato clave>}
   * "cifras": 1 a 3 cifras grandes (ideal para la portada). "barras" o "ranking": 3 a 6 categorías comparadas. "columnas": 3 a 6 periodos.
   * Una sola lectura principal por gráfico. Sin decimales innecesarios.
@@ -107,7 +107,7 @@ La infografía explica con la imagen: las etiquetas señalan cosas que SE VEN en
 - El "title" enuncia la CONCLUSIÓN del dato, no el tema ("El café ya vale 30 % más que hace un año", no "Precio del café"). "body" opcional y corto.
 - Si para una lámina no encuentras datos confiables, convierte esa lámina en una explicación sin gráfico (sin "grafico", con su "icono") antes que inventar.`,
   infodatos: `CAMPOS DEL ESTILO INFOGRAFÍA DE DATOS (en cada lámina):
-- Busca en la web datos REALES y recientes del asunto de fuentes confiables: DANE, Fedecafé, ICA, FAO, ministerios, gremios, medios serios. No inventes ningún número.
+- Busca en la web datos REALES y recientes del asunto de fuentes confiables del sector de la marca (organismos oficiales, gremios, informes de las propias empresas, estudios y encuestas serias, medios serios). No inventes ningún número.
 - "grafico": {"tipo":"barras"|"columnas"|"ranking"|"cifras","unidad":"<unidad visible>","items":[{"etiqueta":"<nombre junto a su valor>","valor":<número>,"variacion":"sube"|"baja"|"estable" (opcional),"nota":"<opcional, corta>","icono":"<opcional, en inglés>"}],"destacado":<índice del dato clave>}
   * "cifras": 1 a 2 cifras grandes (ideal para la portada). "barras" o "ranking": 3 a 5 categorías. "columnas": 3 a 5 periodos. Una sola lectura principal.
   * "valor" es solo el número con su unidad corta ("129.214", "15 cm", "30 %"); lo que dice qué es va en "etiqueta". "unidad" es corta (%, t, kg/ha, US$), nunca una frase. En barras, columnas y ranking, los valores son medidas reales que se comparan, no posiciones ni pasos.

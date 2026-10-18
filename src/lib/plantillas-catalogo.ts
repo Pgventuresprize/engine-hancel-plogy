@@ -29,7 +29,7 @@ export const TIPOS_ESTILO = ["infografia", "dataviz", "infodatos", "fotografico"
 export type TipoEstilo = (typeof TIPOS_ESTILO)[number]
 
 /** Tipografias que Canva tiene y que se leen bien en movil. */
-export const FUENTES_PLANTILLA = ["Montserrat", "Poppins", "Inter", "Oswald", "Playfair Display", "Lora"] as const
+export const FUENTES_PLANTILLA = ["Montserrat", "Poppins", "Inter", "Oswald", "Playfair Display", "Lora", "Space Grotesk", "Chakra Petch"] as const
 
 export type EstiloPlantilla = {
   colores: {

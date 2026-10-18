@@ -62,9 +62,18 @@ export type ResultadoDibujo =
 
 /** El logo claro de la marca. "perfil" es una captura del perfil, no un logo. */
 export async function logoDe(accountId: string): Promise<string | null> {
+  return (await logosDe(accountId)).claro
+}
+
+/**
+ * Las dos versiones del logo: la clara (para fondos oscuros) y la oscura (para
+ * fondos claros). La oscura es opcional: sin ella, sobre fondo claro el logo
+ * claro va dentro de un sello oscuro.
+ */
+export async function logosDe(accountId: string): Promise<{ claro: string | null; oscuro: string | null }> {
   const { data } = await supabaseAdmin().from("generation_config").select("carousel").eq("account_id", accountId).maybeSingle()
-  const logos = (data as { carousel?: { logos?: { claro?: string | null } } } | null)?.carousel?.logos
-  return logos?.claro ?? null
+  const logos = (data as { carousel?: { logos?: { claro?: string | null; oscuro?: string | null } } } | null)?.carousel?.logos
+  return { claro: logos?.claro ?? null, oscuro: logos?.oscuro ?? null }
 }
 
 /** Copia una imagen temporal (de Canva) al storage, para que no caduque. */
@@ -251,7 +260,10 @@ export async function dibujarConCanva(opciones: {
     ancho: W,
     alto: H,
     laminas,
-    logo: await logoDe(opciones.accountId),
+    ...(await (async () => {
+      const l = await logosDe(opciones.accountId)
+      return { logo: l.claro ?? l.oscuro, logoOscuro: l.oscuro }
+    })()),
     titulo: opciones.titulo,
   })
   avisos.push(...solapesDeLaUltimaPieza())

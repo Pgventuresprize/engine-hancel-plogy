@@ -206,13 +206,21 @@ export async function generarRonda(
         : ""
 
     const prompt = `COMBINACIONES\n${lote.map((c) => c.linea).join("\n")}${evita}`
-    const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: 3000 })
-    if (!r.ok) return { pillarId, generadas: aInsertar.length, ronda, uso, error: r.error }
-
-    uso.entrada += r.uso.entrada
-    uso.salida += r.uso.salida
-
-    const bruto = parsearJSONDeClaude(r.texto) as { ideas?: unknown }
+    // Veinticinco ideas con su nota no caben en 3.000 tokens: el JSON salia
+    // cortado. Y si aun asi llega roto, se pide otra vez antes de rendirse.
+    let bruto: { ideas?: unknown } | null = null
+    for (let intento = 0; intento < 2 && !bruto; intento++) {
+      const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: 7000 })
+      if (!r.ok) return { pillarId, generadas: aInsertar.length, ronda, uso, error: r.error }
+      uso.entrada += r.uso.entrada
+      uso.salida += r.uso.salida
+      try {
+        bruto = parsearJSONDeClaude(r.texto) as { ideas?: unknown }
+      } catch (e) {
+        if (intento === 1) throw e
+      }
+    }
+    if (!bruto) continue
     const ideas = Array.isArray(bruto.ideas) ? bruto.ideas : []
     for (const it of ideas as { n?: unknown; idea?: unknown; notes?: unknown }[]) {
       const comb = typeof it.n === "number" ? porNumero.get(it.n) : undefined

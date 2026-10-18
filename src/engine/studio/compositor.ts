@@ -79,6 +79,8 @@ type Ctx = {
   e: EstiloPlantilla
   logo: string | null
   oscuro: boolean
+  /** El logo para fondo claro, si la marca lo tiene. */
+  logoOscuro?: string | null
 }
 
 // ------------------------------------------------------------------ piezas
@@ -301,10 +303,14 @@ function formatearValor(v: number | string) {
   return new Intl.NumberFormat("es-CO", { maximumFractionDigits: Math.abs(v) < 10 ? 1 : 0 }).format(v)
 }
 
-/** El logo de la marca es blanco: sobre fondo claro va dentro de un sello oscuro. */
+/**
+ * El logo de la marca es blanco: sobre fondo claro va dentro de un sello oscuro,
+ * salvo que la marca tenga su version para fondo claro, que va tal cual.
+ */
 function logo(c: Ctx, x: number, y: number, lado: number, sobreOscuro: boolean) {
   if (!c.e.logo || !c.logo) return ""
   if (sobreOscuro) return imagen(c.logo, x - lado * 0.18, y - lado * 0.22, lado, lado, "logo", "", "contain")
+  if (c.logoOscuro) return imagen(c.logoOscuro, x - lado * 0.18, y - lado * 0.22, lado, lado, "logo", "", "contain")
   return (
     bloque(x, y, lado * 0.7, lado * 0.5, `background:${c.e.colores.texto};border-radius:${px(10 * c.k)};`) +
     imagen(c.logo, x - lado * 0.08, y - lado * 0.3, lado * 0.86, lado * 1.1, "logo", "", "contain")
@@ -1445,6 +1451,7 @@ export function componerHTML(opciones: {
   alto: number
   laminas: LaminaCompuesta[]
   logo: string | null
+  logoOscuro?: string | null
   titulo: string
 }): string {
   const { estilo: e } = opciones
@@ -1461,6 +1468,7 @@ export function componerHTML(opciones: {
     apaisado: W > H * 1.15,
     e,
     logo: opciones.logo,
+    logoOscuro: opciones.logoOscuro ?? null,
     oscuro: luminancia(e.colores.fondo) < 0.5,
   }
   const total = opciones.laminas.length
