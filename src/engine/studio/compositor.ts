@@ -317,6 +317,15 @@ function logo(c: Ctx, x: number, y: number, lado: number, sobreOscuro: boolean) 
   )
 }
 
+/**
+ * El logo arriba a la izquierda en las laminas sin foto, frente a la
+ * numeracion. Devuelve tambien cuanto baja el contenido para dejarle sitio.
+ */
+function logoArriba(c: Ctx): { html: string; baja: number } {
+  if (!c.e.logo || !c.logo) return { html: "", baja: 0 }
+  return { html: logo(c, c.m + 6 * c.k, c.m - 4 * c.k, 128 * c.k, c.oscuro), baja: 70 * c.k }
+}
+
 function numeracion(c: Ctx, n: number, total: number, color: string) {
   if (!c.e.numeracion || total < 2) return ""
   const t = `${String(n).padStart(2, "0")} / ${String(total).padStart(2, "0")}`
@@ -477,8 +486,13 @@ function textoRico(
     return /font-weight:(7|8|9)00/.test(estilos[marca]) ? PESO_GRUESO : PESO_NORMAL
   }
   const mayus = (marca: Tramo["marca"]) => /text-transform:uppercase/.test(estilos[marca])
-  const palabras: { p: string; marca: Tramo["marca"]; corte: boolean; w: number }[] = []
+  // "pegada": la palabra va junto a la anterior, sin espacio (la coma o el
+  // punto que siguen a un tramo destacado: "*cierre*, no..." no lleva "cierre ,").
+  const palabras: { p: string; marca: Tramo["marca"]; corte: boolean; pegada: boolean; w: number }[] = []
+  let previo = ""
   for (const tr of tramos(t)) {
+    const pegadaAlInicio = palabras.length > 0 && !/\s$/.test(previo) && !/^\s/.test(tr.texto)
+    previo = tr.texto
     tr.texto
       .trim()
       .split(/\s+/)
@@ -487,6 +501,7 @@ function textoRico(
           p,
           marca: tr.marca,
           corte: saltoAntesDeAcento && tr.marca === "acento" && i === 0,
+          pegada: i === 0 && pegadaAlInicio,
           w: medir(mayus(tr.marca) ? p.toUpperCase() : p, base.size, pesoDe(tr.marca)),
         })
       )
@@ -496,12 +511,12 @@ function textoRico(
   let largo = 0
   for (const w of palabras) {
     const actual = lineasP[lineasP.length - 1]
-    if (actual.length && (w.corte || largo + espacio + w.w > ancho)) {
+    if (actual.length && !w.pegada && (w.corte || largo + espacio + w.w > ancho)) {
       lineasP.push([w])
       largo = w.w
     } else {
       actual.push(w)
-      largo += (actual.length > 1 ? espacio : 0) + w.w
+      largo += (actual.length > 1 && !w.pegada ? espacio : 0) + w.w
     }
   }
   const usado = Math.max(...lineasP.map((l) => l.reduce((s2, w, i) => s2 + w.w + (i ? espacio : 0), 0)))
@@ -511,10 +526,13 @@ function textoRico(
       let i = 0
       while (i < linea.length) {
         const marca = linea[i].marca
-        const run: string[] = []
-        while (i < linea.length && linea[i].marca === marca) run.push(linea[i++].p)
-        const pedazo = esc(run.join(" "))
-        const sep = out ? " " : ""
+        const sep = out && !linea[i].pegada ? " " : ""
+        let run = ""
+        while (i < linea.length && linea[i].marca === marca) {
+          run += (run && !linea[i].pegada ? " " : "") + linea[i].p
+          i++
+        }
+        const pedazo = esc(run)
         out += marca === "normal" ? sep + pedazo : `${sep}<span style="${estilos[marca]}">${pedazo}</span>`
       }
       return out
@@ -709,12 +727,14 @@ function fotoInmersiva(c: Ctx, l: LaminaCompuesta, n: number, total: number, por
   // Degradado de contraste: escalones finos de velo, porque el degradado CSS
   // no se importa de forma fiable.
   const inicioVelo = Math.max(H * 0.25, yTexto - 120 * k)
-  const pasos = 10
-  const altoDegradado = 320 * k
+  // Muchos escalones iguales que, apilados, llegan al velo pedido: sin el
+  // salto final se ven como un degradado y no como franjas.
+  const pasos = 24
+  const altoDegradado = 420 * k
+  const alfa = 1 - Math.pow(1 - Math.min(0.95, e.velo * 0.9), 1 / pasos)
   for (let i = 0; i < pasos; i++) {
-    html += bloque(0, inicioVelo - altoDegradado + (altoDegradado / pasos) * i, W, H, `background:rgba(0,0,0,${(e.velo / (pasos + 1)).toFixed(3)});`)
+    html += bloque(0, inicioVelo - altoDegradado + (altoDegradado / pasos) * (i + 1), W, H, `background:rgba(0,0,0,${alfa.toFixed(3)});`)
   }
-  html += bloque(0, inicioVelo, W, H - inicioVelo, `background:rgba(0,0,0,${(e.velo * 0.35).toFixed(2)});`)
 
   html += bloqueT.html(m, yTexto)
   html += cabeceraSobreFoto(c, n, total)
@@ -745,7 +765,8 @@ function ilustracion(c: Ctx, l: LaminaCompuesta, n: number, total: number) {
   const { W, H, k, m, e } = c
   if (l.rol === "cierre") return cierre(c, l)
   const portada = l.rol === "portada" || l.rol === "unica"
-  let html = ""
+  const cabeza = logoArriba(c)
+  let html = cabeza.html
 
   if (c.apaisado) {
     const colTexto = W * 0.5 - m - 40 * k
@@ -761,16 +782,16 @@ function ilustracion(c: Ctx, l: LaminaCompuesta, n: number, total: number) {
       lhT: 1.1,
       lhC: 1.4,
       gap: 20 * k,
-      maxH: H - (m + 30 * k) - m - altoPastillas - pieI,
+      maxH: H - (m + 30 * k + cabeza.baja) - m - altoPastillas - pieI,
     })
-    html += texto(l.titulo, m, m + 30 * k, colTexto, `font-size:${px(cab.sizeT)};line-height:1.1;font-weight:800;color:${e.colores.texto};`)
-    const yC = m + 30 * k + cab.hT + 20 * k
+    html += texto(l.titulo, m, m + 30 * k + cabeza.baja, colTexto, `font-size:${px(cab.sizeT)};line-height:1.1;font-weight:800;color:${e.colores.texto};`)
+    const yC = m + 30 * k + cabeza.baja + cab.hT + 20 * k
     html += texto(cab.cuerpo, m, yC, colTexto, `font-size:${px(cab.sizeC)};line-height:1.4;color:${e.colores.textoSuave};`)
     html += pastillas(c, pas.etiquetas, m, H - m - pieI - altoPastillas + 30 * k, colTexto, pas.escala).html
     // Debajo de la numeracion, que va arriba a la derecha.
     if (l.imagen) html += imagen(l.imagen, W * 0.5, m + 50 * k, W * 0.5 - m, H - 2 * m - 50 * k, "ilustracion", `border-radius:${px(28 * k)};`)
   } else {
-    const yT = m + 60 * k
+    const yT = m + 60 * k + cabeza.baja
     // Las pastillas se miden (pueden ir en dos filas) y el titulo con su
     // cuerpo se quedan con la mitad del alto como mucho: la otra mitad es del
     // dibujo.
@@ -946,7 +967,9 @@ function infografia(c: Ctx, l: LaminaCompuesta, n: number, total: number) {
   // quedan con menos de la mitad del alto: el resto es de la imagen.
   // En apaisado la imagen ocupa desde la mitad: el texto acaba antes, con aire.
   const anchoTit = c.apaisado ? W * 0.5 - m - 40 * k : W - 2 * m
-  const yT = m + 50 * k
+  const cabeza = logoArriba(c)
+  html += cabeza.html
+  const yT = m + 50 * k + cabeza.baja
   const pieT = portada && e.textoDesliza ? 70 * k : 0
   const cab = cabeceraQueCabe({
     titulo: l.titulo,
@@ -1310,11 +1333,13 @@ function dataviz(c: Ctx, l: LaminaCompuesta, n: number, total: number) {
   const portada = l.rol === "portada" || l.rol === "unica"
   let html = ""
 
-  let yT = m + 50 * k
+  const cabeza = logoArriba(c)
+  html += cabeza.html
+  let yT = m + 50 * k + cabeza.baja
   if (l.icono) {
     const lado = (portada ? 120 : 100) * k
-    html += insignia(c, l.icono, m, m, lado)
-    yT = m + lado + 36 * k
+    html += insignia(c, l.icono, m, m + cabeza.baja, lado)
+    yT = m + cabeza.baja + lado + 36 * k
   }
   const anchoTit = c.apaisado ? W * 0.47 - m - 40 * k : W - 2 * m
   const cab = cabeceraDatos(c, l, yT, anchoTit, portada)
@@ -1347,8 +1372,9 @@ function infodatos(c: Ctx, l: LaminaCompuesta, n: number, total: number) {
   if (l.rol === "cierre") return cierre(c, l)
   const portada = l.rol === "portada" || l.rol === "unica"
   const anchoTit = c.apaisado ? W * 0.47 - m - 40 * k : W - 2 * m
-  const cab = cabeceraDatos(c, l, m + 50 * k, anchoTit, portada)
-  let html = cab.html
+  const cabeza = logoArriba(c)
+  const cab = cabeceraDatos(c, l, m + 50 * k + cabeza.baja, anchoTit, portada)
+  let html = cabeza.html + cab.html
   const g = l.grafico
   const radio = `border-radius:${px(28 * k)};`
   const conImagen = (x: number, y: number, lado: number) =>
