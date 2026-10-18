@@ -21,6 +21,10 @@ export type SlideTexto = {
   type: "text"
   title?: string | null
   body?: string | null
+  /** Linea corta sobre el titular. Solo la usa la plantilla Plogy. */
+  lead?: string | null
+  /** Puntos de una lista numerada. Solo la usa la plantilla Plogy. */
+  items?: string[] | null
 }
 
 export type SlidePortada = {

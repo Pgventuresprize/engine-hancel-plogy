@@ -264,9 +264,12 @@ export function parseSlides(valor: unknown): Slide[] {
 
     const title = texto(obj.title) ?? texto(obj.titulo)
     const body = texto(obj.body) ?? texto(obj.cuerpo) ?? texto(obj.text)
-    if (!title && !body) continue
+    const items = Array.isArray(obj.items)
+      ? obj.items.filter((x): x is string => typeof x === "string" && x.trim().length > 0).map((x) => x.trim()).slice(0, 5)
+      : []
+    if (!title && !body && items.length === 0) continue
 
-    slides.push({ n, type: "text", title, body })
+    slides.push({ n, type: "text", title, body, lead: texto(obj.lead), items: items.length ? items : null })
   }
 
   return slides.slice(0, MAX_SLIDES)

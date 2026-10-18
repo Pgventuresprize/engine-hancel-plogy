@@ -209,6 +209,8 @@ export function parseInstagramResponse(respuesta: unknown): {
           ...slide,
           title: slide.title ? arreglarOrtografia(slide.title) : slide.title,
           body: slide.body ? arreglarOrtografia(slide.body) : slide.body,
+          lead: slide.lead ? arreglarOrtografia(slide.lead) : slide.lead,
+          items: slide.items ? slide.items.map(arreglarOrtografia) : slide.items,
         }
   )
   if (slides.length < MIN_SLIDES) {
@@ -262,6 +264,11 @@ export async function generarCarrusel(
   conPortadaFacebook = false
 ): Promise<CarouselPayload> {
   const { caption, hashtags, slides, fotos, elemento } = parseInstagramResponse(respuesta)
+
+  // Plogy tiene su propia estructura de laminas, no la clasica recoloreada.
+  if (estilo.plantilla === "plogy") {
+    return generarCarruselPlogy(pieceKey, { caption, hashtags, slides, fotos, elemento }, news, estilo, nichos, conPortadaFacebook)
+  }
 
   // El cierre es una lamina de marca, no del guion: se añade aqui y no se le
   // pide al agente. Va siempre, porque la llamada a seguir la cuenta es lo
@@ -488,4 +495,115 @@ async function buscarInserto(
   }
 
   return null
+}
+
+// ------------------------------------------------------------------- plogy
+
+/**
+ * El carrusel con la estructura de Plogy (ver `plogy.tsx`): las laminas del
+ * guion con su composicion y su fondo alternado, y el cierre de marca.
+ */
+async function generarCarruselPlogy(
+  pieceKey: string,
+  guion: ReturnType<typeof parseInstagramResponse>,
+  news: RawNews | null,
+  estilo: Estilo,
+  nichos: string[],
+  conPortadaFacebook: boolean
+): Promise<CarouselPayload> {
+  const { renderPlogy, fotoEnByN, repartirPlogy } = await import("./plogy")
+  const { caption, hashtags, fotos, elemento } = guion
+  const slides = guion.slides.slice(0, MAX_SLIDES - 1)
+
+  const terminos = fotos.length > 0 ? fotos : terminosDeBusqueda(news, nichos, estilo.fotosLiterales)
+  const banco = new BancoDeFotos(terminos)
+  const creditos: { autor: string; url: string }[] = []
+  const delBanco = async (): Promise<string | null> => {
+    if (!estilo.usarFotos || !pexelsConfigurado()) return null
+    const elegida = await banco.siguiente()
+    if (!elegida) return null
+    const descargada = await descargarFotoPexels(elegida)
+    if (descargada && elegida.autor) creditos.push({ autor: elegida.autor, url: elegida.autorUrl })
+    return descargada
+  }
+
+  const [logoClaro, logoOscuro] = await Promise.all([descargarFoto(estilo.logoClaro), descargarFoto(estilo.logoOscuro)])
+  const hallado = news?.account_id ? await buscarInserto(elemento, news.account_id) : null
+  const tema = [news?.niche, news?.tema].filter(Boolean).join(" + ")
+  const reparto = repartirPlogy(slides.map((s) => ({ items: s.type === "text" ? s.items : null })))
+  const total = slides.length + 1
+  const titularDe = (s: Slide) => (s.type === "photo_hook" ? (s.hook ?? "") : (s.title ?? ""))
+
+  const imagenes: Buffer[] = []
+  let fotoPortada: string | null = null
+  for (const [i, slide] of slides.entries()) {
+    const { composicion, fondo } = reparto[i]
+    const necesitaFoto = composicion === "portada" || composicion === "foto"
+    const foto = necesitaFoto ? await fotoEnByN((await delBanco()) ?? (i === 0 ? await descargarFoto(news?.image_url) : null)) : null
+    if (i === 0) fotoPortada = foto
+    imagenes.push(
+      await renderPlogy({
+        composicion,
+        fondo,
+        titular: titularDe(slide),
+        cuerpo: slide.type === "text" ? slide.body : null,
+        lead: slide.type === "text" ? slide.lead : null,
+        items: slide.type === "text" ? (slide.items ?? undefined) : undefined,
+        foto,
+        inserto: i === 0 ? (hallado?.imagen ?? null) : null,
+        n: i + 1,
+        total,
+        tema,
+        handle: estilo.marca,
+        logoClaro,
+        logoOscuro,
+      })
+    )
+  }
+
+  // El cierre: la marca y una sola accion, en el fondo que le toque.
+  imagenes.push(
+    await renderPlogy({
+      composicion: "cierre",
+      fondo: slides.length % 2 === 0 ? "tinta" : "papel",
+      titular: estilo.cierre.titulo,
+      cuerpo: estilo.cierre.texto,
+      n: total,
+      total,
+      tema,
+      handle: estilo.marca,
+      logoClaro,
+      logoOscuro,
+    })
+  )
+
+  const images = await subirCarrusel(pieceKey, imagenes)
+  let portadaFacebook: string | undefined
+  if (conPortadaFacebook && slides[0]) {
+    const png = await renderPlogy({
+      composicion: "portada",
+      fondo: "tinta",
+      titular: titularDe(slides[0]),
+      foto: fotoPortada,
+      inserto: hallado?.imagen ?? null,
+      n: 1,
+      total: 1,
+      tema,
+      handle: estilo.marca,
+      logoClaro,
+      logoOscuro,
+    })
+    portadaFacebook = await subirImagenSuelta(pieceKey, "facebook", png)
+  }
+
+  return {
+    caption,
+    hashtags,
+    images,
+    ...(portadaFacebook ? { portadaFacebook } : {}),
+    slideCount: total,
+    portadaSinFoto: fotoPortada === null,
+    terminosFoto: terminos.slice(0, 6),
+    creditos,
+  }
 }

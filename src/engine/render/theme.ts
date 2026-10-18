@@ -304,6 +304,12 @@ export type Estilo = {
    */
   fotosLiterales: boolean
   cierre: Cierre
+  /**
+   * La familia de laminas. "clasica" es la de siempre; "plogy" es la estructura
+   * propia de Plogy (tinta y papel alternados, titulares con resaltado, fotos
+   * en blanco y negro sobre bloque naranja, listas numeradas).
+   */
+  plantilla: "clasica" | "plogy"
 }
 
 export const ESTILO_POR_DEFECTO: Estilo = {
@@ -319,6 +325,7 @@ export const ESTILO_POR_DEFECTO: Estilo = {
   perfil: null,
   fotosLiterales: false,
   cierre: CIERRE_POR_DEFECTO,
+  plantilla: "clasica",
 }
 
 /** Arma el estilo a partir de lo guardado en `generation_config.carousel`. */
@@ -355,6 +362,7 @@ export function estiloDesdeConfig(valor: unknown): Estilo {
     perfil: url(logos.perfil),
     fotosLiterales: raw.fotosLiterales === true,
     cierre: cierreDesdeConfig(raw.cierre),
+    plantilla: raw.plantilla === "plogy" ? "plogy" : "clasica",
   }
 }
 
