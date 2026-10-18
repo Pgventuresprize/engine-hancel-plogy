@@ -89,6 +89,35 @@ export const PALETAS: Record<string, Paleta> = {
     fundido: ["rgba(28, 28, 28, 0)", "rgba(28, 28, 28, 0.92)", "#1C1C1C"],
     veloTecho: "rgba(28, 28, 28, 0.55)",
   },
+  /**
+   * Plogy (brand kit 01): papel blanco, tinta y el naranja de la marca como
+   * acento. Es la unica paleta con color: la marca lo pide, y el naranja marca
+   * la barra de la cita, el numero grande y el punto, no el texto corrido.
+   */
+  plogy: {
+    fondo: "#FFFFFF",
+    fondoAlterno: "#F4F1EF",
+    texto: "#171310",
+    textoSuave: "#625951",
+    acento: "#FF5B00",
+    velo: "rgba(255, 255, 255, 0.8)",
+    veloFuerte: "rgba(255, 255, 255, 0.9)",
+    fundido: ["rgba(255, 255, 255, 0)", "rgba(255, 255, 255, 0.94)", "#FFFFFF"],
+    veloTecho: "rgba(255, 255, 255, 0.62)",
+    fondoClaro: true,
+  },
+  /** Plogy sobre tinta: la misma marca en oscuro. */
+  "plogy-tinta": {
+    fondo: "#171310",
+    fondoAlterno: "#221C18",
+    texto: "#FFFFFF",
+    textoSuave: "#A39486",
+    acento: "#FF5B00",
+    velo: "rgba(23, 19, 16, 0.66)",
+    veloFuerte: "rgba(23, 19, 16, 0.82)",
+    fundido: ["rgba(23, 19, 16, 0)", "rgba(23, 19, 16, 0.92)", "#171310"],
+    veloTecho: "rgba(23, 19, 16, 0.55)",
+  },
 }
 
 export type NombrePaleta = keyof typeof PALETAS
@@ -106,6 +135,19 @@ export const FUENTES = {
       regular: "HeroFont-Regular.otf",
       semibold: "HeroFont-SemiBold.otf",
       bold: "HeroFont-Bold.otf",
+    },
+  },
+  /**
+   * La alternativa libre que define el brand kit de Plogy: su tipografia de
+   * marca (Screener) es una version demo sin licencia comercial.
+   */
+  SpaceGrotesk: {
+    nombre: "Space Grotesk",
+    archivos: {
+      light: "SpaceGrotesk-300.ttf",
+      regular: "SpaceGrotesk-400.ttf",
+      semibold: "SpaceGrotesk-600.ttf",
+      bold: "SpaceGrotesk-700.ttf",
     },
   },
 } as const
