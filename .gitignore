@@ -44,18 +44,3 @@ next-env.d.ts
 
 # Config local de agentes: lleva tokens, nunca se versiona.
 .agents/
-
-# InsForge & AI agent skills
-.insforge
-.agent
-.agents
-.augment
-.claude
-.cline
-.github/copilot*
-.kilocode
-.qoder
-.qwen
-.roo
-.trae
-.windsurf

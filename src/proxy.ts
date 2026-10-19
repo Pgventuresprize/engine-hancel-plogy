@@ -1,4 +1,4 @@
-import { updateSession } from "@insforge/sdk/ssr/middleware"
+import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
 /**
@@ -9,13 +9,13 @@ import { NextResponse, type NextRequest } from "next/server"
  *
  * Hace dos cosas en la misma pasada, y las dos hacen falta:
  *
- *   1. Refresca la sesion. Los tokens de InsForge caducan en una hora; si nadie
+ *   1. Refresca la sesion. Los tokens de Supabase caducan en una hora; si nadie
  *      los renueva, la sesion se muere sola aunque el usuario este trabajando.
  *      Renovarlos aqui es lo que hace que las cookies lleguen frescas a todo lo
  *      que corra despues.
  *   2. Manda a /login a quien no tenga sesion.
  *
- * `getUser()` valida el token contra InsForge en cada peticion. Es una llamada
+ * `getUser()` valida el token contra Supabase en cada peticion. Es una llamada
  * de red por peticion, que para un panel interno es un precio razonable a cambio
  * de que la puerta no dependa de una cookie que el navegador manda tal cual.
  */
@@ -32,9 +32,6 @@ const ABIERTAS = [
   "/api/videos/tick",
   "/api/redaccion/tick",
   "/api/publicacion/tick",
-  // Los archivos publicos (laminas, logos, el HTML que importa Canva): los
-  // leen Canva, Meta y el portal, sin sesion.
-  "/api/archivo",
 ]
 
 function esAbierta(pathname: string): boolean {
@@ -46,23 +43,34 @@ export async function proxy(request: NextRequest) {
   // ella las cookies renovadas. Si se creara despues, se perderian.
   const response = NextResponse.next({ request })
 
-  const baseUrl = process.env.NEXT_PUBLIC_INSFORGE_URL
-  const anonKey = process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY
+  const url = process.env.SUPABASE_URL
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY
 
   // Sin credenciales no se puede comprobar nada. Se deja pasar en vez de tapiar
   // la aplicacion: el fallo es de configuracion y ya se ve en cuanto algo lee la
   // base, mientras que un redirect infinito a /login no explicaria nada.
-  if (!baseUrl || !anonKey) return response
+  if (!url || !key) return response
 
-  // Refresca el token si esta por vencer y deja las cookies frescas en la
-  // peticion y en la respuesta. Sin token valido no hay sesion.
-  const sesion = await updateSession({
-    baseUrl,
-    anonKey,
-    requestCookies: request.cookies,
-    responseCookies: response.cookies,
-  }).catch(() => null)
-  const user = sesion?.accessToken ? true : null
+  const supabase = createServerClient(url, key, {
+    cookies: {
+      getAll: () => request.cookies.getAll(),
+      setAll: (cookiesToSet, headers) => {
+        for (const { name, value, options } of cookiesToSet) {
+          request.cookies.set(name, value)
+          response.cookies.set(name, value, options)
+        }
+        // Los manda `@supabase/ssr` para que ninguna CDN cachee una respuesta
+        // que lleva la sesion de alguien dentro.
+        for (const [clave, valor] of Object.entries(headers)) {
+          response.headers.set(clave, valor)
+        }
+      },
+    },
+  })
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   const { pathname, search } = request.nextUrl
 
