@@ -60,7 +60,9 @@ export async function estadoTokenClaude(): Promise<EstadoTokenClaude> {
 export async function guardarTokenClaude(
   token: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const limpio = token.trim()
+  // Sin ningun espacio ni salto de linea: al copiar el token de la terminal,
+  // esta le parte la linea larga y se cuelan en medio.
+  const limpio = token.replace(/\s+/g, "")
   const { guardarSecretos } = await import("@/engine/secretos")
   try {
     // Vacio = desconectar. Util para quitar un token revocado a proposito.

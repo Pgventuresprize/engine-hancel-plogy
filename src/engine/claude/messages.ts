@@ -67,8 +67,10 @@ export type ResultadoClaude =
  * Cada empresa usa el suyo: lo que gasta una no sale de la cuenta de otra.
  */
 export async function tokenClaude(accountId: string): Promise<string | null> {
-  const token = (await secretosDe(accountId)).claude_oauth_token
-  return token && token.trim().length > 0 ? token.trim() : null
+  // Se le quitan los espacios de adentro por si se guardo con los que mete la
+  // terminal al partir la linea al copiarlo.
+  const token = (await secretosDe(accountId)).claude_oauth_token?.replace(/\s+/g, "")
+  return token ? token : null
 }
 
 /**
