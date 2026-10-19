@@ -61,6 +61,13 @@ function gruposCon(redes: string[]): Grupo[] {
               titulo: NOMBRE_RED_COLUMNA[red] ?? red,
               pista: "Piezas generadas",
             })),
+            // Lo generado para una red sin conectar o apagada: no tiene columna
+            // propia, pero se puede ver y revisar aqui.
+            {
+              id: "borrador" as Etapa,
+              titulo: "Borradores",
+              pista: "Generadas, sin red conectada",
+            },
           ],
         }
   )
@@ -240,7 +247,10 @@ export function Tablero({ datos }: { datos: TableroDatos }) {
 
       {/* Scroll horizontal: las columnas no caben en un portatil, y partirlas
           en dos filas rompe la lectura de izquierda a derecha del proceso. */}
-      <div className="flex items-start gap-5 overflow-x-auto pb-2">
+      {/* El alto va acotado a la ventana: con el scroll horizontal debajo de la
+          columna mas larga, la barra quedaba fuera de pantalla y no se veia. Asi
+          queda siempre abajo, y las columnas largas scrollean por dentro. */}
+      <div className="flex max-h-[calc(100vh-11rem)] items-start gap-5 overflow-auto pb-2">
         {gruposCon(datos.redes).map((grupo) => {
           const total = grupo.etapas.reduce((n, e) => n + datos.conteos[e.id], 0)
           return (

@@ -108,7 +108,7 @@ export function TableroRedaccion({ datos }: { datos: Datos }) {
         </p>
       ) : null}
 
-      <div className="flex items-start gap-5 overflow-x-auto pb-2">
+      <div className="flex max-h-[calc(100vh-11rem)] items-start gap-5 overflow-auto pb-2">
         {GRUPOS.map((g) => ({
           ...g,
           // Como una red: la columna existe cuando el portal esta conectado.

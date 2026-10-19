@@ -31,6 +31,7 @@ export type Etapa =
   | "post_linkedin"
   | "post_instagram"
   | "post_facebook"
+  | "borrador"
   | "publicado"
   | "descartado"
   | "descartado_fecha"
@@ -194,6 +195,7 @@ export async function getTablero(): Promise<Tablero> {
     post_linkedin: [],
     post_instagram: [],
     post_facebook: [],
+    borrador: [],
     publicado: [],
     descartado: [],
     descartado_fecha: [],
@@ -293,11 +295,21 @@ export async function getTablero(): Promise<Tablero> {
     // En Post la unidad deja de ser el hecho: un hecho produce un post por red
     // y cada uno se revisa y se publica por su lado, asi que la tarjeta se
     // reparte en tantas columnas como piezas tenga. Solo las redes que estan en
-    // el tablero: si LinkedIn esta apagado o sin conectar, su pieza no tiene
-    // donde caer y la columna no existe.
+    // el tablero tienen columna: si LinkedIn esta apagado o sin conectar, su
+    // pieza cae en Borradores, para poder verla y revisarla aunque no haya donde
+    // publicarla.
     if (etapa === "post") {
       for (const pieza of misPiezas) {
-        if (!(redesActivas as string[]).includes(pieza.network)) continue
+        if (!(redesActivas as string[]).includes(pieza.network)) {
+          porEtapa.borrador.push({
+            ...ficha,
+            red: pieza.network,
+            etapa: "borrador",
+            piezas: [pieza],
+            miniatura: miniaturaDe([pieza]),
+          })
+          continue
+        }
         const columna = `post_${pieza.network}` as Etapa
         if (!(columna in porEtapa)) continue
         porEtapa[columna].push({
@@ -332,6 +344,7 @@ const CONTEOS_VACIOS: Record<Etapa, number> = {
   post_linkedin: 0,
   post_instagram: 0,
   post_facebook: 0,
+  borrador: 0,
   publicado: 0,
   descartado: 0,
   descartado_fecha: 0,
