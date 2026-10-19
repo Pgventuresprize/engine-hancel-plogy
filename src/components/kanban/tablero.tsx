@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
@@ -539,13 +540,16 @@ export function IndicadorModo({ modo, redes }: { modo: ModoDeEtapa; redes: strin
             <PlayIcon className={`size-3 ${pending ? "animate-pulse" : ""}`} />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Publicar en</DropdownMenuLabel>
-            <DropdownMenuItem onClick={() => correr("")}>Todas las redes</DropdownMenuItem>
-            {redes.map((red) => (
-              <DropdownMenuItem key={red} onClick={() => correr(red)}>
-                {NOMBRE_RED_COLUMNA[red] ?? red}
-              </DropdownMenuItem>
-            ))}
+            {/* La etiqueta de Base UI solo existe dentro de un grupo. */}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Publicar en</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => correr("")}>Todas las redes</DropdownMenuItem>
+              {redes.map((red) => (
+                <DropdownMenuItem key={red} onClick={() => correr(red)}>
+                  {NOMBRE_RED_COLUMNA[red] ?? red}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       ) : (

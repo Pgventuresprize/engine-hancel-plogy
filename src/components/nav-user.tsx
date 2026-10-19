@@ -93,21 +93,24 @@ export function NavUser({
             {cuentas.length > 1 ? (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-muted-foreground text-xs">
-                  Cuenta
-                </DropdownMenuLabel>
-                {cuentas.map((c) => (
-                  <DropdownMenuItem
-                    key={c.id}
-                    disabled={ocupado || c.id === cuenta.id}
-                    onClick={() =>
-                      startTransition(async () => void (await cambiarCuenta(c.slug)))
-                    }
-                  >
-                    <span className="flex-1 truncate">{c.name}</span>
-                    {c.id === cuenta.id ? <CheckIcon className="size-4" /> : null}
-                  </DropdownMenuItem>
-                ))}
+                {/* La etiqueta de Base UI solo existe dentro de un grupo. */}
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="text-muted-foreground text-xs">
+                    Cuenta
+                  </DropdownMenuLabel>
+                  {cuentas.map((c) => (
+                    <DropdownMenuItem
+                      key={c.id}
+                      disabled={ocupado || c.id === cuenta.id}
+                      onClick={() =>
+                        startTransition(async () => void (await cambiarCuenta(c.slug)))
+                      }
+                    >
+                      <span className="flex-1 truncate">{c.name}</span>
+                      {c.id === cuenta.id ? <CheckIcon className="size-4" /> : null}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
               </>
             ) : null}
 

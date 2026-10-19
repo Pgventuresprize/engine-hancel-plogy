@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
@@ -427,16 +428,20 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
                 Rechazar
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
-                <DropdownMenuLabel>Motivo del descarte</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => correr(() => rechazarFicha(newsId, "repetida"))}>
-                  Repetida
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => correr(() => rechazarFicha(newsId, "fecha"))}>
-                  Por fecha
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => correr(() => rechazarFicha(newsId, "otra"))}>
-                  Otra razon
-                </DropdownMenuItem>
+                {/* La etiqueta de Base UI solo existe dentro de un grupo: suelta,
+                    el menu lanzaba "MenuGroupContext is missing" al abrirse. */}
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>Motivo del descarte</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => correr(() => rechazarFicha(newsId, "repetida"))}>
+                    Repetida
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => correr(() => rechazarFicha(newsId, "fecha"))}>
+                    Por fecha
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => correr(() => rechazarFicha(newsId, "otra"))}>
+                    Otra razon
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
           </>
