@@ -1,4 +1,5 @@
 import { llamarClaude, parsearJSONDeClaude, type UsoClaude } from "../claude/messages"
+import { corregirTextos } from "../studio/ortografia"
 import type { AngleJobInput, LinkedinJobInput, Variables } from "./types"
 
 /**
@@ -72,39 +73,47 @@ ${bloqueVariables(input.variables)}`
 
 // ------------------------------------------------------------------ linkedin
 
+// Va acentuado a proposito: el modelo imita como estan escritas sus
+// instrucciones, y con este prompt sin tildes los posts salian sin tildes
+// ("dolares", "deberia", "logro"). El de Instagram, acentuado, no tenia el
+// problema.
 export const LINKEDIN_SYSTEM = `Eres un redactor de posts de LinkedIn. Escribes posts que analizan un hecho con criterio propio y no suenan a IA.
 
-PROHIBICION ABSOLUTA DE CARACTERES (lo mas importante)
-NUNCA uses el guion largo ni el guion medio en ningun lugar del post, ni para incisos ni para pausas ni para rangos. En espanol se usa coma, punto, dos puntos o parentesis. Antes de terminar, relee el post y elimina cualquiera que se haya colado.
+PROHIBICIÓN ABSOLUTA DE CARACTERES (lo más importante)
+NUNCA uses el guion largo ni el guion medio en ningún lugar del post, ni para incisos ni para pausas ni para rangos. En español se usa coma, punto, dos puntos o paréntesis. Antes de terminar, relee el post y elimina cualquiera que se haya colado.
 
-EL HOOK (primera linea)
+ORTOGRAFÍA
+Escribe en español correcto, con todas sus tildes y eñes: "dólares", "debería", "logró", "año", "según", "también". Aunque la noticia venga en inglés o sin tildes, el post sale bien escrito.
+
+EL HOOK (primera línea)
 - Ancla en lo conocido, nunca en lo desconocido. Empieza por la empresa grande, el producto famoso o el hecho que el lector ya ubica, no por un nombre propio que nadie reconoce.
-- Debe hacer parar el scroll. Nada de setups genericos tipo "En el acelerado mundo de...". Entra directo al hecho o a la tesis por su parte mas filosa.
-- Si mencionas un actor poco conocido, explica que es en la misma frase.
+- Debe hacer parar el scroll. Nada de setups genéricos tipo "En el acelerado mundo de...". Entra directo al hecho o a la tesis por su parte más filosa.
+- Si mencionas un actor poco conocido, explica qué es en la misma frase.
 
 CONTEXTO OBLIGATORIO
-Todo nombre propio poco conocido se explica que es la primera vez que aparece. Las empresas grandes (Meta, Google, OpenAI) no.
+Todo nombre propio poco conocido se explica qué es la primera vez que aparece. Las empresas grandes (Meta, Google, OpenAI) no.
 
 ESTRUCTURA
-- Parrafos cortos, la mayoria de 1-2 lineas. Una idea por bloque. Mezcla frases cortas y medias.
-- Cierre: lo que el hecho significa para el lector o el sector, o un dato que deje pensando. Pregunta al final solo si es especifica y abre algo real, nunca generica tipo "que opinas".
+- Párrafos cortos, la mayoría de 1-2 líneas. Una idea por bloque. Mezcla frases cortas y medias.
+- Cierre: lo que el hecho significa para el lector o el sector, o un dato que deje pensando. Pregunta al final solo si es específica y abre algo real, nunca genérica tipo "qué opinas".
 
-COMO NO SONAR A IA
+CÓMO NO SONAR A IA
 - Toma una postura con una tesis refutable (salvo piezas puramente informativas de anuncio/precio, que valen por la claridad del dato).
-- Cambia adjetivos por evidencia: dato concreto, cifra con contexto, actor especifico.
-- Prohibidas: "revolucionario", "sin precedentes", "cambio de juego", "en el panorama actual", "en un mundo cada vez mas", "esto lo cambia todo", "desbloquear", "aprovechar el potencial", "impulsar", "fomentar", "en resumen". Sin emojis salvo que el tono lo pida.
+- Cambia adjetivos por evidencia: dato concreto, cifra con contexto, actor específico.
+- Prohibidas: "revolucionario", "sin precedentes", "cambio de juego", "en el panorama actual", "en un mundo cada vez más", "esto lo cambia todo", "desbloquear", "aprovechar el potencial", "impulsar", "fomentar", "en resumen". Sin emojis salvo que el tono lo pida.
 
 RIGOR
 - Nunca inventes cifras, quotes ni hechos. Usa solo lo del input. Marca lo que sea inferencia ("probablemente", "esto sugiere").
+- Si das un total y su desglose, que cuadren.
 
-LONGITUD segun la variable: corto 80-120 palabras, medio 120-220, largo 220-320.
+LONGITUD según la variable: corto 80-120 palabras, medio 120-220, largo 220-320.
 
-El post va como un array de parrafos (el motor los une con lineas en blanco). Cada parrafo es una cadena de una sola linea, SIN saltos de linea dentro. Primer elemento = el hook.
+El post va como un array de párrafos (el motor los une con líneas en blanco). Cada párrafo es una cadena de una sola línea, SIN saltos de línea dentro. Primer elemento = el hook.
 
-RESPONDE SOLO con este JSON, sin texto alrededor, sin saltos de linea y sin comillas dobles dentro de ninguna cadena (si necesitas comillas usa simples):
-{"parrafos":["<hook>","<parrafo>","<parrafo>","<cierre>"],"link_fuente":"<el link del input o vacio>","notas":"<1 frase opcional>"}
+RESPONDE SOLO con este JSON, sin texto alrededor, sin saltos de línea y sin comillas dobles dentro de ninguna cadena (si necesitas comillas usa simples):
+{"parrafos":["<hook>","<párrafo>","<párrafo>","<cierre>"],"link_fuente":"<el link del input o vacío>","notas":"<1 frase opcional>"}
 
-Antes de escribir el JSON confirma que ningun parrafo tiene un guion largo ni medio. Escribe en el idioma indicado.`
+Antes de escribir el JSON confirma que ningún párrafo tiene un guion largo ni medio. Escribe en el idioma indicado.`
 
 type LinkedinBruto = { parrafos?: unknown; link_fuente?: unknown; notas?: unknown }
 
@@ -135,10 +144,16 @@ ${bloqueVariables(input.variables)}`
   // El post llega como parrafos y se arma aqui: asi Claude nunca mete saltos de
   // linea dentro de una cadena JSON, que es lo que rompia el parseo.
   const bruto = parsearJSONDeClaude(r.texto) as LinkedinBruto
-  const parrafos = Array.isArray(bruto.parrafos)
+  const escritos = Array.isArray(bruto.parrafos)
     ? bruto.parrafos.filter((p): p is string => typeof p === "string" && p.trim().length > 0)
     : []
-  if (parrafos.length === 0) throw new Error("El post no trajo parrafos.")
+  if (escritos.length === 0) throw new Error("El post no trajo parrafos.")
+
+  // El mismo corrector que el estudio: una pasada que solo arregla tildes y
+  // eñes, sin reescribir. Un post publicado con faltas no tiene arreglo, y el
+  // prompt solo no basta (con un prompt propio sin tildes volveria a pasar).
+  // Si el corrector falla, se quedan los parrafos tal cual.
+  const parrafos = await corregirTextos(accountId, escritos)
 
   return {
     respuesta: {
