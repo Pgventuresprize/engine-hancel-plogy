@@ -32,6 +32,8 @@ const ABIERTAS = [
   "/api/videos/tick",
   "/api/redaccion/tick",
   "/api/publicacion/tick",
+  // Canva importa de aqui el HTML de cada pieza del Estudio, sin sesion.
+  "/api/studio/html",
 ]
 
 function esAbierta(pathname: string): boolean {
