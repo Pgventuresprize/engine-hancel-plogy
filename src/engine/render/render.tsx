@@ -60,7 +60,17 @@ export async function descargarFoto(url: string | null | undefined): Promise<str
     const buffer = await response.arrayBuffer()
     if (buffer.byteLength === 0 || buffer.byteLength > MAX_FOTO_BYTES) return null
 
-    return `data:${tipo.split(";")[0]};base64,${Buffer.from(buffer).toString("base64")}`
+    // Satori solo decodifica bien JPEG y PNG: un WebP o un GIF lo tumban ("u2 is
+    // not iterable") y con el la tarjeta entera. Las miniaturas de Google que
+    // traen muchas noticias son WebP, asi que se pasan a JPEG antes de dibujar.
+    const tipoLimpio = tipo.split(";")[0].toLowerCase()
+    if (tipoLimpio === "image/webp" || tipoLimpio === "image/gif") {
+      const sharp = (await import("sharp")).default
+      const jpg = await sharp(Buffer.from(buffer)).flatten({ background: "#ffffff" }).jpeg({ quality: 90 }).toBuffer()
+      return `data:image/jpeg;base64,${jpg.toString("base64")}`
+    }
+
+    return `data:${tipoLimpio};base64,${Buffer.from(buffer).toString("base64")}`
   } catch {
     return null
   }
