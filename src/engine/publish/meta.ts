@@ -119,7 +119,7 @@ async function aJpeg(urls: string[]): Promise<{ ok: true; urls: string[] } | { o
       const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
       if (!res.ok) return { ok: false, error: `No se pudo bajar una lámina (${res.status}).` }
       const jpg = await sharp(Buffer.from(await res.arrayBuffer())).flatten({ background: "#ffffff" }).jpeg({ quality: 92 }).toBuffer()
-      const ruta = `jpeg/${new URL(url).pathname.split("/carousels/").pop()?.replace(/\.[a-z]+$/i, "") ?? Date.now().toString(36)}.jpg`
+      const ruta = `jpeg/${new URL(url).pathname.split(/\/carousels\/|\/api\/archivo\//).pop()?.replace(/\.[a-z]+$/i, "") ?? Date.now().toString(36)}.jpg`
       const { error } = await supabase.storage.from(BUCKET).upload(ruta, jpg, { contentType: "image/jpeg", upsert: true })
       if (error) return { ok: false, error: `No se pudo guardar la lámina en JPEG: ${error.message}` }
       salida.push(supabase.storage.from(BUCKET).getPublicUrl(ruta).data.publicUrl)

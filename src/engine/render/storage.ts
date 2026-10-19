@@ -87,7 +87,10 @@ export async function subirLogo(
   contentType: string
 ): Promise<string> {
   const supabase = supabaseAdmin()
-  const ruta = `marca/${accountId}/logo-${version}`
+  // Con extension: Canva, al importar el HTML de una pieza, no carga una
+  // imagen cuya URL no termina en .png/.jpg/...
+  const ext = contentType.includes("svg") ? "svg" : contentType.includes("jpeg") ? "jpg" : contentType.includes("webp") ? "webp" : "png"
+  const ruta = `marca/${accountId}/logo-${version}.${ext}`
 
   const { error } = await supabase.storage.from(BUCKET).upload(ruta, bytes, {
     contentType,
@@ -104,7 +107,8 @@ export async function borrarLogo(
   accountId: string,
   version: "claro" | "oscuro" | "perfil"
 ): Promise<void> {
-  await supabaseAdmin().storage.from(BUCKET).remove([`marca/${accountId}/logo-${version}`])
+  const base = `marca/${accountId}/logo-${version}`
+  await supabaseAdmin().storage.from(BUCKET).remove([base, ...["png", "jpg", "svg", "webp"].map((e) => `${base}.${e}`)])
 }
 
 /** Borra las imagenes de un carrusel. Se usa al descartar una pieza. */
