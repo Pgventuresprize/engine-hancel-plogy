@@ -3,6 +3,8 @@
 import * as React from "react"
 import {
   CheckIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   CopyIcon,
   DownloadIcon,
   ExternalLinkIcon,
@@ -304,7 +306,12 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
   const esCarrusel = pieza.network === "instagram"
   const publicada = pieza.status === "published"
   const rechazada = pieza.status === "rejected"
-  const imagenes = esCarrusel ? (pieza.payload.images ?? []) : []
+  // Las laminas del carrusel o, en Facebook, su imagen unica.
+  const imagenes = esCarrusel
+    ? (pieza.payload.images ?? [])
+    : pieza.payload.image
+      ? [pieza.payload.image]
+      : []
 
   const texto = esCarrusel
     ? [pieza.payload.caption, (pieza.payload.hashtags ?? []).join(" ")].filter(Boolean).join("\n\n")
@@ -341,36 +348,16 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
 
       {pieza.publish_error ? <p className="text-destructive text-xs">{pieza.publish_error}</p> : null}
 
+      {/* Con imagen, la pieza se lee como en el feed: la lamina grande a un lado
+          y el texto al otro, en la misma ficha. Sin imagen, solo el texto. */}
       {imagenes.length > 0 ? (
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {imagenes.map((src, i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={src}
-              src={src}
-              alt={`Lamina ${i + 1}`}
-              className="h-36 w-28 shrink-0 rounded-md border object-cover"
-              loading="lazy"
-            />
-          ))}
+        <div className="grid gap-4 md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+          <VisorLaminas imagenes={imagenes} />
+          <p className="leading-relaxed whitespace-pre-wrap">{texto || "(sin texto)"}</p>
         </div>
-      ) : null}
-
-      {/* `self-start` no es un detalle: en una columna flex la imagen se estira
-          al ancho del panel, y con `object-cover` eso la recortaba en una banda
-          apaisada que no se parecia a lo que sale publicado. Mismo tamaño que
-          las laminas del carrusel, porque es la misma imagen. */}
-      {pieza.payload.image ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={pieza.payload.image}
-          alt="Imagen de la publicacion"
-          className="h-36 w-28 shrink-0 self-start rounded-md border object-cover"
-          loading="lazy"
-        />
-      ) : null}
-
-      <p className="leading-relaxed whitespace-pre-wrap">{texto || "(sin texto)"}</p>
+      ) : (
+        <p className="leading-relaxed whitespace-pre-wrap">{texto || "(sin texto)"}</p>
+      )}
 
       <div className="flex flex-wrap items-center gap-2 border-t pt-3">
         {!publicada && !rechazada ? (
@@ -457,6 +444,87 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
 
         {error ? <span className="text-destructive text-xs">{error}</span> : null}
       </div>
+    </div>
+  )
+}
+
+/**
+ * El carrusel dentro de la ficha, una lamina a la vez y a buen tamaño.
+ *
+ * Las miniaturas en fila daban el ritmo del carrusel pero no se leian. Aqui se
+ * ve cada lamina grande y se pasa de una a otra con las flechas (las de la
+ * pantalla o, con el visor enfocado, las del teclado). Las miniaturas quedan
+ * debajo para saltar directo a una.
+ */
+function VisorLaminas({ imagenes }: { imagenes: string[] }) {
+  const [actual, setActual] = React.useState(0)
+  const total = imagenes.length
+  // Si se regenera el carrusel con menos laminas, no quedarse fuera del rango.
+  const i = Math.min(actual, total - 1)
+  const anterior = () => setActual(Math.max(0, i - 1))
+  const siguiente = () => setActual(Math.min(total - 1, i + 1))
+
+  return (
+    <div
+      className="flex flex-col gap-2 outline-none"
+      tabIndex={0}
+      aria-label="Laminas de la pieza"
+      onKeyDown={(e) => {
+        if (e.key === "ArrowLeft") anterior()
+        if (e.key === "ArrowRight") siguiente()
+      }}
+    >
+      <div className="relative">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imagenes[i]}
+          alt={`Lamina ${i + 1}`}
+          className="bg-muted w-full rounded-md border object-contain"
+        />
+        {total > 1 ? (
+          <>
+            <Button
+              size="icon-sm"
+              variant="secondary"
+              className="absolute top-1/2 left-2 -translate-y-1/2 opacity-90"
+              disabled={i === 0}
+              onClick={anterior}
+            >
+              <ChevronLeftIcon />
+              <span className="sr-only">Anterior</span>
+            </Button>
+            <Button
+              size="icon-sm"
+              variant="secondary"
+              className="absolute top-1/2 right-2 -translate-y-1/2 opacity-90"
+              disabled={i === total - 1}
+              onClick={siguiente}
+            >
+              <ChevronRightIcon />
+              <span className="sr-only">Siguiente</span>
+            </Button>
+            <span className="bg-background/80 absolute right-2 bottom-2 rounded px-1.5 py-0.5 text-xs tabular-nums">
+              {i + 1} / {total}
+            </span>
+          </>
+        ) : null}
+      </div>
+
+      {total > 1 ? (
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          {imagenes.map((src, n) => (
+            <button
+              key={src}
+              type="button"
+              onClick={() => setActual(n)}
+              className={`shrink-0 rounded transition-opacity ${n === i ? "ring-primary ring-2" : "opacity-60 hover:opacity-100"}`}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={src} alt={`Ir a la lamina ${n + 1}`} className="h-14 w-11 rounded object-cover" loading="lazy" />
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }

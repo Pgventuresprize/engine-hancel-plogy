@@ -297,19 +297,20 @@ export async function getTablero(): Promise<Tablero> {
     // reparte en tantas columnas como piezas tenga. Solo las redes que estan en
     // el tablero tienen columna: si LinkedIn esta apagado o sin conectar, su
     // pieza cae en Borradores, para poder verla y revisarla aunque no haya donde
-    // publicarla.
+    // publicarla. Ahi la unidad vuelve a ser el hecho: una sola tarjeta con
+    // todas sus piezas sin red, y dentro se pasa de una a otra.
     if (etapa === "post") {
+      const borradores = misPiezas.filter((p) => !(redesActivas as string[]).includes(p.network))
+      if (borradores.length > 0) {
+        porEtapa.borrador.push({
+          ...ficha,
+          etapa: "borrador",
+          piezas: borradores,
+          miniatura: miniaturaDe(borradores),
+        })
+      }
       for (const pieza of misPiezas) {
-        if (!(redesActivas as string[]).includes(pieza.network)) {
-          porEtapa.borrador.push({
-            ...ficha,
-            red: pieza.network,
-            etapa: "borrador",
-            piezas: [pieza],
-            miniatura: miniaturaDe([pieza]),
-          })
-          continue
-        }
+        if (!(redesActivas as string[]).includes(pieza.network)) continue
         const columna = `post_${pieza.network}` as Etapa
         if (!(columna in porEtapa)) continue
         porEtapa[columna].push({
