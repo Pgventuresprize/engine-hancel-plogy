@@ -274,9 +274,7 @@ export async function dibujarConCanva(opciones: {
     upsert: true,
   })
   if (errSubida) return { ok: false, error: `No se pudo dejar la pieza en el storage: ${errSubida.message}` }
-  // Canva lo lee desde la app: el storage no sirve .html como pagina (ver
-  // app/api/studio/html).
-  const urlHtml = `${(process.env.APP_URL ?? "https://app.hancel.xyz").replace(/\/$/, "")}/api/studio/html/${rutaHtml.split("/").map(encodeURIComponent).join("/")}`
+  const urlHtml = supabase.storage.from(BUCKET).getPublicUrl(rutaHtml).data.publicUrl
 
   // ------------------------------------------------------- 3. Canva
   const tipoCanva = formatId.startsWith("ig_") ? "instagram_post" : formatId.startsWith("fb_") ? "facebook_post" : undefined

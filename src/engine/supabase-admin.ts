@@ -71,6 +71,9 @@ async function pedir(base: string, key: string, ruta: string, init: RequestInit 
   }
 }
 
+/** La URL publica de la app, desde la que se sirven los archivos del bucket. */
+const urlApp = () => (process.env.APP_URL ?? "https://app.hancel.xyz").replace(/\/$/, "")
+
 /** La ruta de un objeto con cada tramo codificado, pero con sus "/". */
 const rutaObjeto = (ruta: string) => ruta.split("/").map(encodeURIComponent).join("/")
 
@@ -87,7 +90,9 @@ function storage(base: string, key: string) {
           return { data: r.error ? null : { path: ruta }, error: r.error }
         },
         getPublicUrl(ruta: string) {
-          return { data: { publicUrl: `${base}/api/storage/buckets/${bucket}/objects/${rutaObjeto(ruta)}` } }
+          // Servido por la app (app/api/archivo): el storage responde con una
+          // redireccion que Canva no sigue, y los .html no los da como pagina.
+          return { data: { publicUrl: `${urlApp()}/api/archivo/${rutaObjeto(ruta)}` } }
         },
         async list(prefijo = "", opciones?: { limit?: number }) {
           const p = prefijo ? `${prefijo.replace(/\/$/, "")}/` : ""
