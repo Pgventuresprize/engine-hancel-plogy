@@ -1,11 +1,17 @@
 import "server-only"
 
+import { supabaseAdmin } from "@/engine/supabase-admin"
 import { idDeCuentaActual } from "@/lib/accounts"
-import { supabase } from "@/lib/supabase/server"
 import type { PipelineRun, RawNews } from "@/lib/types"
 
 /**
  * Todo lo que se lee aqui esta acotado a la cuenta activa.
+ *
+ * Va con el cliente de servicio, como el resto de la aplicacion. Antes usaba la
+ * clave publicable, y por eso `raw_news` y `pipeline_runs` tenian que quedar sin
+ * RLS: abiertas a cualquiera con esa clave, con las noticias de todas las
+ * cuentas. Ahora tienen RLS como las demas y el filtro por cuenta de cada
+ * funcion es lo que separa una empresa de otra.
  *
  * El filtro se resuelve dentro de cada funcion y no se recibe por parametro a
  * proposito: son lecturas para la interfaz, siempre en el contexto de una
@@ -27,7 +33,7 @@ export type NewsFilters = {
  * Los filtros son opcionales y se combinan con AND.
  */
 export async function getNews(filters: NewsFilters = {}): Promise<RawNews[]> {
-  let query = supabase
+  let query = supabaseAdmin()
     .from("raw_news")
     .select(ALL_COLUMNS)
     .eq("account_id", await idDeCuentaActual())
@@ -83,7 +89,7 @@ export function buildStats(rows: RawNews[]): NewsStats {
 
 /** Ejecuciones del pipeline, mas recientes primero. */
 export async function getPipelineRuns(): Promise<PipelineRun[]> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin()
     .from("pipeline_runs")
     .select("*")
     .eq("account_id", await idDeCuentaActual())
@@ -95,7 +101,7 @@ export async function getPipelineRuns(): Promise<PipelineRun[]> {
 
 /** Conteo de noticias por nicho, para la navegacion lateral. */
 export async function getNicheCounts(): Promise<{ value: string; count: number }[]> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin()
     .from("raw_news")
     .select("niche")
     .eq("account_id", await idDeCuentaActual())
@@ -122,7 +128,7 @@ export type NewsFacets = {
  * filtro deben ofrecer siempre todas las opciones disponibles.
  */
 export async function getFacets(): Promise<NewsFacets> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin()
     .from("raw_news")
     .select("niche, status")
     .eq("account_id", await idDeCuentaActual())

@@ -180,11 +180,14 @@ export async function retirarDeWeb(newsId: string): Promise<Resultado> {
 export async function guardarEnvioWebAuto(auto: boolean): Promise<Resultado> {
   try {
     const cuenta = await cuentaActual()
-    await supabaseAdmin()
+    const { error } = await supabaseAdmin()
       .from("generation_config")
       // Encenderlo rige desde ahora: no vacia de golpe lo ya redactado.
-      .update({ web_envio_auto: auto, ...(auto ? { web_auto_desde: new Date().toISOString() } : {}) })
-      .eq("account_id", cuenta.id)
+      .upsert(
+        { account_id: cuenta.id, web_envio_auto: auto, ...(auto ? { web_auto_desde: new Date().toISOString() } : {}) },
+        { onConflict: "account_id" }
+      )
+    if (error) throw new Error(error.message)
     refrescar()
     return { ok: true, aviso: auto ? "Automático: cada noticia redactada sale al portal." : "Manual: arrastra a En la web lo que quieras publicar." }
   } catch (e) {

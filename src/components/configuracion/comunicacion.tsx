@@ -34,13 +34,9 @@ export function Comunicacion({ config }: { config: GenerationConfig }) {
 
   const save = () => {
     const form = new FormData()
+    // Solo las variables: el umbral se guarda en General, y la accion no lo
+    // toca si el formulario no lo trae.
     for (const [clave, valor] of Object.entries(variables)) form.set(clave, valor)
-    // El umbral se guarda en General y comparte accion: si no viaja, la accion
-    // lo leeria vacio y lo borraria sin que nadie lo haya tocado.
-    form.set(
-      "score_threshold",
-      config.score_threshold === null ? "" : String(config.score_threshold)
-    )
 
     setResult(null)
     startTransition(async () => setResult(await updateGenerationConfig(form)))

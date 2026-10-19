@@ -502,6 +502,9 @@ create table if not exists public.agent_settings (
     check (agent in ('extraccion', 'analisis', 'angulo', 'instagram', 'linkedin', 'publicacion', 'redaccion'))
 );
 
+-- Lleva los prompts de cada cuenta: cerrada como el resto, solo service role.
+alter table public.agent_settings enable row level security;
+
 -- -------------------------------------------------------------------- motor
 create table if not exists public.engine_settings (
   id         boolean primary key default true,
@@ -518,18 +521,16 @@ create table if not exists public.engine_settings (
 
 -- ----------------------------------------------------------------------- RLS
 --
--- Dos regimenes distintos, segun con que clave se lee cada tabla:
+-- Todas las tablas solo se tocan con la service role, que salta RLS por
+-- completo. Dejarlo activo y sin politicas las cierra a cualquier otra
+-- credencial sin costo.
 --
---   raw_news y pipeline_runs  el dashboard las lee con la clave publicable,
---                             que no salta RLS. Sin politicas y con RLS activo
---                             devolverian cero filas, asi que va desactivado.
---
---   el resto                  solo se tocan con la service role, que salta RLS
---                             por completo. Dejarlo activo y sin politicas las
---                             cierra a cualquier otra credencial sin costo.
+-- raw_news y pipeline_runs iban desactivadas porque el dashboard las leia con
+-- la clave publicable; desde 2026-10-20 se leen tambien con la service role
+-- (migraciones/2026-10-20-cimientos-multimarca.sql).
 
-alter table public.raw_news      disable row level security;
-alter table public.pipeline_runs disable row level security;
+alter table public.raw_news      enable row level security;
+alter table public.pipeline_runs enable row level security;
 
 alter table public.pipeline_events   enable row level security;
 alter table public.engine_categories enable row level security;

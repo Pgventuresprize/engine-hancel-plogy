@@ -80,8 +80,10 @@ export async function updateTimezone(timezone: string): Promise<ActionResult> {
   try {
     const { error } = await supabaseAdmin()
       .from("engine_settings")
-      .update({ timezone: limpia, updated_at: new Date().toISOString() })
-      .eq("account_id", await idDeCuentaActual())
+      .upsert(
+        { account_id: await idDeCuentaActual(), timezone: limpia, updated_at: new Date().toISOString() },
+        { onConflict: "account_id" }
+      )
 
     if (error) throw new Error(error.message)
 

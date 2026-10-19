@@ -42,7 +42,9 @@ export async function guardarWebNoticias(url: string): Promise<ResultadoWeb> {
     // El envio automatico arranca desde que se conecta: lo ya redactado no sale
     // de golpe; se publica a mano si se quiere.
     if (!antes.web_webhook_url) {
-      await supabaseAdmin().from("generation_config").update({ web_auto_desde: new Date().toISOString() }).eq("account_id", cuenta.id)
+      await supabaseAdmin()
+        .from("generation_config")
+        .upsert({ account_id: cuenta.id, web_auto_desde: new Date().toISOString() }, { onConflict: "account_id" })
     }
     refrescar()
     return antes.web_webhook_secret

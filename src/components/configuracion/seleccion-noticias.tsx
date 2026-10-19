@@ -39,9 +39,8 @@ export function SeleccionDeNoticias({
 
   const save = () => {
     const form = new FormData()
-    // Las variables de marca comparten accion y se editan en Marca: si no
-    // viajan, la accion las leeria vacias y las borraria de paso.
-    for (const [clave, valor] of Object.entries(config.variables)) form.set(clave, valor)
+    // Solo los umbrales: las variables de marca se guardan en Marca, y la
+    // accion no las toca si el formulario no las trae.
     form.set("score_threshold", umbral.trim())
     form.set("redaccion_score_threshold", umbralRedaccion.trim())
 

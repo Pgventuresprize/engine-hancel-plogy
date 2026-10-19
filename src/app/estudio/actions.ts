@@ -620,36 +620,44 @@ export async function updateCarouselStyle(form: FormData): Promise<ActionResult>
   try {
     const accountId = await idDeCuentaActual()
 
-    // El logo no viaja en este formulario —se sube aparte— y esta escritura
-    // reemplaza el documento entero, asi que hay que arrastrarlo: sin esto,
-    // guardar la paleta borraria el logo sin que nadie lo tocara.
+    // El formulario no trae todo el aspecto: los logos se suben aparte y la
+    // plantilla, o lo que se añada despues, vive en otras pantallas. Se parte de
+    // lo guardado y se pisa solo lo que trae el formulario; reemplazar el
+    // documento entero borraba en silencio todo lo demas.
     const { data: previa } = await supabaseAdmin()
       .from("generation_config")
       .select("carousel")
       .eq("account_id", accountId)
       .maybeSingle()
-    const logos = ((previa as { carousel?: { logos?: unknown } } | null)?.carousel ?? {}).logos ?? {}
+    const anterior = { ...((previa as { carousel?: Record<string, unknown> } | null)?.carousel ?? {}) }
+    // `logo` a secas es de cuando solo habia uno: arrastrarlo haria resucitar
+    // una version ya quitada.
+    delete anterior.logo
 
     const { error } = await supabaseAdmin()
       .from("generation_config")
-      .update({
-        carousel: {
-          paleta,
-          fuente,
-          marca,
-          logos,
-          mostrarPaginacion: form.get("mostrarPaginacion") === "true",
-          usarFotos: form.get("usarFotos") === "true",
-          fotosLiterales: form.get("fotosLiterales") === "true",
-          cierre: {
-            estilo: form.get("cierreEstilo") === "perfil" ? "perfil" : "marca",
-            titulo: text(form, "cierreTitulo").slice(0, 40),
-            texto: text(form, "cierreTexto").slice(0, 140),
+      .upsert(
+        {
+          account_id: accountId,
+          carousel: {
+            ...anterior,
+            paleta,
+            fuente,
+            marca,
+            logos: anterior.logos ?? {},
+            mostrarPaginacion: form.get("mostrarPaginacion") === "true",
+            usarFotos: form.get("usarFotos") === "true",
+            fotosLiterales: form.get("fotosLiterales") === "true",
+            cierre: {
+              estilo: form.get("cierreEstilo") === "perfil" ? "perfil" : "marca",
+              titulo: text(form, "cierreTitulo").slice(0, 40),
+              texto: text(form, "cierreTexto").slice(0, 140),
+            },
           },
+          updated_at: new Date().toISOString(),
         },
-        updated_at: new Date().toISOString(),
-      })
-      .eq("account_id", accountId)
+        { onConflict: "account_id" }
+      )
 
     if (error) throw new Error(error.message)
     refresh()
@@ -748,11 +756,14 @@ async function guardarLogoEnConfig(
 
   const { error } = await supabase
     .from("generation_config")
-    .update({
-      carousel: { ...resto, logos: { ...logos, [version]: url } },
-      updated_at: new Date().toISOString(),
-    })
-    .eq("account_id", accountId)
+    .upsert(
+      {
+        account_id: accountId,
+        carousel: { ...resto, logos: { ...logos, [version]: url } },
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "account_id" }
+    )
 
   if (error) throw new Error(error.message)
 }
@@ -768,14 +779,23 @@ export async function updateGenerationConfig(form: FormData): Promise<ActionResu
     idioma: text(form, "idioma"),
   }
 
-  const invalido = validateVariables(variables)
-  if (invalido) return { ok: false, error: invalido }
+  // Dos pantallas comparten esta accion y cada una guarda solo lo suyo: Marca
+  // manda las variables y General los umbrales. Antes cada una reenviaba lo de
+  // la otra tal como lo leyo al abrirse, y si entretanto se habia cambiado en
+  // la otra pantalla, guardar devolvia el valor viejo.
+  const traeVariables = form.has("tono")
+  if (traeVariables) {
+    const invalido = validateVariables(variables)
+    if (invalido) return { ok: false, error: invalido }
+  }
 
+  // El umbral viaja solo desde la tarjeta de seleccion.
   // Vacio = sin umbral: no se selecciona nada sola hasta que se defina, que es
   // justo lo que se quiere mientras no haya criterio de scoring.
+  const traeUmbral = form.has("score_threshold")
   const umbralTexto = text(form, "score_threshold")
   let umbral: number | null = null
-  if (umbralTexto.length > 0) {
+  if (traeUmbral && umbralTexto.length > 0) {
     umbral = Number(umbralTexto)
     if (!Number.isInteger(umbral) || umbral < 0 || umbral > 10) {
       return { ok: false, error: "El umbral tiene que ser un entero entre 0 y 10." }
@@ -788,12 +808,18 @@ export async function updateGenerationConfig(form: FormData): Promise<ActionResu
     // Cambiar el umbral solo afecta a lo que entre despues. Se marca la fecha
     // solo si el numero cambio de verdad: guardar otra cosa de la pantalla no
     // puede mover la linea y dejar fuera noticias que ya cumplian.
-    const { data: previa } = await supabaseAdmin()
-      .from("generation_config")
-      .select("score_threshold")
-      .eq("account_id", accountId)
-      .maybeSingle()
-    const cambioElUmbral = (previa as { score_threshold: number | null } | null)?.score_threshold !== umbral
+    const extraUmbral: Record<string, unknown> = {}
+    if (traeUmbral) {
+      const { data: previa } = await supabaseAdmin()
+        .from("generation_config")
+        .select("score_threshold")
+        .eq("account_id", accountId)
+        .maybeSingle()
+      extraUmbral.score_threshold = umbral
+      if ((previa as { score_threshold: number | null } | null)?.score_threshold !== umbral) {
+        extraUmbral.score_threshold_updated_at = new Date().toISOString()
+      }
+    }
 
     // El umbral de redaccion viaja solo desde la tarjeta de seleccion: si el
     // formulario no lo trae (la pantalla de Marca), no se toca.
@@ -817,14 +843,16 @@ export async function updateGenerationConfig(form: FormData): Promise<ActionResu
 
     const { error } = await supabaseAdmin()
       .from("generation_config")
-      .update({
-        variables: parseVariables(variables),
-        score_threshold: umbral,
-        ...(cambioElUmbral ? { score_threshold_updated_at: new Date().toISOString() } : {}),
-        ...extraRedaccion,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("account_id", accountId)
+      .upsert(
+        {
+          account_id: accountId,
+          ...(traeVariables ? { variables: parseVariables(variables) } : {}),
+          ...extraUmbral,
+          ...extraRedaccion,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "account_id" }
+      )
 
     if (error) throw new Error(error.message)
     refresh()

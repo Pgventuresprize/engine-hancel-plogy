@@ -1,9 +1,11 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
 /**
- * Cliente con service role: inserta y borra en `raw_news` y `pipeline_runs`.
+ * Cliente con service role: el unico que lee y escribe datos. Todas las tablas
+ * tienen RLS sin politicas, asi que la clave publicable no alcanza ninguna; esa
+ * clave solo sirve para la sesion (login), en `lib/supabase/auth.ts`.
  *
- * A diferencia de `src/lib/supabase/server.ts`, este modulo NO importa
+ * Este modulo NO importa
  * "server-only", porque el motor tambien corre fuera de Next (`npm run ingest`)
  * y ese paquete lanza al importarse desde Node plano. La proteccion aqui es
  * que la variable no lleva prefijo `NEXT_PUBLIC_`, asi que nunca entra al

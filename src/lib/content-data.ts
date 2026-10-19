@@ -18,10 +18,8 @@ import type { RawNews } from "@/lib/types"
 /**
  * Lectura de la etapa 2 para la interfaz.
  *
- * Las cinco tablas de contenido tienen RLS activo, asi que se leen con
- * `supabaseAdmin()` y no con el cliente publicable de `lib/supabase/server.ts`,
- * que solo alcanza `raw_news` y `pipeline_runs`. Mismo criterio que
- * `lib/engine-data.ts`.
+ * Las tablas tienen RLS activo y sin politicas, asi que se leen con
+ * `supabaseAdmin()`. Mismo criterio que `lib/engine-data.ts`.
  */
 
 /**

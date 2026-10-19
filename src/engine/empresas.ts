@@ -143,7 +143,40 @@ export async function crearEmpresa(
   ])
   if (m.error) return { ok: false, error: `Se creó la empresa pero no el acceso: ${m.error.message}` }
   if (s.error) return { ok: false, error: `Se creó la empresa pero no su espacio de conexiones: ${s.error.message}` }
+  try {
+    await asegurarConfiguracion(id)
+  } catch (e) {
+    return { ok: false, error: `Se creó la empresa pero no su configuración: ${e instanceof Error ? e.message : String(e)}` }
+  }
   return { ok: true, slug }
+}
+
+/** Las redes con horario propio en `publish_schedule`. */
+const REDES_CON_HORARIO = ["linkedin", "instagram", "facebook"] as const
+
+/**
+ * Las filas de configuracion que toda empresa necesita, con los valores por
+ * defecto de la base.
+ *
+ * Sin ellas, las pantallas que solo actualizan (marca, aspecto, zona horaria)
+ * afectaban cero filas y decian "Guardado" sin guardar nada. Es idempotente:
+ * lo que ya existe no se toca, asi que se puede llamar de nuevo sin miedo.
+ */
+export async function asegurarConfiguracion(accountId: string): Promise<void> {
+  const supabase = supabaseAdmin()
+  const opciones = { ignoreDuplicates: true } as const
+  const resultados = await Promise.all([
+    supabase.from("generation_config").upsert({ account_id: accountId }, { onConflict: "account_id", ...opciones }),
+    supabase.from("engine_settings").upsert({ account_id: accountId }, { onConflict: "account_id", ...opciones }),
+    supabase
+      .from("publish_schedule")
+      .upsert(
+        REDES_CON_HORARIO.map((network) => ({ account_id: accountId, network })),
+        { onConflict: "account_id,network", ...opciones }
+      ),
+  ])
+  const fallo = resultados.find((r) => r.error)
+  if (fallo?.error) throw new Error(fallo.error.message)
 }
 
 export async function actualizarEmpresa(accountId: string, campos: { name?: string; plan?: Plan }): Promise<{ ok: true } | { ok: false; error: string }> {

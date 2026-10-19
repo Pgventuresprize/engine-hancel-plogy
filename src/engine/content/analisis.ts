@@ -168,6 +168,11 @@ export async function analizarPendientes(
     return { analizadas: 0, fallidas: 0, errores: [], uso: { entrada: 0, salida: 0 } }
 
   const model = (await modelosClaude(accountId)).analisis
+  // El prompt editado de la cuenta, si lo hay. Antes se usaba siempre la
+  // constante: la ficha del agente dejaba editarlo y el motor lo ignoraba. La
+  // importacion es dinamica porque prompts.ts importa de este archivo.
+  const { promptDe } = await import("../agents/prompts")
+  const system = await promptDe(accountId, "analisis")
   const { timezone } = await getSettings(accountId)
   const hoy = new Date().toLocaleDateString("es-CO", { timeZone: timezone, weekday: "long", day: "numeric", month: "long", year: "numeric" })
   let analizadas = 0
@@ -214,7 +219,7 @@ ${material ? material.slice(0, MAX_MATERIAL) : "(no se pudo recolectar material;
           const r = await llamarClaude({
             accountId,
             model,
-            system: ANALISIS_SYSTEM,
+            system,
             prompt,
             maxTokens: 4000,
           })
