@@ -2,12 +2,12 @@ import { ANALISIS_CONTRATO, ANALISIS_OFICIO } from "../content/analisis"
 import {
   ANGULO_CONTRATO,
   ANGULO_OFICIO,
-  INSTAGRAM_CONTRATO,
+  contratoInstagram,
+  contratoLinkedin,
   INSTAGRAM_OFICIO,
-  LINKEDIN_CONTRATO,
   LINKEDIN_OFICIO,
 } from "../content/agentes"
-import { promptConMarca } from "../marca/prompt"
+import { promptConMarca, type DatosParaPrompt } from "../marca/prompt"
 import { REDACCION_CONTRATO, REDACCION_OFICIO } from "../redaccion/agente"
 import { ajustesDe, type Agente } from "./settings"
 
@@ -44,11 +44,17 @@ export const PROMPT_DE_FABRICA: Record<AgenteConPrompt, string> = {
   redaccion: REDACCION_OFICIO,
 }
 
-export const CONTRATO: Record<AgenteConPrompt, string> = {
+/**
+ * El de Instagram y el de LinkedIn se arman con los numeros de la marca
+ * (laminas, hashtags, emojis): son los mismos con los que el revisor comprueba
+ * la pieza, y van aqui y no en el oficio para que un oficio editado no los deje
+ * anclados a los de fabrica.
+ */
+export const CONTRATO: Record<AgenteConPrompt, string | ((datos: DatosParaPrompt) => string)> = {
   analisis: ANALISIS_CONTRATO,
   angulo: ANGULO_CONTRATO,
-  instagram: INSTAGRAM_CONTRATO,
-  linkedin: LINKEDIN_CONTRATO,
+  instagram: ({ perfil }) => contratoInstagram(perfil),
+  linkedin: ({ perfil }) => contratoLinkedin(perfil),
   redaccion: REDACCION_CONTRATO,
 }
 

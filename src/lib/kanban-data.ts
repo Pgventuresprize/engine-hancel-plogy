@@ -4,6 +4,7 @@ import type { ContentAngle, ContentPiece, PiecePayload } from "@/engine/content/
 import { comoHora } from "@/engine/agents/turno"
 import { redesActivas as redesActivas_ } from "@/engine/agents/redes"
 import { ajustesDe, type Agente } from "@/engine/agents/settings"
+import { parseRevision, type Revision } from "@/engine/content/revisor"
 import { parseClasificacion } from "@/engine/marca/clasificacion"
 import { supabaseAdmin } from "@/engine/supabase-admin"
 import { idDeCuentaActual } from "@/lib/accounts"
@@ -47,6 +48,8 @@ export type PiezaDelTablero = {
   published_at: string | null
   linkedin_urn: string | null
   publish_error: string | null
+  /** Lo que encontro el revisor automatico. Null = pieza de antes del revisor. */
+  revision: Revision | null
 }
 
 export type Ficha = {
@@ -243,6 +246,7 @@ export async function getTablero(): Promise<Tablero> {
       published_at: p.published_at,
       linkedin_urn: p.linkedin_urn,
       publish_error: p.publish_error,
+      revision: parseRevision((p as { revision?: unknown }).revision),
     })
     piezasPorNoticia.set(p.raw_news_id, lista)
   }

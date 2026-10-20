@@ -24,13 +24,14 @@ import { ALTO, ANCHO, ESTILO_POR_DEFECTO, type Estilo, type Variante } from "./t
 
 /** Instagram no admite carruseles de mas de 10, ni de menos de 2. */
 /**
- * Cuantas laminas tiene un carrusel, contando la de cierre.
+ * Cuantas laminas puede tener un carrusel, contando la de cierre.
  *
- * Seis. Antes eran hasta diez y el guion se estiraba para llenarlas, con
- * laminas que repetian lo dicho dos antes. Con cinco de contenido hay que
- * elegir que se cuenta, y eso se nota en lo que se lee.
+ * Siete como mucho. Antes eran hasta diez y el guion se estiraba para
+ * llenarlas, con laminas que repetian lo dicho dos antes. Cuantas lleva cada
+ * carrusel lo decide la marca (Marca > Voz), hasta seis de contenido; esto es
+ * solo el techo que el dibujo admite.
  */
-export const MAX_SLIDES = 6
+export const MAX_SLIDES = 7
 export const MIN_SLIDES = 2
 
 /** Tope de la foto: descargarla entera si es enorme no aporta. */

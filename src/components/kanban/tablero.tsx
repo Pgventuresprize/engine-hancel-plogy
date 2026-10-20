@@ -472,6 +472,8 @@ function Tarjeta({
               {NOMBRE_RED[p.network] ?? p.network}
             </Badge>
           ))}
+
+          <AvisoRevision ficha={ficha} />
         </div>
 
         {ficha.fuente ? (
@@ -479,6 +481,32 @@ function Tarjeta({
         ) : null}
       </div>
     </button>
+  )
+}
+
+/**
+ * Lo que dijo el revisor de las piezas de la tarjeta, de un vistazo. En una
+ * columna de Post habla solo de la pieza de esa red. Lo publicado ya no se
+ * marca: no hay nada que hacer con ello.
+ */
+function AvisoRevision({ ficha }: { ficha: Ficha }) {
+  const piezas = ficha.piezas.filter((p) => (!ficha.red || p.network === ficha.red) && p.status !== "published")
+  // Aprobada con frenos es una decision tomada: sale igual, y se cuenta como avisos.
+  const frenada = piezas.some((p) => p.revision?.frena && p.status !== "approved")
+  const avisos = piezas.reduce((n, p) => n + (p.revision?.hallazgos.length ?? 0), 0)
+
+  if (frenada) {
+    return (
+      <Badge variant="outline" className="border-red-400 text-red-700 dark:text-red-400">
+        Frenada
+      </Badge>
+    )
+  }
+  if (avisos === 0) return null
+  return (
+    <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-400">
+      {avisos === 1 ? "1 aviso" : `${avisos} avisos`}
+    </Badge>
   )
 }
 

@@ -10,18 +10,22 @@ import {
   ExternalLinkIcon,
   RefreshCwIcon,
   SendIcon,
+  ShieldCheckIcon,
   SparklesIcon,
+  WandSparklesIcon,
   XIcon,
 } from "lucide-react"
 
 import {
   approvePiece,
   contenidoDeNoticia,
+  corregirPiezaConIA,
   encolarContenido,
   generateFromAngle,
   publishPieceNow,
   regenerateCarousel,
   rechazarFicha,
+  revisarPiezaDeNuevo,
 } from "@/app/estudio/actions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -42,6 +46,7 @@ import {
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { conPocoMaterial, nombreMaterial } from "@/engine/content/material"
+import type { Hallazgo, Revision } from "@/engine/content/revisor"
 import { NOMBRE_OBJETIVO, type Clasificacion } from "@/engine/marca/clasificacion"
 import type { Ficha, PiezaDelTablero } from "@/lib/kanban-data"
 import { formatDateTime } from "@/lib/format"
@@ -87,12 +92,16 @@ function pestanaInicial(f: Ficha): string {
 function useAccion() {
   const [pending, start] = React.useTransition()
   const [error, setError] = React.useState<string | null>(null)
-  const correr = (fn: () => Promise<{ ok: boolean; error?: string }>) =>
+  // Lo que salio bien pero conviene saber: "quedan dos cosas que frenan".
+  const [aviso, setAviso] = React.useState<string | null>(null)
+  const correr = (fn: () => Promise<{ ok: boolean; error?: string; warning?: string }>) =>
     start(async () => {
       setError(null)
+      setAviso(null)
       try {
         const r = await fn()
         if (!r.ok) setError(r.error ?? "Algo fallo.")
+        else if (r.warning) setAviso(r.warning)
       } catch (e) {
         setError(
           e instanceof Error && e.message
@@ -101,7 +110,7 @@ function useAccion() {
         )
       }
     })
-  return { pending, error, correr }
+  return { pending, error, aviso, correr }
 }
 
 export function FichaDialog({
@@ -348,12 +357,15 @@ function PanelAngulo({ ficha, redesHechas }: { ficha: Ficha; redesHechas: Set<st
 // --------------------------------------------------------------------- pieza
 
 function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string }) {
-  const { pending, error, correr } = useAccion()
+  const { pending, error, aviso, correr } = useAccion()
   const [copiado, setCopiado] = React.useState(false)
 
   const esCarrusel = pieza.network === "instagram"
   const publicada = pieza.status === "published"
   const rechazada = pieza.status === "rejected"
+  // Frenada y sin aprobar: no sale sola. Aprobarla o publicarla es decir "sale igual".
+  const frenada = Boolean(pieza.revision?.frena) && pieza.status !== "approved"
+  const conHallazgos = (pieza.revision?.hallazgos.length ?? 0) > 0
   // Las laminas del carrusel o, en Facebook, su imagen unica.
   const imagenes = esCarrusel
     ? (pieza.payload.images ?? [])
@@ -396,6 +408,8 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
 
       {pieza.publish_error ? <p className="text-destructive text-xs">{pieza.publish_error}</p> : null}
 
+      {!publicada ? <PanelRevision revision={pieza.revision} aprobada={pieza.status === "approved"} /> : null}
+
       {/* Con imagen, la pieza se lee como en el feed: la lamina grande a un lado
           y el texto al otro, en la misma ficha. Sin imagen, solo el texto. */}
       {imagenes.length > 0 ? (
@@ -408,10 +422,42 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
       )}
 
       <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-        {!publicada && !rechazada ? (
-          <Button size="sm" disabled={pending} onClick={() => correr(() => approvePiece(pieza.id))}>
+        {!publicada && !rechazada && pieza.status !== "approved" ? (
+          <Button
+            size="sm"
+            variant={frenada ? "outline" : "default"}
+            disabled={pending}
+            title={frenada ? "La pieza tiene cosas que frenan. Aprobarla es decir que sale igual." : undefined}
+            onClick={() => correr(() => approvePiece(pieza.id))}
+          >
             <CheckIcon />
-            Aprobar
+            {frenada ? "Aprobar igual" : "Aprobar"}
+          </Button>
+        ) : null}
+
+        {!publicada && conHallazgos ? (
+          <Button
+            size="sm"
+            variant={frenada ? "default" : "outline"}
+            disabled={pending}
+            title="Manda la pieza al agente con lo que encontró el revisor. Gasta una llamada a Claude."
+            onClick={() => correr(() => corregirPiezaConIA(pieza.id))}
+          >
+            <WandSparklesIcon />
+            Corregir
+          </Button>
+        ) : null}
+
+        {!publicada ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={pending}
+            title="Vuelve a pasar el revisor con las reglas de tu marca de ahora. No usa IA."
+            onClick={() => correr(() => revisarPiezaDeNuevo(pieza.id))}
+          >
+            <ShieldCheckIcon />
+            Revisar
           </Button>
         ) : null}
 
@@ -460,7 +506,7 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
               onClick={() => correr(() => publishPieceNow(pieza.id))}
             >
               <SendIcon />
-              Publicar
+              {frenada ? "Publicar igual" : "Publicar"}
             </Button>
             {/* Rechazar aparta el hecho entero, no solo esta pieza: dejar viva
                 la de la otra red mantenia la tarjeta en "Post", que es lo
@@ -495,7 +541,84 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
         ) : null}
 
         {error ? <span className="text-destructive text-xs">{error}</span> : null}
+        {aviso ? <span className="text-xs text-amber-700 dark:text-amber-400">{aviso}</span> : null}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Lo que encontro el revisor automatico, con donde esta, que pasa y que hacer.
+ * Es el mismo texto que se le manda al agente al corregir.
+ */
+function PanelRevision({ revision, aprobada }: { revision: Revision | null; aprobada: boolean }) {
+  if (!revision) {
+    return (
+      <p className="text-muted-foreground text-xs">
+        Esta pieza es de antes del revisor automático. Pulsa «Revisar» para pasarla.
+      </p>
+    )
+  }
+
+  const frenos = revision.hallazgos.filter((h) => h.nivel === "frena")
+  const avisos = revision.hallazgos.filter((h) => h.nivel === "aviso")
+  const ultima = revision.correcciones.at(-1)
+
+  if (revision.hallazgos.length === 0 && revision.arreglos.length === 0 && !ultima) {
+    return <p className="text-xs text-emerald-700 dark:text-emerald-400">El revisor automático no encontró nada.</p>
+  }
+
+  return (
+    <div className="flex flex-col gap-2.5 rounded-lg border p-3 text-xs">
+      {frenos.length > 0 ? (
+        <ListaHallazgos
+          titulo={aprobada ? "Frenaba la publicación (la aprobaste igual)" : "Frena la publicación"}
+          clase="text-red-700 dark:text-red-400"
+          hallazgos={frenos}
+        />
+      ) : null}
+      {avisos.length > 0 ? (
+        <ListaHallazgos titulo="Avisos" clase="text-amber-700 dark:text-amber-400" hallazgos={avisos} />
+      ) : null}
+
+      {revision.arreglos.length > 0 ? (
+        <div className="flex flex-col gap-1">
+          <p className="text-muted-foreground font-medium">Se arregló solo</p>
+          <ul className="text-muted-foreground flex flex-col gap-0.5">
+            {revision.arreglos.map((a, i) => (
+              <li key={i}>
+                {a.donde}: {a.detalle}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {ultima ? (
+        <p className="text-muted-foreground border-t pt-2">
+          {ultima.origen === "automatica" ? "Se mandó sola al agente a corregir" : "La mandaste a corregir"}{" "}
+          {ultima.pedido.length === 1 ? "1 cosa" : `${ultima.pedido.length} cosas`} ({formatDateTime(ultima.fecha)}).{" "}
+          {ultima.frenosDespues === 0
+            ? "Quedó sin nada que frene."
+            : `Quedan ${ultima.frenosDespues === 1 ? "1 cosa que frena" : `${ultima.frenosDespues} cosas que frenan`}.`}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+function ListaHallazgos({ titulo, clase, hallazgos }: { titulo: string; clase: string; hallazgos: Hallazgo[] }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <p className={`font-medium ${clase}`}>{titulo}</p>
+      <ul className="flex flex-col gap-1.5">
+        {hallazgos.map((h, i) => (
+          <li key={i} className="leading-relaxed">
+            <span className="font-medium">{h.donde}:</span> {h.detalle}{" "}
+            <span className="text-muted-foreground">Qué hacer: {h.pide}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

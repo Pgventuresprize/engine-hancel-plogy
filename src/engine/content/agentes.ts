@@ -1,7 +1,26 @@
 import { llamarClaude, parsearJSONDeClaude, type UsoClaude } from "../claude/messages"
 import { bloqueClasificacion, bloqueParaClasificar, resolverClasificacion } from "../marca/clasificacion"
 import { identidadEditorial } from "../marca/editorial"
+import { ctasUsables } from "../marca/editorial-modelo"
+import { perfilDe } from "../marca/perfil"
+import type { PerfilMarca } from "../marca/perfil-modelo"
 import { corregirTextos } from "../studio/ortografia"
+import {
+  armarRevision,
+  arreglarCarrusel,
+  arreglarPost,
+  frenosDe,
+  materialDe,
+  parseRevision,
+  pedidoDeCorreccion,
+  reglasDe,
+  revisarCarrusel,
+  revisarPost,
+  type Arreglo,
+  type ContextoRevision,
+  type Correccion,
+  type Hallazgo,
+} from "./revisor"
 import type { AngleJobInput, LinkedinJobInput, Variables } from "./types"
 
 /**
@@ -36,6 +55,75 @@ function bloqueVariables(v: Variables): string {
 function conClasificacion(input: LinkedinJobInput): string {
   const bloque = bloqueClasificacion(input.angle.clasificacion)
   return bloque ? `\n${bloque}\n` : ""
+}
+
+// ------------------------------------------------------------------ revision
+
+/**
+ * Lo que el revisor necesita para esta pieza: las reglas de la marca de hoy y
+ * el material que vio el agente, que es contra lo que se comprueban las cifras.
+ */
+export async function contextoDeRevision(accountId: string, input: LinkedinJobInput): Promise<ContextoRevision> {
+  const [perfil, editorial] = await Promise.all([perfilDe(accountId), identidadEditorial(accountId)])
+  return {
+    reglas: reglasDe(perfil),
+    marcaTieneCta: ctasUsables(editorial.ctas).length > 0,
+    material: materialDe(input.raw_news),
+  }
+}
+
+const sumarUso = (a: UsoClaude, b: UsoClaude): UsoClaude => ({ entrada: a.entrada + b.entrada, salida: a.salida + b.salida })
+
+/** Cual de dos versiones se queda: la que menos frena y, a igualdad, la que menos avisa. */
+function esMejor(nueva: Hallazgo[], anterior: Hallazgo[]): boolean {
+  const fn = frenosDe(nueva).length
+  const fa = frenosDe(anterior).length
+  return fn < fa || (fn === fa && nueva.length <= anterior.length)
+}
+
+/** El mensaje de la vuelta de correccion: lo de siempre, la version anterior y lo que falla. */
+function promptDeCorreccion(prompt: string, anterior: unknown, hallazgos: Hallazgo[]): string {
+  return `${prompt}
+
+TU VERSIÓN ANTERIOR
+${JSON.stringify(anterior)}
+
+${pedidoDeCorreccion(hallazgos)}`
+}
+
+/**
+ * Corrige una pieza con lo que encontro el revisor: una vuelta mas al agente
+ * con el pedido exacto. Se queda la version que menos frena; si la vuelta falla
+ * o sale peor, la pieza se queda como estaba, con la correccion anotada para
+ * que se vea que se intento.
+ */
+async function vueltaDeCorreccion<V>(opciones: {
+  anterior: { version: V; hallazgos: Hallazgo[]; arreglos: Arreglo[]; correcciones: Correccion[] }
+  origen: Correccion["origen"]
+  escribir: (pedido: Hallazgo[]) => Promise<{ version: V; hallazgos: Hallazgo[]; arreglos: Arreglo[]; uso: UsoClaude } | null>
+}): Promise<{ version: V; hallazgos: Hallazgo[]; arreglos: Arreglo[]; correcciones: Correccion[]; uso: UsoClaude | null }> {
+  const { anterior } = opciones
+  let nueva: Awaited<ReturnType<typeof opciones.escribir>> = null
+  try {
+    nueva = await opciones.escribir(anterior.hallazgos)
+  } catch (e) {
+    console.error("[revisor] La vuelta de correccion fallo:", e instanceof Error ? e.message : e)
+  }
+  const gana = nueva && esMejor(nueva.hallazgos, anterior.hallazgos) ? nueva : null
+  const final = gana ?? anterior
+  const correccion: Correccion = {
+    fecha: new Date().toISOString(),
+    origen: opciones.origen,
+    pedido: anterior.hallazgos,
+    frenosDespues: frenosDe(final.hallazgos).length,
+  }
+  return {
+    version: final.version,
+    hallazgos: final.hallazgos,
+    arreglos: final.arreglos,
+    correcciones: [...anterior.correcciones, correccion],
+    uso: nueva?.uso ?? null,
+  }
 }
 
 // ------------------------------------------------------------------- angulo
@@ -107,7 +195,7 @@ ${bloqueParaClasificar(editorial)}`
 export const LINKEDIN_OFICIO = `Eres un redactor de posts de LinkedIn. Escribes posts que analizan un hecho con criterio propio y no suenan a IA.
 
 PROHIBICIÓN ABSOLUTA DE CARACTERES (lo más importante)
-NUNCA uses el guion largo ni el guion medio en ningún lugar del post, ni para incisos ni para pausas ni para rangos. En español se usa coma, punto, dos puntos o paréntesis. Antes de terminar, relee el post y elimina cualquiera que se haya colado.
+NUNCA uses el guion largo ni el guion medio en ningún lugar del post, ni para incisos ni para pausas ni para rangos. En español se usa coma, punto, dos puntos o paréntesis. Antes de terminar, relee el post y elimina cualquiera que se haya colado. El guion corto de los nombres sí se conserva, tal como lo escribe la fuente: GPT-6, COVID-19, Wi-Fi.
 
 ORTOGRAFÍA
 Escribe en español correcto, con todas sus tildes y eñes: "dólares", "debería", "logró", "año", "según", "también". Aunque la noticia venga en inglés o sin tildes, el post sale bien escrito.
@@ -127,7 +215,7 @@ ESTRUCTURA
 CÓMO NO SONAR A IA
 - Toma una postura con una tesis refutable (salvo piezas puramente informativas de anuncio/precio, que valen por la claridad del dato).
 - Cambia adjetivos por evidencia: dato concreto, cifra con contexto, actor específico.
-- Prohibidas: "revolucionario", "sin precedentes", "cambio de juego", "en el panorama actual", "en un mundo cada vez más", "esto lo cambia todo", "desbloquear", "aprovechar el potencial", "impulsar", "fomentar", "en resumen". Sin emojis salvo que el tono lo pida.
+- Prohibidas: "revolucionario", "sin precedentes", "cambio de juego", "en el panorama actual", "en un mundo cada vez más", "esto lo cambia todo", "desbloquear", "aprovechar el potencial", "impulsar", "fomentar", "en resumen".
 
 RIGOR
 - Nunca inventes cifras, quotes ni hechos. Usa solo lo del input. Marca lo que sea inferencia ("probablemente", "esto sugiere").
@@ -137,21 +225,20 @@ LONGITUD según la variable: corto 80-120 palabras, medio 120-220, largo 220-320
 
 Antes de escribir el JSON confirma que ningún párrafo tiene un guion largo ni medio. Escribe en el idioma indicado.`
 
-export const LINKEDIN_CONTRATO = `El post va como un array de párrafos (el motor los une con líneas en blanco). Cada párrafo es una cadena de una sola línea, SIN saltos de línea dentro. Primer elemento = el hook.
+/** El formato del post, con la regla de emojis de la marca. */
+export function contratoLinkedin(perfil: Pick<PerfilMarca, "emojis_linkedin">): string {
+  return `El post va como un array de párrafos (el motor los une con líneas en blanco). Cada párrafo es una cadena de una sola línea, SIN saltos de línea dentro. Primer elemento = el hook.
+${perfil.emojis_linkedin ? "Emojis: solo si ayudan a leer, nunca de adorno." : "Emojis: ninguno. La marca no los usa en LinkedIn."}
 
 RESPONDE SOLO con este JSON, sin texto alrededor, sin saltos de línea y sin comillas dobles dentro de ninguna cadena (si necesitas comillas usa simples):
 {"parrafos":["<hook>","<párrafo>","<párrafo>","<cierre>"],"link_fuente":"<el link del input o vacío>","notas":"<1 frase opcional>"}`
+}
 
 type LinkedinBruto = { parrafos?: unknown; link_fuente?: unknown; notas?: unknown }
 
-export async function generarLinkedin(
-  accountId: string,
-  input: LinkedinJobInput,
-  model: string,
-  system: string
-): Promise<{ respuesta: unknown; uso: UsoClaude }> {
+function promptLinkedin(input: LinkedinJobInput): string {
   const n = input.raw_news
-  const prompt = `ANGULO
+  return `ANGULO
 - angulo: ${input.angle.angle}
 - tesis: ${input.angle.thesis ?? "(sin tesis)"}
 - formato: ${input.angle.playbook_format ?? "(sin formato)"}
@@ -164,7 +251,19 @@ NOTICIA
 
 VARIABLES
 ${bloqueVariables(input.variables)}`
+}
 
+type PostEscrito = { post: string; link_fuente: string; notas: string | null }
+
+/** Una llamada al agente de LinkedIn, con el post ya revisado. */
+async function escribirLinkedin(
+  accountId: string,
+  model: string,
+  system: string,
+  prompt: string,
+  ctx: ContextoRevision,
+  longitud: string
+): Promise<{ version: PostEscrito; hallazgos: Hallazgo[]; arreglos: Arreglo[]; uso: UsoClaude }> {
   const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: 1800 })
   if (!r.ok) throw new Error(r.error)
 
@@ -181,15 +280,90 @@ ${bloqueVariables(input.variables)}`
   // prompt solo no basta (con un prompt propio sin tildes volveria a pasar).
   // Si el corrector falla, se quedan los parrafos tal cual.
   const parrafos = await corregirTextos(accountId, escritos)
+  const { post, arreglos } = arreglarPost(parrafos.join("\n\n"), ctx)
 
   return {
-    respuesta: {
-      post: parrafos.join("\n\n"),
-      hook: parrafos[0],
+    version: {
+      post,
       link_fuente: typeof bruto.link_fuente === "string" ? bruto.link_fuente : "",
       notas: typeof bruto.notas === "string" ? bruto.notas : null,
     },
+    hallazgos: revisarPost(post, ctx, longitud),
+    arreglos,
     uso: r.uso,
+  }
+}
+
+const respuestaLinkedin = (v: PostEscrito, revision: ReturnType<typeof armarRevision>) => ({
+  post: v.post,
+  hook: v.post.split("\n\n")[0],
+  link_fuente: v.link_fuente,
+  notas: v.notas,
+  revision,
+})
+
+/**
+ * El post de LinkedIn. Si el revisor lo frena, vuelve una vez al agente con el
+ * pedido exacto de lo que tiene que corregir.
+ */
+export async function generarLinkedin(
+  accountId: string,
+  input: LinkedinJobInput,
+  model: string,
+  system: string
+): Promise<{ respuesta: unknown; uso: UsoClaude }> {
+  const prompt = promptLinkedin(input)
+  const ctx = await contextoDeRevision(accountId, input)
+  const primera = await escribirLinkedin(accountId, model, system, prompt, ctx, input.variables.longitud)
+  if (frenosDe(primera.hallazgos).length === 0) {
+    return { respuesta: respuestaLinkedin(primera.version, armarRevision(primera.hallazgos, primera.arreglos)), uso: primera.uso }
+  }
+  const final = await corregirPost(accountId, input, model, system, { ...primera, correcciones: [] }, "automatica", ctx)
+  return { respuesta: final.respuesta, uso: final.uso ? sumarUso(primera.uso, final.uso) : primera.uso }
+}
+
+/** Una vuelta de correccion sobre un post ya escrito. La usa tambien el boton de la ficha. */
+export async function corregirPost(
+  accountId: string,
+  input: LinkedinJobInput,
+  model: string,
+  system: string,
+  anterior: { version: PostEscrito; hallazgos: Hallazgo[]; arreglos: Arreglo[]; correcciones: Correccion[] },
+  origen: Correccion["origen"],
+  ctx?: ContextoRevision
+): Promise<{ respuesta: ReturnType<typeof respuestaLinkedin>; uso: UsoClaude | null }> {
+  const contexto = ctx ?? (await contextoDeRevision(accountId, input))
+  const prompt = promptLinkedin(input)
+  const r = await vueltaDeCorreccion({
+    anterior,
+    origen,
+    escribir: (pedido) =>
+      escribirLinkedin(
+        accountId,
+        model,
+        system,
+        promptDeCorreccion(prompt, { parrafos: anterior.version.post.split("\n\n") }, pedido),
+        contexto,
+        input.variables.longitud
+      ),
+  })
+  return { respuesta: respuestaLinkedin(r.version, armarRevision(r.hallazgos, r.arreglos, r.correcciones)), uso: r.uso }
+}
+
+/** Un post guardado, revisado otra vez con la marca y el material de ahora. */
+export function revisarPostGuardado(respuesta: unknown, ctx: ContextoRevision, longitud: string) {
+  const r = (respuesta ?? {}) as Record<string, unknown>
+  const { post, arreglos } = arreglarPost(typeof r.post === "string" ? r.post : "", ctx)
+  const previa = parseRevision(r.revision)
+  return {
+    version: {
+      post,
+      link_fuente: typeof r.link_fuente === "string" ? r.link_fuente : "",
+      notas: typeof r.notas === "string" ? r.notas : null,
+    },
+    hallazgos: revisarPost(post, ctx, longitud),
+    arreglos: [...(previa?.arreglos ?? []), ...arreglos],
+    correcciones: previa?.correcciones ?? [],
   }
 }
 
@@ -214,7 +388,7 @@ Un título que no cabe se corta con puntos suspensivos y deja una frase sin sent
 - BIEN: título "El mecanismo vence el 31 de diciembre de 2026." y cuerpo "Puede caer antes si se agota el cupo asignado."
 
 PROHIBICIÓN DE CARACTERES
-NUNCA uses guion largo ni medio en ningún campo. Usa coma, punto, dos puntos o paréntesis.
+NUNCA uses guion largo ni medio en ningún campo. Usa coma, punto, dos puntos o paréntesis. El guion corto de los nombres sí se conserva, tal como lo escribe la fuente: GPT-6, COVID-19, Wi-Fi.
 
 EL HOOK (lámina 1) ES EL TITULAR, NO UN TEASER
 Casi nadie pasa de la portada, así que el hook tiene que valer por sí solo. Lleva tres cosas:
@@ -234,13 +408,14 @@ Si la noticia es un logro, un reconocimiento o un récord del país de la marca 
 - LÍMITE DURO DEL HOOK: 95 caracteres contando espacios, y cuéntalos. Si no cabe, quita adjetivos y conectores; la cifra y el actor no se tocan nunca.
 - PROHIBIDO: el patrón de dos fragmentos con coma, la fórmula "No es X, es Y", frases abstractas sin actor, preguntas genéricas.
 
-ESTRUCTURA: DE 3 A 5 LÁMINAS, SEGÚN LO QUE DÉ LA NOTICIA
+ESTRUCTURA: LAS LÁMINAS QUE DÉ LA NOTICIA
+Cuántas, como mínimo y como máximo, lo dice el formato de respuesta.
 - LÁMINA 1 (portada): solo el hook.
 - LÁMINA 2: NO repite el hecho del hook. Cierra el hueco que abrió: el porqué, el mecanismo, la condición o lo que viene ahora.
-- LÁMINAS DEL MEDIO (ninguna, una o dos): una idea cada una, y cada una sale de un dato o un hecho del contenido. Título = oración completa y concreta (nada de etiquetas tipo "El dato clave"; di lo que pasa) más cuerpo breve.
+- LÁMINAS DEL MEDIO (las que sostenga el contenido): una idea cada una, y cada una sale de un dato o un hecho del contenido. Título = oración completa y concreta (nada de etiquetas tipo "El dato clave"; di lo que pasa) más cuerpo breve.
 - ÚLTIMA LÁMINA: la tesis, en una oración clara que cierre el argumento.
 
-Cinco es el máximo, no la meta. Cada lámina se apoya en algo que dice el contenido: si la noticia da para tres, son tres. Rellenar con ideas que la noticia no sostiene, o con cifras y conclusiones que no trae, es peor que un carrusel corto. Y nada de láminas que repiten lo dicho dos antes.
+El máximo no es la meta. Cada lámina se apoya en algo que dice el contenido: si la noticia da para tres, son tres. Rellenar con ideas que la noticia no sostiene, o con cifras y conclusiones que no trae, es peor que un carrusel corto. Y nada de láminas que repiten lo dicho dos antes.
 
 EL CIERRE: LA LÁMINA DEL CTA
 Después de la última va una lámina más, el cierre, y la escribes tú aparte, en "cierre". Es la acción que pide el CTA de la clasificación, dicha con las palabras de esta pieza. No resume ni concluye: invita a hacer una cosa concreta.
@@ -250,7 +425,7 @@ Después de la última va una lámina más, el cierre, y la escribes tú aparte,
 - No prometas nada que el CTA no prometa.
 
 CONTENIDO
-Escribe en el idioma indicado en las variables. Texto cortísimo por lámina: título de hasta 65 caracteres y cuerpo de hasta 2 frases. Toma postura, no resumas neutral. Cambia adjetivos por datos concretos cuando estén en el input. Explica nombres poco conocidos la primera vez. No inventes datos. Sin hipérboles ni emojis salvo que el tono lo pida.
+Escribe en el idioma indicado en las variables. Texto cortísimo por lámina: título de hasta 65 caracteres y cuerpo de hasta 2 frases. Toma postura, no resumas neutral. Cambia adjetivos por datos concretos cuando estén en el input. Explica nombres poco conocidos la primera vez. No inventes datos: cada cifra que escribas tiene que estar en el contenido. Sin hipérboles.
 
 TIPO DE LÁMINA: "photo_hook" la 1 (solo hook); "text" las demás (título y cuerpo).
 
@@ -277,20 +452,32 @@ Esta búsqueda va a un buscador de internet, no a un banco de fotos: pide la cos
 
 Antes de responder relee y confirma cinco cosas: que no hay guiones largos, que ningún título pasa de 65 caracteres, que el dato más fuerte está en el hook y no en la lámina 2, que el cierre pide el CTA y que el texto lleva todas sus tildes y sus eñes.`
 
-export const INSTAGRAM_CONTRATO = `RESPONDE SOLO con este JSON, sin texto alrededor:
-{"slide_count":<3 a 5>,"caption":"<2 a 4 frases con la tesis y el cta, oraciones completas>","hashtags":["<3 a 6 en minúscula sin espacios>"],"fotos":["<5 a 8 búsquedas en inglés>"],"elemento":"<una búsqueda en español de la cosa concreta>","slides":[{"n":1,"type":"photo_hook","hook":"<máx 95 caracteres>"},{"n":2,"type":"text","title":"<máx 65 caracteres>","body":"<máx 2 frases>"}],"cierre":{"title":"<máx 40 caracteres: la acción del CTA>","body":"<máx 140 caracteres: la razón para hacerlo>"}}
+const rango = (min: number, max: number) => (min === max ? `${min}` : `${min} a ${max}`)
 
-El array slides va en orden y tiene de 3 a 5 elementos, tantos como sostenga el contenido: el primero photo_hook, los demás text.
+/**
+ * El formato del carrusel con los numeros de la marca: cuantas laminas, cuantos
+ * hashtags y si van emojis. Son los mismos con los que el revisor comprueba la
+ * pieza, asi que lo que se pide y lo que se mide no se pueden desfasar.
+ */
+export function contratoInstagram(
+  perfil: Pick<PerfilMarca, "laminas_min" | "laminas_max" | "hashtags_min" | "hashtags_max" | "emojis_instagram">
+): string {
+  const laminas = rango(perfil.laminas_min, perfil.laminas_max)
+  const sinHashtags = perfil.hashtags_max === 0
+  const hashtags = sinHashtags ? "" : `"<${rango(perfil.hashtags_min, perfil.hashtags_max)} en minúscula sin espacios>"`
+  return `RESPONDE SOLO con este JSON, sin texto alrededor:
+{"slide_count":<${laminas}>,"caption":"<2 a 4 frases con la tesis y el cta, oraciones completas>","hashtags":[${hashtags}],"fotos":["<5 a 8 búsquedas en inglés>"],"elemento":"<una búsqueda en español de la cosa concreta>","slides":[{"n":1,"type":"photo_hook","hook":"<máx 95 caracteres>"},{"n":2,"type":"text","title":"<máx 65 caracteres>","body":"<máx 2 frases>"}],"cierre":{"title":"<máx 40 caracteres: la acción del CTA>","body":"<máx 140 caracteres: la razón para hacerlo>"}}
+
+El array slides va en orden y tiene ${perfil.laminas_min === perfil.laminas_max ? "exactamente" : "de"} ${laminas} elementos, tantos como sostenga el contenido: el primero photo_hook, los demás text.
+${sinHashtags ? "La marca no usa hashtags: \"hashtags\" va vacío." : `Hashtags: ${rango(perfil.hashtags_min, perfil.hashtags_max)}, específicos y buscables.`}
+${perfil.emojis_instagram ? "Emojis: solo si ayudan a leer, nunca de adorno." : "Emojis: ninguno, en ningún campo."}
+El caption termina pidiendo la misma acción que el cierre, con sus mismas palabras clave.
 El cierre no va en slides: va en "cierre" y pide el CTA de la clasificación o, si no viene, el CTA de la marca que mejor encaje con la pieza. Si la marca no tiene ningún CTA, "cierre" es null.`
+}
 
-export async function generarInstagram(
-  accountId: string,
-  input: LinkedinJobInput,
-  model: string,
-  system: string
-): Promise<{ respuesta: unknown; uso: UsoClaude }> {
+function promptInstagram(input: LinkedinJobInput): string {
   const n = input.raw_news
-  const prompt = `ANGULO
+  return `ANGULO
 - angulo: ${input.angle.angle}
 - tesis: ${input.angle.thesis ?? "(sin tesis)"}
 - formato: ${input.angle.playbook_format ?? "(sin formato)"}
@@ -302,10 +489,94 @@ NOTICIA
 
 VARIABLES
 ${bloqueVariables(input.variables)}`
+}
 
+/** Un guion, con lo mecanico ya arreglado y revisado. */
+function guionRevisado(bruto: unknown, input: LinkedinJobInput, ctx: ContextoRevision) {
+  const { respuesta, arreglos } = arreglarCarrusel(conTipoDeCta(bruto, input), ctx)
+  return { version: respuesta, hallazgos: revisarCarrusel(respuesta, ctx), arreglos }
+}
+
+/** El guion sin lo que pone el motor, para enseñarselo al agente al corregir. */
+function guionParaCorregir(respuesta: unknown): unknown {
+  if (!respuesta || typeof respuesta !== "object" || Array.isArray(respuesta)) return respuesta
+  const { revision: _revision, ...resto } = respuesta as Record<string, unknown>
+  void _revision
+  if (resto.cierre && typeof resto.cierre === "object" && !Array.isArray(resto.cierre)) {
+    const { tipo: _tipo, ...cierre } = resto.cierre as Record<string, unknown>
+    void _tipo
+    return { ...resto, cierre }
+  }
+  return resto
+}
+
+const conRevision = (version: unknown, revision: ReturnType<typeof armarRevision>) =>
+  version && typeof version === "object" && !Array.isArray(version) ? { ...(version as Record<string, unknown>), revision } : version
+
+/** Un guion con menos de dos laminas no se puede dibujar: esa version no se queda nunca. */
+const dibujable = (version: unknown) =>
+  Boolean(version) && typeof version === "object" && Array.isArray((version as Record<string, unknown>).slides) &&
+  ((version as Record<string, unknown>).slides as unknown[]).length >= 2
+
+/**
+ * El guion del carrusel. Lo mecanico se arregla solo; si el revisor lo frena,
+ * vuelve una vez al agente con el pedido exacto de lo que tiene que corregir.
+ */
+export async function generarInstagram(
+  accountId: string,
+  input: LinkedinJobInput,
+  model: string,
+  system: string
+): Promise<{ respuesta: unknown; uso: UsoClaude }> {
+  const prompt = promptInstagram(input)
   const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: 3600 })
   if (!r.ok) throw new Error(r.error)
-  return { respuesta: conTipoDeCta(parsearJSONDeClaude(r.texto), input), uso: r.uso }
+
+  const ctx = await contextoDeRevision(accountId, input)
+  const primera = guionRevisado(parsearJSONDeClaude(r.texto), input, ctx)
+  if (frenosDe(primera.hallazgos).length === 0) {
+    return { respuesta: conRevision(primera.version, armarRevision(primera.hallazgos, primera.arreglos)), uso: r.uso }
+  }
+  const final = await corregirCarrusel(accountId, input, model, system, { ...primera, correcciones: [] }, "automatica", ctx)
+  return { respuesta: final.respuesta, uso: final.uso ? sumarUso(r.uso, final.uso) : r.uso }
+}
+
+/** Una vuelta de correccion sobre un guion ya escrito. La usa tambien el boton de la ficha. */
+export async function corregirCarrusel(
+  accountId: string,
+  input: LinkedinJobInput,
+  model: string,
+  system: string,
+  anterior: { version: unknown; hallazgos: Hallazgo[]; arreglos: Arreglo[]; correcciones: Correccion[] },
+  origen: Correccion["origen"],
+  ctx?: ContextoRevision
+): Promise<{ respuesta: unknown; uso: UsoClaude | null }> {
+  const contexto = ctx ?? (await contextoDeRevision(accountId, input))
+  const prompt = promptInstagram(input)
+  const r = await vueltaDeCorreccion({
+    anterior,
+    origen,
+    escribir: async (pedido) => {
+      const respuesta = await llamarClaude({
+        accountId,
+        model,
+        system,
+        prompt: promptDeCorreccion(prompt, guionParaCorregir(anterior.version), pedido),
+        maxTokens: 3600,
+      })
+      if (!respuesta.ok) throw new Error(respuesta.error)
+      const nueva = guionRevisado(parsearJSONDeClaude(respuesta.texto), input, contexto)
+      return dibujable(nueva.version) ? { ...nueva, uso: respuesta.uso } : null
+    },
+  })
+  return { respuesta: conRevision(r.version, armarRevision(r.hallazgos, r.arreglos, r.correcciones)), uso: r.uso }
+}
+
+/** Un guion guardado, revisado otra vez con la marca y el material de ahora. */
+export function revisarCarruselGuardado(respuesta: unknown, input: LinkedinJobInput, ctx: ContextoRevision) {
+  const previa = parseRevision((respuesta as Record<string, unknown> | null)?.revision)
+  const r = guionRevisado(guionParaCorregir(respuesta), input, ctx)
+  return { ...r, arreglos: [...(previa?.arreglos ?? []), ...r.arreglos], correcciones: previa?.correcciones ?? [] }
 }
 
 /**

@@ -77,7 +77,25 @@ export type PerfilMarca = {
   reglas: string
   frases_prohibidas: string[]
   temas_vetados: string
+  /** Cuantos hashtags lleva un post de Instagram. 0 y 0 = ninguno. */
+  hashtags_min: number
+  hashtags_max: number
+  /** Cuantas laminas lleva un carrusel, sin contar el cierre. */
+  laminas_min: number
+  laminas_max: number
+  emojis_instagram: boolean
+  emojis_linkedin: boolean
 }
+
+/**
+ * Los limites de las reglas que se comprueban, los mismos que impone la base.
+ * Las laminas llegan a seis porque con el cierre son siete, y mas que eso ya no
+ * es un carrusel que se lea entero.
+ */
+export const RANGOS_REGLAS = {
+  hashtags: { min: 0, max: 30 },
+  laminas: { min: 3, max: 6 },
+} as const
 
 export const PERFIL_VACIO: PerfilMarca = {
   nombre: "",
@@ -91,6 +109,13 @@ export const PERFIL_VACIO: PerfilMarca = {
   reglas: "",
   frases_prohibidas: [],
   temas_vetados: "",
+  // Lo que pide la fabrica: una cuenta que no los toque no nota nada.
+  hashtags_min: 3,
+  hashtags_max: 6,
+  laminas_min: 3,
+  laminas_max: 5,
+  emojis_instagram: false,
+  emojis_linkedin: false,
 }
 
 const CAMPOS_DE_TEXTO = ["nombre", "que_hace", "mensaje_central", "voz_si", "voz_no", "reglas", "temas_vetados"] as const
@@ -125,6 +150,27 @@ function limpiarFrases(valor: unknown): string[] {
   return salida
 }
 
+const entero = (valor: unknown): number | null => {
+  const n = typeof valor === "number" ? valor : typeof valor === "string" && valor.trim() ? Number(valor) : NaN
+  return Number.isInteger(n) ? n : null
+}
+
+/**
+ * Un rango min-max dentro de sus limites. Lo que no es un entero cae al de
+ * fabrica, lo que se sale se lleva al borde, y si llegan cruzados se ordenan.
+ */
+function limpiarRango(
+  min: unknown,
+  max: unknown,
+  limites: { min: number; max: number },
+  porDefecto: [number, number]
+): [number, number] {
+  const encaja = (n: number) => Math.min(limites.max, Math.max(limites.min, n))
+  const a = encaja(entero(min) ?? porDefecto[0])
+  const b = encaja(entero(max) ?? porDefecto[1])
+  return a <= b ? [a, b] : [b, a]
+}
+
 /**
  * Normaliza lo que venga de la base o de un formulario. Nunca lanza: lo que no
  * cabe se recorta y lo invalido cae al valor vacio. Lo que avisa al usuario es
@@ -133,12 +179,26 @@ function limpiarFrases(valor: unknown): string[] {
 export function parsePerfil(valor: unknown): PerfilMarca {
   const raw = (valor ?? {}) as Record<string, unknown>
   const idioma = String(raw.idioma ?? "")
+  const [hashtags_min, hashtags_max] = limpiarRango(raw.hashtags_min, raw.hashtags_max, RANGOS_REGLAS.hashtags, [
+    PERFIL_VACIO.hashtags_min,
+    PERFIL_VACIO.hashtags_max,
+  ])
+  const [laminas_min, laminas_max] = limpiarRango(raw.laminas_min, raw.laminas_max, RANGOS_REGLAS.laminas, [
+    PERFIL_VACIO.laminas_min,
+    PERFIL_VACIO.laminas_max,
+  ])
   const perfil: PerfilMarca = {
     ...PERFIL_VACIO,
     handle: limpiarHandle(raw.handle),
     idioma: (IDIOMAS_MARCA as readonly string[]).includes(idioma) ? (idioma as IdiomaMarca) : PERFIL_VACIO.idioma,
     pais: limpiarPais(raw.pais),
     frases_prohibidas: limpiarFrases(raw.frases_prohibidas),
+    hashtags_min,
+    hashtags_max,
+    laminas_min,
+    laminas_max,
+    emojis_instagram: raw.emojis_instagram === true,
+    emojis_linkedin: raw.emojis_linkedin === true,
   }
   for (const campo of CAMPOS_DE_TEXTO) perfil[campo] = texto(raw[campo], TOPES_PERFIL[campo])
   return perfil
@@ -164,6 +224,21 @@ export function validarPerfil(valor: Record<string, unknown>): string | null {
   const frases = Array.isArray(valor.frases_prohibidas) ? valor.frases_prohibidas : null
   if (frases && frases.filter((f) => typeof f === "string" && f.trim()).length > TOPES_PERFIL.frases) {
     return `Caben hasta ${TOPES_PERFIL.frases} frases prohibidas.`
+  }
+  const rangos = [
+    ["hashtags", "Los hashtags", RANGOS_REGLAS.hashtags],
+    ["laminas", "Las láminas", RANGOS_REGLAS.laminas],
+  ] as const
+  for (const [campo, nombre, limites] of rangos) {
+    const min = valor[`${campo}_min`]
+    const max = valor[`${campo}_max`]
+    if (min === undefined && max === undefined) continue
+    const a = entero(min)
+    const b = entero(max)
+    if (a === null || b === null || a < limites.min || b > limites.max) {
+      return `${nombre} van de ${limites.min} a ${limites.max}.`
+    }
+    if (a > b) return `${nombre}: el mínimo no puede pasar del máximo.`
   }
   return null
 }

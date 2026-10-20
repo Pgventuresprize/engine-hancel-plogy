@@ -371,7 +371,7 @@ export async function updatePiece(form: FormData): Promise<ActionResult> {
     const supabase = supabaseAdmin()
     const { data, error } = await supabase
       .from("content_pieces")
-      .select("payload")
+      .select("payload, network")
       .eq("id", pieceId)
       .eq("account_id", await idDeCuentaActual())
       .single()
@@ -379,6 +379,7 @@ export async function updatePiece(form: FormData): Promise<ActionResult> {
     if (error) throw new Error(error.message)
 
     const payload = { ...((data as { payload: object }).payload ?? {}) }
+    const esLinkedin = (data as { network: string }).network === "linkedin"
     const hook = text(form, "hook")
     const actualizado = { ...payload, body, hook: hook || null }
 
@@ -389,6 +390,20 @@ export async function updatePiece(form: FormData): Promise<ActionResult> {
       .eq("account_id", await idDeCuentaActual())
 
     if (errorUpdate) throw new Error(errorUpdate.message)
+
+    // Un post de LinkedIn editado a mano se revisa otra vez: la revision tiene
+    // que hablar del texto que va a salir, no del que escribio el agente. Si
+    // falla, el texto ya esta guardado y la revision vieja sigue a la vista.
+    // Facebook no: su texto sale del guion del carrusel, y revisarlo lo
+    // reescribiria desde ahi pisando lo editado.
+    if (esLinkedin) {
+      try {
+        const { revisarPieza } = await import("@/engine/content/revision")
+        await revisarPieza(await idDeCuentaActual(), pieceId)
+      } catch (e) {
+        console.error("[revisor] No se pudo revisar el post editado:", e instanceof Error ? e.message : e)
+      }
+    }
     refresh()
     return { ok: true }
   } catch (error) {
@@ -524,6 +539,52 @@ export async function regenerateCarousel(pieceId: string): Promise<ActionResult>
     return { ok: true }
   } catch (error) {
     return fail(error, "No se pudieron regenerar las imagenes.")
+  }
+}
+
+/**
+ * Vuelve a pasar el revisor con la marca de ahora. Sin IA: sirve despues de
+ * cambiar una regla, o con una pieza de antes del revisor.
+ */
+export async function revisarPiezaDeNuevo(pieceId: string): Promise<ActionResult> {
+  if (!pieceId) return { ok: false, error: "Falta el id de la pieza." }
+  try {
+    const { revisarPieza } = await import("@/engine/content/revision")
+    const r = await revisarPieza(await idDeCuentaActual(), pieceId)
+    refresh()
+    return r.redibujar
+      ? { ok: true, warning: "Se arreglaron textos de las láminas. Pulsa Regenerar para verlos en las imágenes." }
+      : { ok: true }
+  } catch (error) {
+    return fail(error, "No se pudo revisar la pieza.")
+  }
+}
+
+/**
+ * Manda la pieza al agente con el pedido exacto de lo que encontro el revisor y,
+ * si es un carrusel, vuelve a dibujarlo con el texto corregido. Gasta una
+ * llamada a Claude.
+ */
+export async function corregirPiezaConIA(pieceId: string): Promise<ActionResult> {
+  if (!pieceId) return { ok: false, error: "Falta el id de la pieza." }
+  try {
+    const { corregirPieza } = await import("@/engine/content/revision")
+    const r = await corregirPieza(await idDeCuentaActual(), pieceId)
+    const quedan = r.revision.hallazgos.filter((h) => h.nivel === "frena").length
+
+    if (r.redibujar) {
+      const dibujo = await regenerateCarousel(r.redibujar)
+      if (!dibujo.ok) {
+        refresh()
+        return { ok: true, warning: `El texto se corrigió, pero no se pudieron redibujar las imágenes: ${dibujo.error}` }
+      }
+    }
+    refresh()
+    return quedan > 0
+      ? { ok: true, warning: `Se corrigió, pero ${quedan === 1 ? "queda 1 cosa que frena" : `quedan ${quedan} cosas que frenan`}.` }
+      : { ok: true }
+  } catch (error) {
+    return fail(error, "No se pudo corregir la pieza.")
   }
 }
 
@@ -903,6 +964,8 @@ async function facebookDesdeCarruselExistente(angleId: string): Promise<boolean>
     status: "generated",
     variables_usadas: ((job as { input?: { variables?: unknown } }).input?.variables ?? null) as Variables | null,
     generated_at: new Date().toISOString(),
+    // Sale del mismo guion que el carrusel, asi que lleva su misma revision.
+    revision: (pieza as { revision?: unknown }).revision ?? null,
   })
   if (error) throw new Error(error.message)
   return true

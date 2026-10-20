@@ -65,12 +65,25 @@ export async function guardarIdentidad(
 
 // ---------------------------------------------------------------------- voz
 
-export async function guardarVoz(
-  campos: Pick<PerfilMarca, "voz_si" | "voz_no" | "reglas" | "frases_prohibidas" | "temas_vetados"> & {
-    tono: string
-    longitud: string
-  }
-): Promise<ActionResult> {
+export type CamposVoz = Pick<
+  PerfilMarca,
+  | "voz_si"
+  | "voz_no"
+  | "reglas"
+  | "frases_prohibidas"
+  | "temas_vetados"
+  | "hashtags_min"
+  | "hashtags_max"
+  | "laminas_min"
+  | "laminas_max"
+  | "emojis_instagram"
+  | "emojis_linkedin"
+> & {
+  tono: string
+  longitud: string
+}
+
+export async function guardarVoz(campos: CamposVoz): Promise<ActionResult> {
   const invalido = validateVariables({ tono: campos.tono, longitud: campos.longitud })
   if (invalido) return { ok: false, error: invalido }
 

@@ -27,6 +27,7 @@ import {
 } from "./jobs"
 import { analizarPendientes } from "./analisis"
 import { procesarBuzones } from "./procesar"
+import { revisionDeRespuesta } from "./revision"
 import { ContentLog } from "./log"
 import { parseAngleResponse, parseLinkedinResponse } from "./parse"
 import type { ContentAngle, DestinoCarrusel, JobAngle, JobLinkedin, Variables } from "./types"
@@ -557,6 +558,7 @@ export async function runContentTick(
       status: "generated",
       variables_usadas: variablesUsadas,
       generated_at: new Date().toISOString(),
+      revision: await revisionDeRespuesta(job.account_id, "linkedin", job.respuesta, job.input),
     })
 
     // 23505 es el indice de una pieza por red: ya hay post de LinkedIn de esta
@@ -617,6 +619,8 @@ export async function runContentTick(
         await nichosDe(job.account_id),
         destinos.includes("facebook")
       )
+      // La misma para Instagram y Facebook: las dos salen del mismo guion.
+      const revision = await revisionDeRespuesta(job.account_id, "instagram", job.respuesta, job.input)
 
       if (destinos.includes("instagram")) {
         const { error } = await supabase.from("content_pieces").insert({
@@ -629,6 +633,7 @@ export async function runContentTick(
           status: "generated",
           variables_usadas: (job.input?.variables ?? null) as Variables | null,
           generated_at: new Date().toISOString(),
+          revision,
         })
 
         // 23505 es el indice de una pieza por red: ya hay carrusel de esta
@@ -663,6 +668,7 @@ export async function runContentTick(
           status: "generated",
           variables_usadas: (job.input?.variables ?? null) as Variables | null,
           generated_at: new Date().toISOString(),
+          revision,
         })
         if (errorFacebook && errorFacebook.code !== "23505") {
           // La de Instagram ya esta guardada; la de Facebook se puede rehacer

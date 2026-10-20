@@ -33,7 +33,9 @@ export async function promptConMarca(
   accountId: string,
   agente: AgenteConMarca,
   oficio: string,
-  contrato: string
+  /** Fijo, o armado con los numeros de la marca (laminas, hashtags, emojis). */
+  contrato: string | ((datos: DatosParaPrompt) => string)
 ): Promise<string> {
-  return promptArmado(await datosParaPrompt(accountId), agente, oficio, contrato)
+  const datos = await datosParaPrompt(accountId)
+  return promptArmado(datos, agente, oficio, typeof contrato === "string" ? contrato : contrato(datos))
 }

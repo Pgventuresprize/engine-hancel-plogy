@@ -163,7 +163,8 @@ async function publicarEnFacebook(piece: ContentPiece): Promise<PublishResult> {
 }
 
 /**
- * Las piezas que una tanda publicaria: generadas o aprobadas, sin publicar.
+ * Las piezas que una tanda publicaria: generadas o aprobadas, sin publicar, y
+ * sin un freno del revisor que nadie haya aprobado.
  *
  * Por orden de creacion, que es el orden en que se generaron: si una tanda no da
  * para todas, las mas viejas salen primero.
@@ -193,6 +194,10 @@ export async function pendingToPublish(
     .eq("account_id", accountId)
     .eq("network", network)
     .in("status", ["generated", "approved"])
+    // El freno del revisor: una pieza que frena no sale sola. Sale si alguien
+    // la aprobo, que es decir "la vi y sale igual". Las de antes del revisor no
+    // tienen revision y salen como siempre.
+    .or("status.eq.approved,revision.is.null,revision->>frena.eq.false")
     .is("published_at", null)
     .order("created_at")
     .limit(limite)
