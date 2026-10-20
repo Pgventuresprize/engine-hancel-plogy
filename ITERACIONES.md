@@ -8,6 +8,37 @@ Al retomar uno, se detalla como bloque antes de construir.
 
 ---
 
+## ⚠️ ERRORES CONOCIDOS: arreglar primero
+
+Salieron en la generación real de prueba del 2026-10-20, antes de subir el
+Paso 1. No los trajo esa rama: producción ya funcionaba así.
+
+### ⚠️ Se puede generar desde una noticia sin analizar, y no avisa
+- **Qué pasa:** pedir a mano una noticia que sigue en "pendiente de análisis"
+  salta el análisis. El agente escribe con solo el titular y el snippet (en la
+  prueba, Cloudflare Clairic: 151 caracteres y un carrusel de 5 láminas), y la
+  ficha no muestra el aviso de poco material porque "sin analizar no se sabe".
+- **Arreglo propuesto:** al encolar a mano una noticia sin analizar, analizarla
+  primero (leer el artículo y buscar en la web) y seguir después; si queda con
+  poco material, el aviso y el "Generar igual" de siempre.
+- **Dónde:** `encolarContenido` y `encolarContenidoConOverride`
+  (src/app/estudio/actions.ts) y `conPocoMaterial` (src/engine/content/material.ts).
+
+### ⚠️ El análisis resume demasiado: el material queda corto
+- **Qué pasa:** con 8 fuentes de la búsqueda web, el texto consolidado quedó en
+  617 caracteres (el mínimo es 1.500). La noticia queda marcada como "poco
+  material" y el agente escribe con mucho menos de lo que había. Además la
+  página de la noticia no se pudo leer ("no se pudo leer la página").
+- **Por qué importa:** es lo que más limita el valor de las piezas: el escritor
+  no puede contar lo que el análisis no le pasó.
+- **Arreglo propuesto:** que el análisis consolide los hechos de todas las
+  fuentes sin resumirlos (cifras, citas, fechas, con su fuente), y averiguar
+  por qué falla `leerPagina` en esa noticia.
+- **Dónde:** el oficio y el contrato del análisis (src/engine/content/analisis.ts)
+  y `leerPagina` (src/engine/redaccion/fuentes.ts).
+
+---
+
 ## Prompts y agentes
 
 ### Herramienta "consultar documento"
