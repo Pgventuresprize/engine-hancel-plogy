@@ -2,9 +2,9 @@ import "server-only"
 
 import { supabaseAdmin } from "@/engine/supabase-admin"
 import { getSettings } from "@/engine/schedule"
-import { ajustesVideo, type AjustesVideo } from "@/engine/videos/ajustes"
+import { ajustesVideo, promptGuion, type AjustesVideo } from "@/engine/videos/ajustes"
 import type { Capas, Guion } from "@/engine/videos/guion"
-import { GUION_SYSTEM } from "@/engine/videos/prompt"
+import { GUION_OFICIO } from "@/engine/videos/prompt"
 import { idDeCuentaActual } from "@/lib/accounts"
 
 /**
@@ -41,6 +41,8 @@ export type OpcionesVideo = {
   intenciones: { id: string; name: string; narrativas: string[] }[]
   narrativas: { id: string; name: string }[]
   promptPorDefecto: string
+  /** Lo que recibe de verdad el agente: oficio, marca y formato de respuesta. */
+  promptFinal: string
 }
 
 export type VideoStudioVista = { ajustes: AjustesVideo; videos: VideoVista[]; opciones: OpcionesVideo; timezone: string }
@@ -49,6 +51,7 @@ export async function getVideoStudio(): Promise<VideoStudioVista> {
   const supabase = supabaseAdmin()
   const accountId = await idDeCuentaActual()
   const [ajustes, { timezone }] = await Promise.all([ajustesVideo(accountId), getSettings(accountId)])
+  const promptFinal = await promptGuion(accountId, ajustes)
 
   const hace30 = new Date(Date.now() - 30 * 86400_000).toISOString()
   const [items, pubs, pilares, intenciones, narrativas, enlaces] = await Promise.all([
@@ -131,7 +134,8 @@ export async function getVideoStudio(): Promise<VideoStudioVista> {
       pilares: (pilares.data ?? []) as { id: string; name: string }[],
       intenciones: ((intenciones.data ?? []) as { id: string; name: string }[]).map((i) => ({ ...i, narrativas: narrPorIntencion.get(i.id) ?? [] })),
       narrativas: (narrativas.data ?? []) as { id: string; name: string }[],
-      promptPorDefecto: GUION_SYSTEM,
+      promptPorDefecto: GUION_OFICIO,
+      promptFinal,
     },
   }
 }

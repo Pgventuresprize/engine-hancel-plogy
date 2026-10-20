@@ -3,6 +3,7 @@
 import * as React from "react"
 
 import { guardarAjustesVideo } from "@/app/videos/actions"
+import { PromptFinal } from "@/components/agentes/prompt-final"
 import type { AjustesVideo } from "@/engine/videos/ajustes"
 import type { OpcionesVideo } from "@/lib/videos-data"
 import { MODELOS_DISPONIBLES } from "@/lib/modelos-ia"
@@ -239,7 +240,7 @@ export function ConfigVideos({ ajustes, opciones }: { ajustes: AjustesVideo; opc
           </div>
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between gap-2">
-              <Label htmlFor="v-prompt">Prompt del guion (vacío = el de serie)</Label>
+              <Label htmlFor="v-prompt">Oficio del guion (vacío = el de serie)</Label>
               {!prompt ? (
                 <Button size="sm" variant="ghost" disabled={pending} onClick={() => setPrompt(opciones.promptPorDefecto)}>
                   Partir del de serie
@@ -256,6 +257,7 @@ export function ConfigVideos({ ajustes, opciones }: { ajustes: AjustesVideo; opc
               className="font-mono text-xs"
             />
           </div>
+          <PromptFinal prompt={opciones.promptFinal} />
         </CardContent>
       </Card>
 

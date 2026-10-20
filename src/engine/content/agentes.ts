@@ -17,22 +17,19 @@ import type { AngleJobInput, LinkedinJobInput, Variables } from "./types"
  * que nada aguas abajo cambia: solo cambia quien llena `respuesta`.
  */
 
-/** El bloque de personalizacion que viaja en todos los prompts. */
+/**
+ * Los ajustes de esta pieza: los de la marca, o los que se cambiaron a mano al
+ * pedirla. Lo demas de la marca (quien es, como suena, sus CTA) va en el bloque
+ * de marca del prompt de sistema; las viejas ranuras de texto libre
+ * (audiencia, voz, cta, evitar) ya no se mandan, las sustituye el perfil.
+ */
 function bloqueVariables(v: Variables): string {
-  return [
-    `- tono: ${v.tono}`,
-    `- audiencia: ${v.audiencia}`,
-    `- voz_marca: ${v.voz_marca}`,
-    `- cta: ${v.cta}`,
-    `- evitar: ${v.evitar}`,
-    `- longitud: ${v.longitud}`,
-    `- idioma: ${v.idioma}`,
-  ].join("\n")
+  return [`- tono: ${v.tono}`, `- longitud: ${v.longitud}`, `- idioma: ${v.idioma}`].join("\n")
 }
 
 // ------------------------------------------------------------------- angulo
 
-export const ANGULO_SYSTEM = `Eres un analista editorial. Decides el angulo editorial de una noticia: la lectura no obvia del hecho, no lo que paso sino lo que revela sobre algo mas grande (cambio de poder, contradiccion, patron, consecuencia ignorada).
+export const ANGULO_OFICIO = `Eres un analista editorial. Decides el angulo editorial de una noticia: la lectura no obvia del hecho, no lo que paso sino lo que revela sobre algo mas grande (cambio de poder, contradiccion, patron, consecuencia ignorada).
 
 Por la noticia que se te da, decide:
 
@@ -44,16 +41,17 @@ REGLAS
 - Escribe en el idioma indicado en las variables.
 - No inventes datos que no esten en el input. Si falta contexto, trabaja con lo que hay.
 - La noticia ya paso el filtro de relevancia: siempre produce el mejor angulo posible, no descartes.
-- TRABAJAS SOBRE EL HECHO, NO SOBRE SU FIABILIDAD. El contenido que recibes es lo que paso. Nunca es tu tema si el titular es "comprobable", si la fuente es fiable o si el dato esta "confirmado": eso ya lo decidio quien te paso esta noticia. Da el hecho por bueno y cuenta lo que revela. Prohibido cualquier angulo o tesis del tipo "un titular dijo que X pero no se puede comprobar", "la noticia afirma sin pruebas", "habria que verificar": eso no es un angulo, es desconfianza, y aqui el hecho ya esta dado.
+- TRABAJAS SOBRE EL HECHO, NO SOBRE SU FIABILIDAD. El contenido que recibes es lo que paso. Nunca es tu tema si el titular es "comprobable", si la fuente es fiable o si el dato esta "confirmado": eso ya lo decidio quien te paso esta noticia. Da el hecho por bueno y cuenta lo que revela. Prohibido cualquier angulo o tesis del tipo "un titular dijo que X pero no se puede comprobar", "la noticia afirma sin pruebas", "habria que verificar": eso no es un angulo, es desconfianza, y aqui el hecho ya esta dado.`
 
-RESPONDE SOLO con este JSON, sin texto alrededor:
+export const ANGULO_CONTRATO = `RESPONDE SOLO con este JSON, sin texto alrededor:
 {"angle":"<2-3 frases>","thesis":"<1 frase refutable>","playbook_format":"<uno de los formatos>"}`
 
+/** `system` es el prompt ya armado: oficio, marca y contrato (ver agents/prompts.ts). */
 export async function generarAngulo(
   accountId: string,
   input: AngleJobInput,
   model: string,
-  system: string = ANGULO_SYSTEM
+  system: string
 ): Promise<{ respuesta: unknown; uso: UsoClaude }> {
   const n = input.raw_news
   const prompt = `NOTICIA
@@ -77,7 +75,7 @@ ${bloqueVariables(input.variables)}`
 // instrucciones, y con este prompt sin tildes los posts salian sin tildes
 // ("dolares", "deberia", "logro"). El de Instagram, acentuado, no tenia el
 // problema.
-export const LINKEDIN_SYSTEM = `Eres un redactor de posts de LinkedIn. Escribes posts que analizan un hecho con criterio propio y no suenan a IA.
+export const LINKEDIN_OFICIO = `Eres un redactor de posts de LinkedIn. Escribes posts que analizan un hecho con criterio propio y no suenan a IA.
 
 PROHIBICIÓN ABSOLUTA DE CARACTERES (lo más importante)
 NUNCA uses el guion largo ni el guion medio en ningún lugar del post, ni para incisos ni para pausas ni para rangos. En español se usa coma, punto, dos puntos o paréntesis. Antes de terminar, relee el post y elimina cualquiera que se haya colado.
@@ -108,12 +106,12 @@ RIGOR
 
 LONGITUD según la variable: corto 80-120 palabras, medio 120-220, largo 220-320.
 
-El post va como un array de párrafos (el motor los une con líneas en blanco). Cada párrafo es una cadena de una sola línea, SIN saltos de línea dentro. Primer elemento = el hook.
+Antes de escribir el JSON confirma que ningún párrafo tiene un guion largo ni medio. Escribe en el idioma indicado.`
+
+export const LINKEDIN_CONTRATO = `El post va como un array de párrafos (el motor los une con líneas en blanco). Cada párrafo es una cadena de una sola línea, SIN saltos de línea dentro. Primer elemento = el hook.
 
 RESPONDE SOLO con este JSON, sin texto alrededor, sin saltos de línea y sin comillas dobles dentro de ninguna cadena (si necesitas comillas usa simples):
-{"parrafos":["<hook>","<párrafo>","<párrafo>","<cierre>"],"link_fuente":"<el link del input o vacío>","notas":"<1 frase opcional>"}
-
-Antes de escribir el JSON confirma que ningún párrafo tiene un guion largo ni medio. Escribe en el idioma indicado.`
+{"parrafos":["<hook>","<párrafo>","<párrafo>","<cierre>"],"link_fuente":"<el link del input o vacío>","notas":"<1 frase opcional>"}`
 
 type LinkedinBruto = { parrafos?: unknown; link_fuente?: unknown; notas?: unknown }
 
@@ -121,7 +119,7 @@ export async function generarLinkedin(
   accountId: string,
   input: LinkedinJobInput,
   model: string,
-  system: string = LINKEDIN_SYSTEM
+  system: string
 ): Promise<{ respuesta: unknown; uso: UsoClaude }> {
   const n = input.raw_news
   const prompt = `ANGULO
@@ -168,7 +166,7 @@ ${bloqueVariables(input.variables)}`
 
 // ----------------------------------------------------------------- instagram
 
-export const INSTAGRAM_SYSTEM = `Analizas una noticia y defines el texto de cada lámina de un carrusel de Instagram.
+export const INSTAGRAM_OFICIO = `Analizas una noticia y defines el texto de cada lámina de un carrusel de Instagram.
 
 ORTOGRAFÍA: ESCRIBES EN ESPAÑOL CORRECTO
 Todo lo que escribas se publica tal cual. Lleva sus tildes y sus eñes, siempre.
@@ -241,16 +239,18 @@ Devuelve "elemento": UNA búsqueda corta, EN ESPAÑOL, de la cosa concreta.
 
 Esta búsqueda va a un buscador de internet, no a un banco de fotos: pide la cosa exacta con su nombre propio.
 
-RESPONDE SOLO con este JSON, sin texto alrededor:
+Antes de responder relee y confirma cuatro cosas: que no hay guiones largos, que ningún título pasa de 65 caracteres, que el dato más fuerte está en el hook y no en la lámina 2, y que el texto lleva todas sus tildes y sus eñes.`
+
+export const INSTAGRAM_CONTRATO = `RESPONDE SOLO con este JSON, sin texto alrededor:
 {"slide_count":5,"caption":"<2 a 4 frases con la tesis y el cta, oraciones completas>","hashtags":["<3 a 6 en minúscula sin espacios>"],"fotos":["<5 a 8 búsquedas en inglés>"],"elemento":"<una búsqueda en español de la cosa concreta>","slides":[{"n":1,"type":"photo_hook","hook":"<máx 95 caracteres>"},{"n":2,"type":"text","title":"<máx 65 caracteres>","body":"<máx 2 frases>"}]}
 
-El array slides va en orden y tiene 5 elementos: el primero photo_hook, los otros cuatro text. Antes de responder relee y confirma cuatro cosas: que no hay guiones largos, que ningún título pasa de 65 caracteres, que el dato más fuerte está en el hook y no en la lámina 2, y que el texto lleva todas sus tildes y sus eñes.`
+El array slides va en orden y tiene 5 elementos: el primero photo_hook, los otros cuatro text.`
 
 export async function generarInstagram(
   accountId: string,
   input: LinkedinJobInput,
   model: string,
-  system: string = INSTAGRAM_SYSTEM
+  system: string
 ): Promise<{ respuesta: unknown; uso: UsoClaude }> {
   const n = input.raw_news
   const prompt = `ANGULO

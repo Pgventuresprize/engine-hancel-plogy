@@ -2,33 +2,9 @@
 
 import { guardarIdentidad } from "@/app/configuracion/marca/actions"
 import { Label } from "@/components/ui/label"
-import { TOPES_PERFIL, type PerfilMarca } from "@/engine/marca/perfil-modelo"
+import { PAISES, TOPES_PERFIL, type PerfilMarca } from "@/engine/marca/perfil-modelo"
 
 import { BarraGuardar, CampoTexto, Opciones, useFormulario } from "./campos"
-
-/** Los paises que se ofrecen. "Sin pais" para una marca que no escribe para uno. */
-const PAISES: { codigo: string; nombre: string }[] = [
-  { codigo: "AR", nombre: "Argentina" },
-  { codigo: "BO", nombre: "Bolivia" },
-  { codigo: "BR", nombre: "Brasil" },
-  { codigo: "CL", nombre: "Chile" },
-  { codigo: "CO", nombre: "Colombia" },
-  { codigo: "CR", nombre: "Costa Rica" },
-  { codigo: "EC", nombre: "Ecuador" },
-  { codigo: "SV", nombre: "El Salvador" },
-  { codigo: "ES", nombre: "España" },
-  { codigo: "US", nombre: "Estados Unidos" },
-  { codigo: "GT", nombre: "Guatemala" },
-  { codigo: "HN", nombre: "Honduras" },
-  { codigo: "MX", nombre: "México" },
-  { codigo: "NI", nombre: "Nicaragua" },
-  { codigo: "PA", nombre: "Panamá" },
-  { codigo: "PY", nombre: "Paraguay" },
-  { codigo: "PE", nombre: "Perú" },
-  { codigo: "DO", nombre: "República Dominicana" },
-  { codigo: "UY", nombre: "Uruguay" },
-  { codigo: "VE", nombre: "Venezuela" },
-]
 
 type Campos = Pick<PerfilMarca, "nombre" | "handle" | "que_hace" | "mensaje_central" | "idioma" | "pais">
 

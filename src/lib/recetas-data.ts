@@ -100,20 +100,24 @@ export type ConfigEstudio = {
   /** Los de codigo, para pintarlos como punto de partida. */
   ideasPorDefecto: string
   contentPorDefecto: string
+  /** Lo que reciben de verdad los agentes: oficio, marca y formato de respuesta. */
+  ideasFinal: string
+  contentFinal: string
   /** Si Canva esta conectado (se conecta en Configuracion > Conexiones). */
   canvaConectado: boolean
 }
 
 /** La config del pipeline nuevo, para la pestana de configuracion. */
 export async function getConfigEstudio(): Promise<ConfigEstudio> {
-  const { PROMPTS_POR_DEFECTO } = await import("@/engine/studio/settings")
+  const { PROMPTS_POR_DEFECTO, studioConfig } = await import("@/engine/studio/settings")
   const supabase = supabaseAdmin()
   const accountId = await idDeCuentaActual()
 
   const { estadoCanva } = await import("@/engine/studio/canva-conexion")
-  const [ajustes, canva] = await Promise.all([
+  const [ajustes, canva, armados] = await Promise.all([
     supabase.from("studio_settings").select("ideas_prompt, content_prompt").eq("account_id", accountId).maybeSingle(),
     estadoCanva(accountId),
+    studioConfig(accountId),
   ])
 
   const a = (ajustes.data ?? {}) as { ideas_prompt?: string | null; content_prompt?: string | null }
@@ -123,6 +127,8 @@ export async function getConfigEstudio(): Promise<ConfigEstudio> {
     contentPrompt: a.content_prompt ?? null,
     ideasPorDefecto: PROMPTS_POR_DEFECTO.ideas,
     contentPorDefecto: PROMPTS_POR_DEFECTO.contenido,
+    ideasFinal: armados.promptIdeas,
+    contentFinal: armados.promptContenido,
     canvaConectado: canva.conectado,
   }
 }

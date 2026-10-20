@@ -1,12 +1,13 @@
 /**
- * El prompt de serie del agente de guiones de video.
+ * El oficio de serie del agente de guiones de video.
  *
  * Es el texto que define como se construye el guion: 7 escenas listas para
- * copiar en Flow, la narracion de corrido y la descripcion del post. Va tal
- * cual lo escribio la marca; cada cuenta puede reemplazarlo en la
- * configuracion de Video studio (vacio = este).
+ * copiar en Flow, la narracion de corrido y la descripcion del post. Cada
+ * cuenta puede reemplazarlo en la configuracion de Video studio (vacio =
+ * este). El formato de respuesta va aparte, en GUION_CONTRATO, porque es lo
+ * que lee separarGuion y no se edita.
  */
-export const GUION_SYSTEM = `# Generador de guion por escenas
+export const GUION_OFICIO = `# Generador de guion por escenas
 
 Generas el guion completo de un video corto, escena por escena, listo para copiar y pegar en Flow.
 
@@ -188,9 +189,9 @@ Verificación:
 - Lista los puntos clave con ✅, uno por línea.
 - Cierra con la frase final de la escena 6.
 - Agrega el CTA exacto.
-- Termina con 6 a 10 hashtags del tema y del agro colombiano.
+- Termina con 6 a 10 hashtags del tema y del agro colombiano.`
 
-## Formato de respuesta
+export const GUION_CONTRATO = `## Formato de respuesta
 
 1. Escenas 1 a 7, cada una en su propio bloque de código, con esta plantilla:
 

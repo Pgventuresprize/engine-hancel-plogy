@@ -14,7 +14,7 @@ import type { TipoEstilo } from "@/lib/plantillas-catalogo"
  * forma de escribir de las instrucciones, y un prompt sin tildes devuelve texto
  * sin tildes. Ya paso dos veces.
  */
-export const CONTENIDO_SYSTEM = `Eres un redactor y director de arte de contenido para redes sociales de una marca del sector agropecuario colombiano. Desarrollas una IDEA en una pieza terminada para el CANAL, el FORMATO y el ESTILO GRÁFICO que se te indican.
+export const CONTENIDO_OFICIO = `Eres un redactor y director de arte de contenido para redes sociales de una marca del sector agropecuario colombiano. Desarrollas una IDEA en una pieza terminada para el CANAL, el FORMATO y el ESTILO GRÁFICO que se te indican.
 
 QUÉ RECIBES
 - La idea (un título concreto) y una nota de por dónde va.
@@ -45,7 +45,13 @@ CÓMO NO SONAR A IA
 - Toma postura, no resumas en neutro. Habla claro y directo, como quien sabe del campo.
 - Prohibidas: "revolucionario", "sin precedentes", "cambio de juego", "en el panorama actual", "en un mundo cada vez más", "desbloquear", "aprovechar el potencial", "impulsar", "fomentar", "en resumen". Sin emojis.
 
-LAS LÁMINAS
+Antes de responder confirma: sin guiones largos, títulos dentro del límite, todo con sus tildes y sus eñes, ningún dato inventado, los campos del estilo completos en cada lámina, y el CTA presente.`
+
+/**
+ * El contrato: la forma de la pieza que el motor sabe guardar y dibujar. Va
+ * despues de la marca y no se edita.
+ */
+export const CONTENIDO_CONTRATO = `LAS LÁMINAS
 Devuelves un array "slides". Cada lámina tiene:
 - "hook" (solo la primera) o "title" (las demás): el texto grande. Máximo 70 caracteres.
 - "body": texto de apoyo, máximo dos líneas (unos 120 caracteres). Puede ir vacío si el estilo pide poco texto.
@@ -64,9 +70,7 @@ SIEMPRE:
 - "hashtags": de 3 a 6, en minúscula, sin espacios, del asunto.
 
 RESPONDE SOLO con el JSON, sin texto alrededor y sin saltos de línea dentro de las cadenas (si necesitas comillas, usa simples):
-{"caption":"<...>","hashtags":["<...>"],"slides":[{"n":1,"hook":"<...>","body":"<...>", ...campos del estilo},{"n":2,"title":"<...>","body":"<...>", ...}],"cierre":{"title":"<...>","body":"<...>"},"parrafos":[]}
-
-Antes de responder confirma: sin guiones largos, títulos dentro del límite, todo con sus tildes y sus eñes, ningún dato inventado, los campos del estilo completos en cada lámina, y el CTA presente.`
+{"caption":"<...>","hashtags":["<...>"],"slides":[{"n":1,"hook":"<...>","body":"<...>", ...campos del estilo},{"n":2,"title":"<...>","body":"<...>", ...}],"cierre":{"title":"<...>","body":"<...>"},"parrafos":[]}`
 
 /** Lo que el agente debe rellenar por lamina segun el estilo. */
 export const INSTRUCCIONES_ESTILO: Record<TipoEstilo, string> = {

@@ -9,7 +9,8 @@ import { DashboardShell } from "@/components/dashboard-shell"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { modeloDe } from "@/engine/agents/modelos"
-import { PROMPT_DE_FABRICA, tienePrompt, type AgenteConPrompt } from "@/engine/agents/prompts"
+import { PromptFinal } from "@/components/agentes/prompt-final"
+import { PROMPT_DE_FABRICA, promptDe, tienePrompt, type AgenteConPrompt } from "@/engine/agents/prompts"
 import { agenteReal, ajustesDe, type Agente } from "@/engine/agents/settings"
 import { proximasPasadas } from "@/engine/agents/turno"
 import { REDES, NOMBRE_DE_RED } from "@/engine/content/types"
@@ -67,6 +68,7 @@ export default async function AgentePage({
     ? (propios.prompt?.trim() || PROMPT_DE_FABRICA[real as AgenteConPrompt])
     : null
   const modelo = conPrompt ? await modeloDe(accountId, real as AgenteConPrompt) : null
+  const promptFinal = conPrompt ? await promptDe(accountId, real as AgenteConPrompt) : null
 
   return (
     <DashboardShell title={ficha.nombre}>
@@ -105,6 +107,8 @@ export default async function AgentePage({
             }
           />
         ) : null}
+
+        {promptFinal ? <PromptFinal prompt={promptFinal} /> : null}
 
         {conPrompt && modelo ? (
           <ModeloEditor clave={ficha.clave} modelo={modelo} soloLectura={espejo} />

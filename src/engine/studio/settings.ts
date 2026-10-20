@@ -1,20 +1,22 @@
 import { supabaseAdmin } from "../supabase-admin"
-import { CONTENIDO_SYSTEM } from "./prompts"
-import { IDEAS_SYSTEM } from "../ideas/generar"
+import { CONTENIDO_CONTRATO, CONTENIDO_OFICIO } from "./prompts"
+import { IDEAS_CONTRATO, IDEAS_OFICIO } from "../ideas/generar"
+import { armarPrompt, bloqueMarca, datosParaPrompt } from "../marca/prompt"
 
 /**
  * La configuracion de las dos agentes del pipeline nuevo.
  *
  * Los modelos son de cada empresa y viven en `account_secrets`, junto a los
- * modelos de los otros agentes. Los
- * prompts son de cada cuenta —la voz de una marca no es la de otra— y viven en
- * `studio_settings`, una fila por cuenta. En ambos sitios, vacio significa "usa
- * lo que trae el codigo".
+ * modelos de los otros agentes. El oficio de cada agente es de cada cuenta
+ * y vive en `studio_settings`, una fila por cuenta; vacio significa "usa el
+ * que trae el codigo". Los prompts que salen de aqui ya van armados: oficio,
+ * marca y contrato, igual que los de los agentes de noticias.
  */
 
 export type StudioConfig = {
   modelIdeas: string
   modelContenido: string
+  /** Armados y listos para mandar. */
   promptIdeas: string
   promptContenido: string
 }
@@ -22,9 +24,10 @@ export type StudioConfig = {
 export async function studioConfig(accountId: string): Promise<StudioConfig> {
   const supabase = supabaseAdmin()
 
-  const [secretos, ajustes] = await Promise.all([
+  const [secretos, ajustes, marca] = await Promise.all([
     supabase.from("account_secrets").select("model_ideas, model_contenido").eq("account_id", accountId).maybeSingle(),
     supabase.from("studio_settings").select("ideas_prompt, content_prompt").eq("account_id", accountId).maybeSingle(),
+    datosParaPrompt(accountId),
   ])
 
   const s = (secretos.data ?? {}) as { model_ideas?: string; model_contenido?: string }
@@ -33,13 +36,21 @@ export async function studioConfig(accountId: string): Promise<StudioConfig> {
   return {
     modelIdeas: s.model_ideas?.trim() || "claude-sonnet-5",
     modelContenido: s.model_contenido?.trim() || "claude-sonnet-5",
-    promptIdeas: a.ideas_prompt?.trim() || IDEAS_SYSTEM,
-    promptContenido: a.content_prompt?.trim() || CONTENIDO_SYSTEM,
+    promptIdeas: armarPrompt({
+      oficio: a.ideas_prompt?.trim() || IDEAS_OFICIO,
+      marca: bloqueMarca(marca, "ideas"),
+      contrato: IDEAS_CONTRATO,
+    }),
+    promptContenido: armarPrompt({
+      oficio: a.content_prompt?.trim() || CONTENIDO_OFICIO,
+      marca: bloqueMarca(marca, "contenido"),
+      contrato: CONTENIDO_CONTRATO,
+    }),
   }
 }
 
-/** Los prompts por defecto, para pintarlos en la config como punto de partida. */
+/** Los oficios por defecto, para pintarlos en la config como punto de partida. */
 export const PROMPTS_POR_DEFECTO = {
-  ideas: IDEAS_SYSTEM,
-  contenido: CONTENIDO_SYSTEM,
+  ideas: IDEAS_OFICIO,
+  contenido: CONTENIDO_OFICIO,
 }

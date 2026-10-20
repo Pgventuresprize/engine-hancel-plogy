@@ -22,7 +22,7 @@ import { investigarEnLaWeb } from "./composio"
  * como Hancel, con la misma vara.
  */
 
-export const ANALISIS_SYSTEM = `Eres un analista editorial. Te dan una noticia y el material que otro sistema ya recolecto de la web sobre ese hecho. Tu trabajo es consolidar y calificar. NO investigas ni buscas: trabajas solo con lo que se te entrega.
+export const ANALISIS_OFICIO = `Eres un analista editorial. Te dan una noticia y el material que otro sistema ya recolecto de la web sobre ese hecho. Tu trabajo es consolidar y calificar. NO investigas ni buscas: trabajas solo con lo que se te entrega.
 
 PASO 1: CONSOLIDAR
 Con el titular, el snippet y el material recolectado, escribe un texto limpio y estructurado con la informacion factual del hecho: solo hechos con su contexto, sin opiniones ni relleno, sin referencias tipo [1]. Maximo 8000 caracteres. Si el material es pobre, consolida lo que haya y no inventes nada.
@@ -68,9 +68,9 @@ LA PRUEBA: si lo noticioso es una decision que ya cambia algo para el sector, es
 
 FILTRO DURO: si NO es un hecho verificable (opinion, prediccion sin gatillo, listicle generico), relevance_score = 1-2 sin importar lo demas.
 
-content_fetch_status: "success" si el material recolectado era sustancioso, "partial" si apenas habia mas que el snippet, "failed" si no llego nada.
+content_fetch_status: "success" si el material recolectado era sustancioso, "partial" si apenas habia mas que el snippet, "failed" si no llego nada.`
 
-RESPONDE SOLO con este JSON, sin texto alrededor, sin saltos de linea y sin comillas dobles dentro de ninguna cadena (usa comillas simples y separa ideas con espacios dentro de full_content):
+export const ANALISIS_CONTRATO = `RESPONDE SOLO con este JSON, sin texto alrededor, sin saltos de linea y sin comillas dobles dentro de ninguna cadena (usa comillas simples y separa ideas con espacios dentro de full_content):
 {"vetada":<true|false>,"motivo_veto":"<una frase, solo si vetada es true>","fecha_hecho":"<YYYY-MM-DD o null si no se puede saber>","vieja":<true|false>,"politica":<true|false>,"full_content":"<el texto consolidado, en un solo bloque sin saltos de linea>","content_fetch_status":"success|partial|failed","relevance_score":<entero 1-10>,"keywords_matched":["<4 a 6 keywords en minuscula>"],"analysis_notes":"<2-3 frases: primero el score global y por que; luego el angulo editorial mas prometedor si lo hay>"}`
 
 type ResultadoAnalisis = {
@@ -168,9 +168,9 @@ export async function analizarPendientes(
     return { analizadas: 0, fallidas: 0, errores: [], uso: { entrada: 0, salida: 0 } }
 
   const model = (await modelosClaude(accountId)).analisis
-  // El prompt editado de la cuenta, si lo hay. Antes se usaba siempre la
-  // constante: la ficha del agente dejaba editarlo y el motor lo ignoraba. La
-  // importacion es dinamica porque prompts.ts importa de este archivo.
+  // El prompt armado de la cuenta: su oficio (editado o de fabrica), su marca
+  // y el contrato. La importacion es dinamica porque prompts.ts importa de
+  // este archivo.
   const { promptDe } = await import("../agents/prompts")
   const system = await promptDe(accountId, "analisis")
   const { timezone } = await getSettings(accountId)

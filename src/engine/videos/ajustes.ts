@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "../supabase-admin"
 import type { RedBuffer } from "../studio/publicar"
-import { GUION_SYSTEM } from "./prompt"
+import { promptConMarca } from "../marca/prompt"
+import { GUION_CONTRATO, GUION_OFICIO } from "./prompt"
 
 /**
  * La configuracion de Video studio, por cuenta.
@@ -62,5 +63,11 @@ export async function ajustesVideo(accountId: string): Promise<AjustesVideo> {
   }
 }
 
-/** El prompt con el que se escribe el guion: el de la cuenta o el de serie. */
-export const promptGuion = (a: AjustesVideo) => a.prompt ?? GUION_SYSTEM
+/**
+ * El prompt con el que se escribe el guion, armado como el de los demas
+ * agentes: el oficio (el de la cuenta o el de serie), la marca y el formato
+ * de respuesta, que es lo que separarGuion sabe leer.
+ */
+export async function promptGuion(accountId: string, a: AjustesVideo): Promise<string> {
+  return promptConMarca(accountId, "guion", a.prompt ?? GUION_OFICIO, GUION_CONTRATO)
+}

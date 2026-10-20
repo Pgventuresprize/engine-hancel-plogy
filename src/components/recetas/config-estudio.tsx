@@ -5,6 +5,7 @@ import * as React from "react"
 import Link from "next/link"
 
 import { guardarPromptsEstudio } from "@/app/recetas/actions"
+import { PromptFinal } from "@/components/agentes/prompt-final"
 import type { ConfigEstudio as Config } from "@/lib/recetas-data"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -47,7 +48,7 @@ export function ConfigEstudio({ config }: { config: Config }) {
           </p>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
-          <Label htmlFor="cfg-ideas">Prompt (vacio = el de serie)</Label>
+          <Label htmlFor="cfg-ideas">Oficio (vacío = el de serie)</Label>
           <Textarea
             id="cfg-ideas"
             rows={8}
@@ -57,6 +58,7 @@ export function ConfigEstudio({ config }: { config: Config }) {
             onChange={(e) => setIdeas(e.target.value)}
             className="font-mono text-xs"
           />
+          <PromptFinal prompt={config.ideasFinal} />
         </CardContent>
       </Card>
 
@@ -68,7 +70,7 @@ export function ConfigEstudio({ config }: { config: Config }) {
           </p>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
-          <Label htmlFor="cfg-contenido">Prompt (vacio = el de serie)</Label>
+          <Label htmlFor="cfg-contenido">Oficio (vacío = el de serie)</Label>
           <Textarea
             id="cfg-contenido"
             rows={8}
@@ -78,6 +80,7 @@ export function ConfigEstudio({ config }: { config: Config }) {
             onChange={(e) => setContenido(e.target.value)}
             className="font-mono text-xs"
           />
+          <PromptFinal prompt={config.contentFinal} />
           <div>
             <Button onClick={guardarPrompts} disabled={pending}>
               Guardar prompts

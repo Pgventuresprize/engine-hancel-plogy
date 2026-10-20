@@ -9,7 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 
 /**
- * El prompt con el que trabaja el agente.
+ * El oficio del agente: como hace su trabajo. Es la parte editable del prompt;
+ * la marca y el formato de respuesta se le añaden solos y se ven completos en
+ * "Ver prompt final".
  *
  * Se enseña siempre el que se va a usar de verdad, venga de la base o del
  * codigo: un editor vacio con el prompt real escondido en el repositorio es la
@@ -51,7 +53,7 @@ export function PromptEditor({
     <Card>
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center gap-2">
-          <CardTitle className="text-base">Prompt</CardTitle>
+          <CardTitle className="text-base">Oficio</CardTitle>
           {editado ? (
             <Badge variant="outline">Editado</Badge>
           ) : (
@@ -63,6 +65,9 @@ export function PromptEditor({
             (editado
               ? "Escrito por ti. Las mejoras que vengan en un despliegue ya no le llegan: manda lo que hay aqui."
               : "El que trae el motor. Si lo editas deja de actualizarse solo y pasa a mandar tu version.")}
+        </p>
+        <p className="text-muted-foreground mt-1 text-xs">
+          Es cómo hace su trabajo. Tu marca y el formato de respuesta se le añaden solos.
         </p>
       </CardHeader>
 

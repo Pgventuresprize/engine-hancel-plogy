@@ -18,7 +18,7 @@ import { todas } from "../paginar"
  * combinaciones a la vez: el modelo reparte asuntos distintos entre ellas.
  */
 
-export const IDEAS_SYSTEM = `Eres un editor que propone ideas de contenido para redes sociales de una marca del sector agropecuario colombiano.
+export const IDEAS_OFICIO = `Eres un editor que propone ideas de contenido para redes sociales de una marca del sector agropecuario colombiano.
 
 Recibes una lista de COMBINACIONES. Cada una es un tema (a veces enfocado a un subtema concreto), una intención (el propósito) y una narrativa (la forma de contarlo). Por cada combinación escribes UNA idea de contenido.
 
@@ -33,10 +33,12 @@ CADA IDEA:
 
 ORTOGRAFÍA: cada idea y cada nota llevan sus tildes y sus eñes. Se leen tal cual en la interfaz y son el punto de partida del texto publicado.
 
-RESPONDE SOLO con este JSON, sin texto alrededor:
+Antes de responder, relee y confirma que no hay dos ideas del mismo asunto y que nada le falta una tilde.`
+
+export const IDEAS_CONTRATO = `RESPONDE SOLO con este JSON, sin texto alrededor:
 {"ideas":[{"n":<número de la combinación>,"idea":"<título concreto de la idea, una frase>","notes":"<1-2 frases de por dónde va>"}]}
 
-Devuelve exactamente una idea por combinación, con su número. Antes de responder, relee y confirma que no hay dos ideas del mismo asunto y que nada le falta una tilde.`
+Devuelve exactamente una idea por combinación, con su número.`
 
 type Comb = {
   n: number
@@ -147,7 +149,8 @@ export async function generarRonda(
   accountId: string,
   pillarId: string,
   model: string,
-  system: string = IDEAS_SYSTEM
+  /** El prompt ya armado: oficio, marca y contrato (ver studio/settings.ts). */
+  system: string
 ): Promise<ResultadoIdeas> {
   const supabase = supabaseAdmin()
   const todasLasCombs = await combinacionesDe(accountId, pillarId)

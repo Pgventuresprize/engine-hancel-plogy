@@ -17,6 +17,35 @@
 export const IDIOMAS_MARCA = ["es", "en"] as const
 export type IdiomaMarca = (typeof IDIOMAS_MARCA)[number]
 
+export const NOMBRE_IDIOMA: Record<IdiomaMarca, string> = { es: "español", en: "inglés" }
+
+/** Los paises que se ofrecen. "Sin pais" para una marca que no escribe para uno. */
+export const PAISES: { codigo: string; nombre: string }[] = [
+  { codigo: "AR", nombre: "Argentina" },
+  { codigo: "BO", nombre: "Bolivia" },
+  { codigo: "BR", nombre: "Brasil" },
+  { codigo: "CL", nombre: "Chile" },
+  { codigo: "CO", nombre: "Colombia" },
+  { codigo: "CR", nombre: "Costa Rica" },
+  { codigo: "EC", nombre: "Ecuador" },
+  { codigo: "SV", nombre: "El Salvador" },
+  { codigo: "ES", nombre: "España" },
+  { codigo: "US", nombre: "Estados Unidos" },
+  { codigo: "GT", nombre: "Guatemala" },
+  { codigo: "HN", nombre: "Honduras" },
+  { codigo: "MX", nombre: "México" },
+  { codigo: "NI", nombre: "Nicaragua" },
+  { codigo: "PA", nombre: "Panamá" },
+  { codigo: "PY", nombre: "Paraguay" },
+  { codigo: "PE", nombre: "Perú" },
+  { codigo: "DO", nombre: "República Dominicana" },
+  { codigo: "UY", nombre: "Uruguay" },
+  { codigo: "VE", nombre: "Venezuela" },
+]
+
+export const nombrePais = (codigo: string | null) =>
+  codigo ? (PAISES.find((p) => p.codigo === codigo)?.nombre ?? codigo) : null
+
 /**
  * Cuanto cabe en cada campo. Todo entra en cada prompt, asi que un perfil sin
  * tope encarece cada llamada. Son los mismos que impone la base.

@@ -13,7 +13,7 @@ export const MODELO_REDACCION = "claude-sonnet-5-5"
 export const MIN_PALABRAS = 250
 export const MAX_PALABRAS = 400
 
-export const REDACCION_SYSTEM = `Eres un redactor de noticias. Recibes una noticia y el material de investigación sobre ella, y escribes una noticia explicada: clara, completa, sin opinión y con cada afirmación atribuida a su fuente.
+export const REDACCION_OFICIO = `Eres un redactor de noticias. Recibes una noticia y el material de investigación sobre ella, y escribes una noticia explicada: clara, completa, sin opinión y con cada afirmación atribuida a su fuente.
 
 ENTRADA
 Recibes un JSON con:
@@ -74,7 +74,15 @@ RESUMEN
 - Una o dos oraciones completas que cuenten la noticia entera a quien no la va a leer: qué pasó, quién y por qué importa. Máximo 200 caracteres.
 - Es un resumen escrito para eso, no el comienzo de la entrada recortado. Nunca termina en puntos suspensivos ni deja una frase a medias.
 
-RESPUESTA (JSON)
+ANTES DE RESPONDER, VERIFICA
+1. word_count del cuerpo está entre 250 y 400.
+2. No hay ningún — ni –, y el resumen es una o dos oraciones completas sin puntos suspensivos.
+3. Cada cifra y cada cita tiene atribución en el texto.
+4. Ningún subtítulo es genérico ni un fragmento con coma.
+5. No hay opinión fuera de inferencias marcadas en la sección de lo que significa.
+Si algo falla, corrígelo antes de responder.`
+
+export const REDACCION_CONTRATO = `RESPUESTA (JSON)
 {
   "status": "ok" | "material_insuficiente",
   "titular": "<oración completa>",
@@ -98,15 +106,7 @@ RESPUESTA (JSON)
 
 Dentro de los textos, las citas textuales van entre comillas angulares («así»), nunca entre comillas dobles: unas comillas dobles sin escapar rompen el JSON.
 
-Cada bloque lista en fuentes los id que respaldan sus párrafos. Todo id que aparezca en la pieza debe estar en fuentes_usadas.
-
-ANTES DE RESPONDER, VERIFICA
-1. word_count del cuerpo está entre 250 y 400.
-2. No hay ningún — ni –, y el resumen es una o dos oraciones completas sin puntos suspensivos.
-3. Cada cifra y cada cita tiene atribución en el texto.
-4. Ningún subtítulo es genérico ni un fragmento con coma.
-5. No hay opinión fuera de inferencias marcadas en la sección de lo que significa.
-Si algo falla, corrígelo antes de responder.`
+Cada bloque lista en fuentes los id que respaldan sus párrafos. Todo id que aparezca en la pieza debe estar en fuentes_usadas.`
 
 /** Lo que el agente devuelve, ya normalizado. */
 export type Redaccion = {
@@ -194,7 +194,8 @@ export async function redactarNoticia(
     fuentes: FuenteEntrada[]
   },
   model: string,
-  system: string = REDACCION_SYSTEM
+  /** El prompt ya armado: oficio, marca y contrato (ver agents/prompts.ts). */
+  system: string
 ): Promise<{ redaccion: Redaccion; uso: UsoClaude }> {
   // Una respuesta con el JSON roto (unas comillas sin escapar dentro de una
   // cita) es rara pero pasa: se pide otra vez antes de dar la redaccion por
