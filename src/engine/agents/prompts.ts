@@ -4,11 +4,15 @@ import {
   ANGULO_OFICIO,
   contratoInstagram,
   contratoLinkedin,
+  exigirInstagram,
   INSTAGRAM_OFICIO,
   LINKEDIN_OFICIO,
+  PIEZAS_INSTAGRAM,
 } from "../content/agentes"
-import { promptConMarca, type DatosParaPrompt } from "../marca/prompt"
+import type { Situacion } from "../marca/cuando"
+import { datosParaPrompt, type DatosParaPrompt } from "../marca/prompt"
 import { REDACCION_CONTRATO, REDACCION_OFICIO } from "../redaccion/agente"
+import { armarPorPiezas, textoDelPrompt, type Exigencia, type PiezaDeOficio, type PromptPorPiezas } from "./armador"
 import { ajustesDe, type Agente } from "./settings"
 
 /**
@@ -35,7 +39,12 @@ import { ajustesDe, type Agente } from "./settings"
 export const AGENTES_CON_PROMPT = ["analisis", "angulo", "instagram", "linkedin", "redaccion"] as const
 export type AgenteConPrompt = (typeof AGENTES_CON_PROMPT)[number]
 
-/** El oficio de fabrica: lo que se ve y se edita en la ficha del agente. */
+/**
+ * El oficio de fabrica: lo que se ve y se edita en la ficha del agente. Es el
+ * nucleo, lo que va siempre; las piezas que entran solo con algunas piezas
+ * (logros, el cierre de cada tipo de CTA) van en PIEZAS_DE_OFICIO, viven en el
+ * codigo y le llegan a todas las cuentas, tambien a las que editaron el nucleo.
+ */
 export const PROMPT_DE_FABRICA: Record<AgenteConPrompt, string> = {
   analisis: ANALISIS_OFICIO,
   angulo: ANGULO_OFICIO,
@@ -53,10 +62,26 @@ export const PROMPT_DE_FABRICA: Record<AgenteConPrompt, string> = {
 export const CONTRATO: Record<AgenteConPrompt, string | ((datos: DatosParaPrompt) => string)> = {
   analisis: ANALISIS_CONTRATO,
   angulo: ANGULO_CONTRATO,
-  instagram: ({ perfil }) => contratoInstagram(perfil),
+  instagram: ({ perfil, listas }) => contratoInstagram(perfil, listas === true),
   linkedin: ({ perfil }) => contratoLinkedin(perfil),
   redaccion: REDACCION_CONTRATO,
 }
+
+export const PIEZAS_DE_OFICIO: Record<AgenteConPrompt, PiezaDeOficio[]> = {
+  analisis: [],
+  angulo: [],
+  instagram: PIEZAS_INSTAGRAM,
+  linkedin: [],
+  redaccion: [],
+}
+
+const EXIGENCIAS: Partial<Record<AgenteConPrompt, Exigencia>> = { instagram: exigirInstagram }
+
+/**
+ * Los agentes que escriben una pieza ya clasificada: los unicos para los que
+ * la situacion cambia el prompt. Los demas reciben siempre lo mismo.
+ */
+export const AGENTES_POR_PIEZA = ["instagram", "linkedin"] as const satisfies readonly AgenteConPrompt[]
 
 export function tienePrompt(agent: Agente): agent is AgenteConPrompt {
   return (AGENTES_CON_PROMPT as readonly string[]).includes(agent)
@@ -69,7 +94,44 @@ export async function oficioDe(accountId: string, agent: AgenteConPrompt): Promi
   return editado && editado.length > 0 ? editado : PROMPT_DE_FABRICA[agent]
 }
 
-/** El prompt completo que recibe el agente: oficio, marca y contrato. */
+/** El armado puro, con los datos ya leidos: lo usan el motor, el simulador y la cobertura. */
+export function armarPromptDe(
+  agent: AgenteConPrompt,
+  datos: DatosParaPrompt,
+  oficioEditado: string | null,
+  situacion: Situacion | null,
+  tope?: number
+): PromptPorPiezas {
+  const contrato = CONTRATO[agent]
+  return armarPorPiezas({
+    datos,
+    agente: agent,
+    oficio: oficioEditado || PROMPT_DE_FABRICA[agent],
+    oficioEditado: Boolean(oficioEditado),
+    piezasDeOficio: PIEZAS_DE_OFICIO[agent],
+    contrato: typeof contrato === "string" ? contrato : contrato(datos),
+    situacion,
+    exigir: EXIGENCIAS[agent],
+    tope,
+  })
+}
+
+/**
+ * El prompt de una pieza: lo de siempre (oficio, marca, skills de siempre) mas
+ * lo que entra por su situacion, y la receta de como se armo. Se lee la marca
+ * en cada llamada: lo que cambia en Configuracion > Marca vale desde la
+ * siguiente pieza.
+ */
+export async function promptPara(
+  accountId: string,
+  agent: AgenteConPrompt,
+  situacion: Situacion | null
+): Promise<PromptPorPiezas> {
+  const [datos, ajustes] = await Promise.all([datosParaPrompt(accountId), ajustesDe(accountId, agent)])
+  return armarPromptDe(agent, datos, ajustes.prompt?.trim() || null, situacion)
+}
+
+/** El prompt completo de un agente que no depende de la pieza: oficio, marca, skills y contrato. */
 export async function promptDe(accountId: string, agent: AgenteConPrompt): Promise<string> {
-  return promptConMarca(accountId, agent, await oficioDe(accountId, agent), CONTRATO[agent])
+  return textoDelPrompt(await promptPara(accountId, agent, null))
 }

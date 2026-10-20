@@ -7,7 +7,15 @@ import { bloqueSkills, type Skill } from "./skills-modelo"
  * datos.
  */
 
-export type DatosParaPrompt = DatosDeMarca & { skills: Skill[] }
+export type DatosParaPrompt = DatosDeMarca & {
+  skills: Skill[]
+  /**
+   * La plantilla del carrusel dibuja listas numeradas (la de Plogy). Solo
+   * entonces el formato de respuesta le ofrece al agente laminas de pasos: en
+   * la clasica una lista no se veria.
+   */
+  listas?: boolean
+}
 
 export function promptArmado(
   datos: DatosParaPrompt,

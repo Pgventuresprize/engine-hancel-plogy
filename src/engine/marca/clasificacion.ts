@@ -43,6 +43,11 @@ export type Clasificacion = {
   vertical: Ref | null
   objetivo: Objetivo | null
   cta: (Ref & { tipo: string }) | null
+  /**
+   * La noticia es un logro del pais o del sector de la marca. Decide si entra la
+   * pieza de "logros" del oficio. Ausente en las clasificaciones de antes.
+   */
+  logro?: boolean
 }
 
 const PREFIJO = { pilares: "P", audiencias: "A", verticales: "V", ctas: "C" } as const
@@ -109,6 +114,7 @@ export function resolverClasificacion(bruto: unknown, editorial: IdentidadEditor
     vertical: ref(buscar(l.verticales, o.vertical)),
     objetivo: (OBJETIVOS as readonly string[]).includes(objetivo) ? (objetivo as Objetivo) : null,
     cta: cta ? { id: cta.id, nombre: cta.name, tipo: cta.tipo } : null,
+    logro: o.logro === true || o.logro === "true",
   }
 }
 
@@ -130,6 +136,7 @@ export function parseClasificacion(valor: unknown): Clasificacion | null {
     vertical: ref(o.vertical),
     objetivo,
     cta: cta ? { ...cta, tipo: typeof tipo === "string" ? tipo : "" } : null,
+    logro: o.logro === true,
   }
 }
 
@@ -145,6 +152,7 @@ export function bloqueClasificacion(c: Clasificacion | null | undefined): string
     c.vertical ? `- vertical: ${c.vertical.nombre}` : "",
     c.objetivo ? `- objetivo: ${c.objetivo} (${QUE_BUSCA[c.objetivo]})` : "",
     c.cta ? `- cta: ${c.cta.nombre}. El cierre y el caption piden este CTA, dicho con las palabras de la pieza.` : "",
+    c.logro ? "- es un logro del país o del sector de la marca" : "",
   ].filter(Boolean)
   return lineas.length > 0 ? `CLASIFICACIÓN (la decidió el agente de ángulo)\n${lineas.join("\n")}` : null
 }

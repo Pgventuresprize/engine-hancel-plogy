@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "../supabase-admin"
+import { parseCuando } from "./cuando"
 import { parseSkill, validarSkill, type CamposSkill, type Skill } from "./skills-modelo"
 
 export * from "./skills-modelo"
@@ -27,6 +28,7 @@ export async function guardarSkill(accountId: string, id: string | null, campos:
     texto: campos.texto.trim(),
     original: campos.original,
     agentes: campos.agentes,
+    cuando: parseCuando(campos.cuando),
     activo: campos.activo,
     updated_at: new Date().toISOString(),
   }

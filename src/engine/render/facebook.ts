@@ -39,7 +39,10 @@ export function armarPublicacionFacebook(opciones: {
     .map((slide) => {
       const titulo = slide.title?.trim()
       const cuerpo = slide.body?.trim()
-      return [titulo, cuerpo].filter((parte) => parte && parte.length > 0).join("\n")
+      // Una lamina de pasos no tiene cuerpo: sus puntos van numerados, con su
+      // etiqueta delante, como se ven en la imagen.
+      const lista = slide.items?.length ? slide.items.map((item, i) => `${i + 1}. ${item.trim()}`).join("\n") : null
+      return [slide.lead?.trim(), titulo, cuerpo, lista].filter((parte) => parte && parte.length > 0).join("\n")
     })
     .filter((parrafo) => parrafo.length > 0)
 

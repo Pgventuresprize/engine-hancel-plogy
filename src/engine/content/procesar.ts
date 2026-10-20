@@ -1,10 +1,11 @@
 import { ajustesDe, type Agente } from "../agents/settings"
 import { modeloDe } from "../agents/modelos"
-import { promptDe } from "../agents/prompts"
+import type { Receta } from "../agents/armador"
+import { promptPara } from "../agents/prompts"
 import { leToca } from "../agents/turno"
 import { getSettings } from "../schedule"
 import { supabaseAdmin } from "../supabase-admin"
-import { generarAngulo, generarInstagram, generarLinkedin } from "./agentes"
+import { generarAngulo, generarInstagram, generarLinkedin, situacionDe } from "./agentes"
 import type { AngleJobInput, LinkedinJobInput } from "./types"
 
 /**
@@ -25,7 +26,7 @@ type Buzon = "jobs_angle" | "jobs_linkedin" | "jobs_instagram"
 async function procesarBuzon(
   tabla: Buzon,
   agent: Agente,
-  agente: (input: unknown, accountId: string) => Promise<{ respuesta: unknown }>,
+  agente: (input: unknown, accountId: string) => Promise<{ respuesta: unknown; receta?: Receta }>,
   disparo: Disparo,
   limite: number
 ): Promise<{ procesadas: number; fallidas: number; errores: string[] }> {
@@ -78,10 +79,10 @@ async function procesarBuzon(
     if (!claimed) continue
 
     try {
-      const { respuesta } = await agente(job.input, job.account_id)
+      const { respuesta, receta } = await agente(job.input, job.account_id)
       const { error: errDone } = await supabase
         .from(tabla)
-        .update({ respuesta, status: "done", processed_at: new Date().toISOString() })
+        .update({ respuesta, receta: receta ?? null, status: "done", processed_at: new Date().toISOString() })
         .eq("id", job.id)
       if (errDone) throw new Error(errDone.message)
       procesadas++
@@ -138,31 +139,26 @@ export async function procesarBuzones(
 }> {
   await reclamarColgados()
 
+  // El prompt se arma por trabajo, con la situacion de su pieza: el angulo
+  // todavia no esta clasificado y recibe lo de siempre; LinkedIn e Instagram
+  // reciben ademas lo que toca a su pilar, su CTA y sus senales. La receta de
+  // como se armo se guarda con el trabajo.
   const resultados = [
-    await procesarBuzon("jobs_angle", "angulo", async (input, cuenta) =>
-      generarAngulo(
-        cuenta,
-        input as AngleJobInput,
-        await modeloDe(cuenta, "angulo"),
-        await promptDe(cuenta, "angulo")
-      ), disparo, maxPorBuzon
-    ),
-    await procesarBuzon("jobs_linkedin", "linkedin", async (input, cuenta) =>
-      generarLinkedin(
-        cuenta,
-        input as LinkedinJobInput,
-        await modeloDe(cuenta, "linkedin"),
-        await promptDe(cuenta, "linkedin")
-      ), disparo, maxPorBuzon
-    ),
-    await procesarBuzon("jobs_instagram", "instagram", async (input, cuenta) =>
-      generarInstagram(
-        cuenta,
-        input as LinkedinJobInput,
-        await modeloDe(cuenta, "instagram"),
-        await promptDe(cuenta, "instagram")
-      ), disparo, maxPorBuzon
-    ),
+    await procesarBuzon("jobs_angle", "angulo", async (input, cuenta) => {
+      const armado = await promptPara(cuenta, "angulo", null)
+      const r = await generarAngulo(cuenta, input as AngleJobInput, await modeloDe(cuenta, "angulo"), armado)
+      return { ...r, receta: armado.receta }
+    }, disparo, maxPorBuzon),
+    await procesarBuzon("jobs_linkedin", "linkedin", async (input, cuenta) => {
+      const armado = await promptPara(cuenta, "linkedin", situacionDe(input as LinkedinJobInput))
+      const r = await generarLinkedin(cuenta, input as LinkedinJobInput, await modeloDe(cuenta, "linkedin"), armado)
+      return { ...r, receta: armado.receta }
+    }, disparo, maxPorBuzon),
+    await procesarBuzon("jobs_instagram", "instagram", async (input, cuenta) => {
+      const armado = await promptPara(cuenta, "instagram", situacionDe(input as LinkedinJobInput))
+      const r = await generarInstagram(cuenta, input as LinkedinJobInput, await modeloDe(cuenta, "instagram"), armado)
+      return { ...r, receta: armado.receta }
+    }, disparo, maxPorBuzon),
   ]
 
   return {

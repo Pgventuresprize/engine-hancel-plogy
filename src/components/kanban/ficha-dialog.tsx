@@ -45,6 +45,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { RecetaDelPrompt } from "@/components/agentes/simulador-prompt"
 import { conPocoMaterial, nombreMaterial } from "@/engine/content/material"
 import type { Hallazgo, Revision } from "@/engine/content/revisor"
 import { NOMBRE_OBJETIVO, type Clasificacion } from "@/engine/marca/clasificacion"
@@ -437,6 +438,17 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
               </li>
             ))}
           </ol>
+        </details>
+      ) : null}
+
+      {/* Que entro en el prompt que la escribio y que no: sirve para saber de
+          donde sale un fallo que se repite. */}
+      {pieza.receta ? (
+        <details className="rounded-lg border p-3 text-xs">
+          <summary className="cursor-pointer font-medium">Cómo se armó el prompt</summary>
+          <div className="mt-2">
+            <RecetaDelPrompt receta={pieza.receta} />
+          </div>
         </details>
       ) : null}
 

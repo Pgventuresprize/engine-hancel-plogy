@@ -21,6 +21,16 @@ Al retomar uno, se detalla como bloque antes de construir.
   kit de Plogy son unos 90.000 caracteres; un catálogo de servicios o de casos
   lo empujaría más).
 
+### Marca › Documentos (tabla `brand_documentos`)
+- **Qué es:** una pantalla para subir o pegar documentos largos de la marca; la
+  app los parte por títulos y cada sección queda "fuera", "por regla" o
+  "consultable". Es la base de los dos puntos siguientes.
+- **Por qué esperó:** el sistema narrativo de Plogy ya entra entero como tres
+  skills (1D-6a), así que hoy la pantalla repetiría lo que hacen las skills.
+  Se sacó del 1D-6b el 2026-10-20.
+- **Cuándo:** con la herramienta de consulta, o cuando una marca tenga un
+  documento que no tenga sentido pegar como skill (catálogo, casos, glosario).
+
 ### Partir los documentos por secciones con "cuándo entra"
 - **Qué es:** que de un documento largo entre solo la sección que aplica (la
   densidad del pilar de la pieza, la audiencia de la pieza).

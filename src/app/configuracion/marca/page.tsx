@@ -68,7 +68,7 @@ export default async function MarcaPage({ searchParams }: { searchParams: Promis
             ),
             cta: <EditorCtas ctas={editorial.ctas} />,
             visual: <PestanaVisual estilo={estilo} paleta={paleta} pexelsConfigurado={pexelsConfigurado()} />,
-            skills: <PestanaSkills skills={skills} />,
+            skills: <PestanaSkills skills={skills} pilares={editorial.pilares.map((p) => ({ id: p.id, name: p.name }))} />,
           }}
         />
       </div>

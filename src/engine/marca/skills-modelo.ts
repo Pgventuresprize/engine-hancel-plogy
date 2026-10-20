@@ -1,4 +1,5 @@
 import { AGENTES_CON_MARCA, type AgenteConMarca } from "./bloque"
+import { esSiempre, parseCuando, type Cuando } from "./cuando"
 
 /**
  * Las skills de marca: instrucciones propias de una marca para sus agentes.
@@ -34,6 +35,8 @@ export type Skill = {
   texto: string
   original: string
   agentes: AgenteConMarca[]
+  /** Con que piezas entra (ver cuando.ts). Vacio = siempre. */
+  cuando: Cuando
   activo: boolean
   position: number
 }
@@ -56,6 +59,7 @@ export function parseSkill(fila: Record<string, unknown>): Skill {
     // El original no se recorta por delante ni por detras: es el documento.
     original: typeof fila.original === "string" ? fila.original.slice(0, TOPES_SKILL.original) : "",
     agentes: agentes(fila.agentes),
+    cuando: parseCuando(fila.cuando),
     activo: fila.activo !== false,
     position: typeof fila.position === "number" ? fila.position : 0,
   }
@@ -77,11 +81,17 @@ export function validarSkill(c: CamposSkill): string | null {
 }
 
 /**
- * La capa de skills de un agente: las activas que lo incluyen, en su orden.
- * Vacia si no tiene ninguna, y entonces no se escribe nada en el prompt.
+ * La capa de skills de un agente: las activas que lo incluyen y van siempre, en
+ * su orden. Las que tienen condiciones solo entran por el armador por piezas,
+ * que es el que conoce la clasificacion de la pieza; un agente sin ella (el
+ * Estudio, los guiones) no las recibe.
  */
 export function bloqueSkills(skills: Skill[], agente: AgenteConMarca): string {
-  const suyas = skillsDeAgente(skills, agente)
+  return bloqueDeSkills(skillsDeAgente(skills, agente).filter((s) => esSiempre(s.cuando)))
+}
+
+/** La capa de skills con estas skills, ya elegidas. Vacia si no hay ninguna. */
+export function bloqueDeSkills(suyas: Skill[]): string {
   if (suyas.length === 0) return ""
   return [
     // La segunda frase es para las skills que vienen de un kit de trabajo con

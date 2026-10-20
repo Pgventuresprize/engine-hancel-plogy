@@ -1,5 +1,5 @@
 import { modeloDe } from "../agents/modelos"
-import { promptDe } from "../agents/prompts"
+import { promptPara } from "../agents/prompts"
 import { armarPublicacionFacebook } from "../render/facebook"
 import { supabaseAdmin } from "../supabase-admin"
 import {
@@ -8,6 +8,7 @@ import {
   corregirPost,
   revisarCarruselGuardado,
   revisarPostGuardado,
+  situacionDe,
 } from "./agentes"
 import { armarRevision, parseRevision, type Arreglo, type Revision } from "./revisor"
 import type { LinkedinJobInput } from "./types"
@@ -188,7 +189,7 @@ export async function corregirPieza(accountId: string, pieceId: string): Promise
   if (esCarrusel(pieza.network)) {
     const actual = revisarCarruselGuardado(trabajo.respuesta, trabajo.input, ctx)
     if (actual.hallazgos.length === 0) throw new Error("El revisor no encuentra nada que corregir.")
-    const [model, system] = await Promise.all([modeloDe(accountId, "instagram"), promptDe(accountId, "instagram")])
+    const [model, system] = await Promise.all([modeloDe(accountId, "instagram"), promptPara(accountId, "instagram", situacionDe(trabajo.input))])
     const r = await corregirCarrusel(accountId, trabajo.input, model, system, actual, "manual", ctx)
     const revision = parseRevision((r.respuesta as Record<string, unknown>).revision)!
     return { revision, redibujar: await guardarCarrusel(accountId, trabajo, r.respuesta, revision) }
@@ -196,7 +197,7 @@ export async function corregirPieza(accountId: string, pieceId: string): Promise
 
   const actual = revisarPostGuardado(postDeLaPieza(pieza, trabajo), ctx, trabajo.input.variables.longitud)
   if (actual.hallazgos.length === 0) throw new Error("El revisor no encuentra nada que corregir.")
-  const [model, system] = await Promise.all([modeloDe(accountId, "linkedin"), promptDe(accountId, "linkedin")])
+  const [model, system] = await Promise.all([modeloDe(accountId, "linkedin"), promptPara(accountId, "linkedin", situacionDe(trabajo.input))])
   const r = await corregirPost(accountId, trabajo.input, model, system, actual, "manual", ctx)
   await guardarPost(trabajo, pieza, r.respuesta, r.respuesta.revision)
   return { revision: r.respuesta.revision, redibujar: null }

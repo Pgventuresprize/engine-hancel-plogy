@@ -1,6 +1,7 @@
 import "server-only"
 
 import type { ContentAngle, ContentPiece, PiecePayload } from "@/engine/content/types"
+import { parseReceta, type Receta } from "@/engine/agents/armador"
 import { comoHora } from "@/engine/agents/turno"
 import { redesActivas as redesActivas_ } from "@/engine/agents/redes"
 import { ajustesDe, type Agente } from "@/engine/agents/settings"
@@ -51,6 +52,8 @@ export type PiezaDelTablero = {
   publish_error: string | null
   /** Lo que encontro el revisor automatico. Null = pieza de antes del revisor. */
   revision: Revision | null
+  /** Como se armo el prompt que la escribio. Null = pieza de antes del armador por piezas. */
+  receta: Receta | null
 }
 
 export type Ficha = {
@@ -217,10 +220,18 @@ export async function getTablero(): Promise<Tablero> {
   // `in()` hace una URL de decenas de kB que PostgREST rechaza, y el fallo era
   // mudo —las piezas no llegaban y todo parecia estar en "analizada"—. Ademas
   // las dos tablas ya llevan `account_id`, asi que el filtro es el mismo.
-  const [angulos, piezas] = await Promise.all([
+  const [angulos, piezas, recetasIg, recetasLi] = await Promise.all([
     supabase.from("content_angles").select("*").eq("account_id", accountId),
     supabase.from("content_pieces").select("*").eq("account_id", accountId),
+    // Solo la receta: el guion entero no hace falta para pintar el tablero.
+    supabase.from("jobs_instagram").select("id, receta").eq("account_id", accountId).not("receta", "is", null),
+    supabase.from("jobs_linkedin").select("id, receta").eq("account_id", accountId).not("receta", "is", null),
   ])
+  const recetas = new Map<string, Receta>()
+  for (const j of [...(recetasIg.data ?? []), ...(recetasLi.data ?? [])] as { id: string; receta: unknown }[]) {
+    const r = parseReceta(j.receta)
+    if (r) recetas.set(j.id, r)
+  }
 
   if (angulos.error) throw new Error(`No se pudieron leer los angulos: ${angulos.error.message}`)
   if (piezas.error) throw new Error(`No se pudieron leer las piezas: ${piezas.error.message}`)
@@ -248,6 +259,7 @@ export async function getTablero(): Promise<Tablero> {
       linkedin_urn: p.linkedin_urn,
       publish_error: p.publish_error,
       revision: parseRevision((p as { revision?: unknown }).revision),
+      receta: recetaDe(p as { job_instagram_id?: string | null; job_linkedin_id?: string | null }, recetas),
     })
     piezasPorNoticia.set(p.raw_news_id, lista)
   }
@@ -404,3 +416,12 @@ async function modosDeEtapa(accountId: string): Promise<Partial<Record<Etapa, Mo
   return salida
 }
 
+
+/** La receta del trabajo del que salio la pieza: el carrusel para Instagram y Facebook, el post para LinkedIn. */
+function recetaDe(
+  p: { job_instagram_id?: string | null; job_linkedin_id?: string | null },
+  recetas: Map<string, Receta>
+): Receta | null {
+  const job = p.job_instagram_id ?? p.job_linkedin_id
+  return job ? (recetas.get(job) ?? null) : null
+}

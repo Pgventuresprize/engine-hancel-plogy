@@ -37,7 +37,7 @@ export type LlamadaClaude = {
   /** Id de modelo. Haiku para volumen barato, Sonnet/Opus para escribir. */
   model: string
   /** Las instrucciones del paso: el rol, el tono, el formato de salida. */
-  system: string
+  system: Sistema
   /** El contenido concreto sobre el que trabajar (la noticia, el angulo...). */
   prompt: string
   maxTokens: number
@@ -55,8 +55,20 @@ export type LlamadaClaude = {
   timeoutMs?: number
 }
 
-/** Lo que costo la llamada. Sirve para ver el gasto real por paso. */
-export type UsoClaude = { entrada: number; salida: number }
+/**
+ * Las instrucciones, enteras o partidas en dos: `fijo` es lo que no cambia
+ * entre piezas (oficio, marca, skills de siempre) y se marca para que la API
+ * lo reaproveche entre llamadas seguidas; `resto` es lo propio de esta pieza.
+ * Ver agents/armador.ts.
+ */
+export type Sistema = string | { fijo: string; resto: string }
+
+/**
+ * Lo que costo la llamada. Sirve para ver el gasto real por paso. `entrada`
+ * cuenta todo lo leido, reaprovechado o no; `deCache` es la parte que se
+ * reaprovecho y se cobro a una decima parte.
+ */
+export type UsoClaude = { entrada: number; salida: number; deCache?: number }
 
 export type ResultadoClaude =
   | { ok: true; texto: string; uso: UsoClaude }
@@ -104,12 +116,23 @@ export async function llamarClaude(opciones: LlamadaClaude): Promise<ResultadoCl
 
   // Con el token de suscripcion, el primer bloque de sistema tiene que ser la
   // identidad de Claude Code; con API key no hace falta, pero no molesta.
-  const system = esApiKey
-    ? opciones.system
-    : [
-        { type: "text", text: IDENTIDAD_CLAUDE_CODE },
-        { type: "text", text: opciones.system },
-      ]
+  //
+  // Partido en dos, la parte fija lleva la marca de reaprovechar: lo que va
+  // hasta ella (la identidad y lo fijo) se guarda unos minutos y las llamadas
+  // siguientes con el mismo principio lo leen a una decima parte del precio.
+  // Las vueltas de correccion repiten el prompt al momento y son las que mas
+  // ahorran. Si lo fijo es demasiado corto, la API simplemente no lo guarda.
+  const instrucciones =
+    typeof opciones.system === "string"
+      ? [{ type: "text", text: opciones.system }]
+      : [
+          { type: "text", text: opciones.system.fijo, cache_control: { type: "ephemeral" } },
+          ...(opciones.system.resto.trim() ? [{ type: "text", text: opciones.system.resto }] : []),
+        ]
+  const system =
+    esApiKey && typeof opciones.system === "string"
+      ? opciones.system
+      : [...(esApiKey ? [] : [{ type: "text", text: IDENTIDAD_CLAUDE_CODE }]), ...instrucciones]
 
   // Opus 5.5 no admite apagar el razonamiento de ninguna de las dos formas: con
   // "between_tools" responde 400. Se le deja pensar a su manera, y como lo que
@@ -173,7 +196,12 @@ export async function llamarClaude(opciones: LlamadaClaude): Promise<ResultadoCl
 
     const datos = JSON.parse(cuerpo) as {
       content?: { type: string; text?: string }[]
-      usage?: { input_tokens?: number; output_tokens?: number }
+      usage?: {
+        input_tokens?: number
+        output_tokens?: number
+        cache_creation_input_tokens?: number
+        cache_read_input_tokens?: number
+      }
     }
     const texto = (datos.content ?? [])
       .filter((bloque) => bloque.type === "text" && bloque.text)
@@ -186,8 +214,12 @@ export async function llamarClaude(opciones: LlamadaClaude): Promise<ResultadoCl
       ok: true,
       texto,
       uso: {
-        entrada: datos.usage?.input_tokens ?? 0,
+        entrada:
+          (datos.usage?.input_tokens ?? 0) +
+          (datos.usage?.cache_creation_input_tokens ?? 0) +
+          (datos.usage?.cache_read_input_tokens ?? 0),
         salida: datos.usage?.output_tokens ?? 0,
+        deCache: datos.usage?.cache_read_input_tokens ?? 0,
       },
     }
   } catch (error) {

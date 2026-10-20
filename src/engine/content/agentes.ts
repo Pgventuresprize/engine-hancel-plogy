@@ -1,7 +1,9 @@
-import { llamarClaude, parsearJSONDeClaude, type UsoClaude } from "../claude/messages"
+import type { Exigencia, PiezaDeOficio } from "../agents/armador"
+import { llamarClaude, parsearJSONDeClaude, type Sistema, type UsoClaude } from "../claude/messages"
 import { bloqueClasificacion, bloqueParaClasificar, resolverClasificacion } from "../marca/clasificacion"
+import { SIEMPRE, type Situacion } from "../marca/cuando"
 import { identidadEditorial } from "../marca/editorial"
-import { ctasUsables } from "../marca/editorial-modelo"
+import { ctasUsables, TIPOS_CTA, type TipoCta } from "../marca/editorial-modelo"
 import { perfilDe } from "../marca/perfil"
 import type { PerfilMarca } from "../marca/perfil-modelo"
 import { corregirTextos } from "../studio/ortografia"
@@ -22,6 +24,7 @@ import {
   type Correccion,
   type Hallazgo,
 } from "./revisor"
+import { conPocoMaterial, estadoDelMaterial } from "./material"
 import type { AngleJobInput, LinkedinJobInput, Variables } from "./types"
 
 /**
@@ -73,7 +76,11 @@ export async function contextoDeRevision(accountId: string, input: LinkedinJobIn
   }
 }
 
-const sumarUso = (a: UsoClaude, b: UsoClaude): UsoClaude => ({ entrada: a.entrada + b.entrada, salida: a.salida + b.salida })
+const sumarUso = (a: UsoClaude, b: UsoClaude): UsoClaude => ({
+  entrada: a.entrada + b.entrada,
+  salida: a.salida + b.salida,
+  deCache: (a.deCache ?? 0) + (b.deCache ?? 0),
+})
 
 /** Cual de dos versiones se queda: la que menos frena y, a igualdad, la que menos avisa. */
 function esMejor(nueva: Hallazgo[], anterior: Hallazgo[]): boolean {
@@ -173,6 +180,7 @@ Por la noticia que se te da, decide:
    - OBJETIVO: lo que la pieza busca. Una tesis que posiciona criterio es autoridad; un dato que sorprende a cualquiera es alcance; una pregunta abierta que divide opiniones es comunidad; un problema que la marca resuelve es conversion.
    - CTA: el que mejor sirve a ese objetivo. Uno que pide comentar sirve a comunidad, uno que pide seguir sirve a alcance, uno comercial o de mensaje directo sirve a conversion. Si ninguno encaja, el mas cercano.
    Si una lista viene vacia, ese campo es null. Nunca inventes un codigo.
+   - LOGRO: true solo si la noticia es un logro, un reconocimiento o un record del pais o del sector de la marca, algo que se celebra. En cualquier otro caso false, y siempre false en noticias de perdidas, crisis o riesgos.
 
 REGLAS
 - Escribe en el idioma indicado en las variables.
@@ -182,14 +190,14 @@ REGLAS
 - TRABAJAS SOBRE EL HECHO, NO SOBRE SU FIABILIDAD. El contenido que recibes es lo que paso. Nunca es tu tema si el titular es "comprobable", si la fuente es fiable o si el dato esta "confirmado": eso ya lo decidio quien te paso esta noticia. Da el hecho por bueno y cuenta lo que revela. Prohibido cualquier angulo o tesis del tipo "un titular dijo que X pero no se puede comprobar", "la noticia afirma sin pruebas", "habria que verificar": eso no es un angulo, es desconfianza, y aqui el hecho ya esta dado.`
 
 export const ANGULO_CONTRATO = `RESPONDE SOLO con este JSON, sin texto alrededor:
-{"angle":"<2-3 frases>","thesis":"<1 frase refutable>","playbook_format":"<uno de los formatos>","pilar":"<codigo P o null>","pilar_secundario":"<codigo P o null>","audiencia":"<codigo A o null>","vertical":"<codigo V o null>","objetivo":"<alcance|comunidad|autoridad|conversion>","cta":"<codigo C o null>"}`
+{"angle":"<2-3 frases>","thesis":"<1 frase refutable>","playbook_format":"<uno de los formatos>","pilar":"<codigo P o null>","pilar_secundario":"<codigo P o null>","audiencia":"<codigo A o null>","vertical":"<codigo V o null>","objetivo":"<alcance|comunidad|autoridad|conversion>","cta":"<codigo C o null>","logro":<true|false>}`
 
 /** `system` es el prompt ya armado: oficio, marca y contrato (ver agents/prompts.ts). */
 export async function generarAngulo(
   accountId: string,
   input: AngleJobInput,
   model: string,
-  system: string
+  system: Sistema
 ): Promise<{ respuesta: unknown; uso: UsoClaude }> {
   const n = input.raw_news
   // Las listas se leen al llamar, no al encolar: un trabajo que espero en la
@@ -313,7 +321,7 @@ type PostEscrito = { post: string; link_fuente: string; notas: string | null }
 async function escribirLinkedin(
   accountId: string,
   model: string,
-  system: string,
+  system: Sistema,
   prompt: string,
   ctx: ContextoRevision,
   longitud: string
@@ -364,7 +372,7 @@ export async function generarLinkedin(
   accountId: string,
   input: LinkedinJobInput,
   model: string,
-  system: string
+  system: Sistema
 ): Promise<{ respuesta: unknown; uso: UsoClaude }> {
   const prompt = promptLinkedin(input)
   const ctx = await contextoDeRevision(accountId, input)
@@ -381,7 +389,7 @@ export async function corregirPost(
   accountId: string,
   input: LinkedinJobInput,
   model: string,
-  system: string,
+  system: Sistema,
   anterior: { version: PostEscrito; hallazgos: Hallazgo[]; arreglos: Arreglo[]; correcciones: Correccion[] },
   origen: Correccion["origen"],
   ctx?: ContextoRevision
@@ -452,9 +460,6 @@ EL HUECO VA SOBRE LA CONSECUENCIA, NUNCA SOBRE EL HECHO. Guardarte el dato para 
 MAL: "Los exportadores de acero empezaron a perder rentabilidad y pocos saben por qué."
 BIEN: "Estados Unidos subió a 12,5% el arancel al acero importado."
 
-LOGROS DEL PAÍS O DEL SECTOR DE LA MARCA
-Si la noticia es un logro, un reconocimiento o un récord del país de la marca o de su sector, el hook ABRE con una palabra de celebración y luego el hecho con su cifra: "¡Histórico! [el país o la empresa] entró al top 20 mundial de...". Úsalo solo para logros reales; en una noticia de pérdidas o de crisis es de mal gusto y resta credibilidad.
-
 - Oración completa, humana: ancla en un actor reconocible, nunca abstracciones.
 - LÍMITE DURO DEL HOOK: 95 caracteres contando espacios, y cuéntalos. Si no cabe, quita adjetivos y conectores; la cifra y el actor no se tocan nunca.
 - PROHIBIDO: el patrón de dos fragmentos con coma, la fórmula "No es X, es Y", frases abstractas sin actor, preguntas genéricas.
@@ -506,6 +511,83 @@ Esta búsqueda va a un buscador de internet, no a un banco de fotos: pide la cos
 
 Antes de responder relee y confirma cinco cosas: que no hay guiones largos, que ningún título pasa de 65 caracteres, que el dato más fuerte está en el hook y no en la lámina 2, que el cierre pide el CTA y que el texto lleva todas sus tildes y sus eñes.`
 
+/**
+ * Las piezas del oficio de Instagram que no van siempre: entran solo con la
+ * pieza que las necesita (ver agents/armador.ts). El nucleo de arriba es lo
+ * unico que se edita en la ficha del agente; estas viven aqui y llegan solas.
+ *
+ * Hay un cierre por cada tipo de CTA: la prueba de cobertura falla si se
+ * añade un tipo y nadie le escribe el suyo.
+ */
+export const PIEZAS_INSTAGRAM: PiezaDeOficio[] = [
+  {
+    id: "logro",
+    nombre: "Logros del país o del sector de la marca",
+    cuando: { ...SIEMPRE, senales: ["logro"] },
+    texto: `El ángulo marcó esta noticia como un logro, un reconocimiento o un récord del país de la marca o de su sector. El hook ABRE con una palabra de celebración y luego el hecho con su cifra: "¡Histórico! [el país o la empresa] entró al top 20 mundial de...". Si al leer el contenido ves que no es un logro real, no celebres: en una noticia de pérdidas o de crisis es de mal gusto y resta credibilidad.`,
+  },
+  {
+    id: "poco_material",
+    nombre: "La noticia trae poco material",
+    cuando: { ...SIEMPRE, senales: ["poco_material"] },
+    texto: `El contenido de esta noticia es corto. Haz el carrusel con el mínimo de láminas que pide el formato de respuesta y apoya cada una en una frase del contenido. No completes con contexto general, cifras ni consecuencias que el contenido no diga: si algo importante todavía no se sabe, dilo así ("todavía no se sabe cuánto costará"). Un carrusel corto y cierto vale más que uno largo y rellenado.`,
+  },
+  {
+    id: "cierre:seguir",
+    nombre: "El cierre pide seguir la cuenta",
+    cuando: { ...SIEMPRE, cta_tipos: ["seguir"] },
+    texto: `El título dice la acción con el nombre o la cuenta de la marca ("Sigue a @cuenta"). El cuerpo da una razón concreta y ligada al tema de este carrusel: qué va a encontrar quien sigue la cuenta la próxima vez que pase algo así. Nada de "para más contenido" ni "no te pierdas nada". El caption termina con la misma invitación a seguir.`,
+  },
+  {
+    id: "cierre:comentar",
+    nombre: "El cierre pide un comentario",
+    cuando: { ...SIEMPRE, cta_tipos: ["comentar"] },
+    texto: `El cierre hace una pregunta que se responde en una línea, desde la experiencia de quien lee ("¿Ya mediste cuánto te cuesta cada tarea?"). Sale de la tesis de este carrusel, no de una plantilla. Prohibido "¿qué opinas?", "déjanos tu opinión" o cualquier pregunta que serviría igual para otra pieza. El caption termina con la misma pregunta.`,
+  },
+  {
+    id: "cierre:palabra",
+    nombre: "El cierre pide comentar una palabra",
+    cuando: { ...SIEMPRE, cta_tipos: ["palabra"] },
+    texto: `El cierre pide comentar una sola palabra, en mayúsculas, a cambio de algo que la marca envía. La palabra y lo que se recibe salen del CTA de la clasificación: no inventes otra palabra ni otro recurso. El título lleva la palabra ("Comenta PROCESO"); el cuerpo dice qué recibe quien la comenta y cómo le llega, sin prometer plazos ni nada que el CTA no diga. El caption repite la misma palabra en mayúsculas y la misma promesa.`,
+  },
+  {
+    id: "cierre:dm",
+    nombre: "El cierre pide escribir por mensaje directo",
+    cuando: { ...SIEMPRE, cta_tipos: ["dm"] },
+    texto: `El cierre pide escribirle a la marca por mensaje directo. Di qué escribir o sobre qué, y qué obtiene quien escribe, conectado con el problema de este carrusel. Una sola acción, sin urgencia inventada. El caption termina pidiendo lo mismo.`,
+  },
+  {
+    id: "cierre:comercial",
+    nombre: "El cierre es comercial",
+    cuando: { ...SIEMPRE, cta_tipos: ["comercial"] },
+    texto: `El cierre presenta lo que la marca ofrece para el problema que contó el carrusel, tal como lo describe el CTA. Las láminas de antes no venden: el carrusel informa y el cierre es el único sitio donde aparece la oferta. Una sola acción concreta (escribir, agendar, visitar), sin descuentos, plazos ni garantías que el CTA no traiga. El caption termina pidiendo la misma acción.`,
+  },
+]
+
+/** Con CTA elegido, el carrusel no se escribe sin el cierre de su tipo. */
+export const exigirInstagram: Exigencia = (entraron, s) =>
+  s?.cta_tipo && !entraron.some((p) => p.id === `cierre:${s.cta_tipo}`)
+    ? `falta el cierre para el CTA de tipo «${s.cta_tipo}»`
+    : null
+
+/**
+ * Lo que se sabe de la pieza antes de escribirla, para elegir que entra en su
+ * prompt. Un trabajo de antes de la clasificacion no trae nada y recibe solo
+ * lo que va siempre.
+ */
+export function situacionDe(input: LinkedinJobInput): Situacion {
+  const c = input.angle.clasificacion
+  const tipo = c?.cta?.tipo
+  return {
+    pilar: c?.pilar?.id ?? null,
+    objetivo: c?.objetivo ?? null,
+    cta_tipo: tipo && (TIPOS_CTA as readonly string[]).includes(tipo) ? (tipo as TipoCta) : null,
+    formato: input.angle.playbook_format ?? null,
+    logro: c?.logro === true,
+    poco_material: conPocoMaterial(estadoDelMaterial(input.raw_news.full_content ?? input.raw_news.snippet)),
+  }
+}
+
 const rango = (min: number, max: number) => (min === max ? `${min}` : `${min} a ${max}`)
 
 /** Con el plan de cada lamina, el guion pide mas salida: en la prueba fueron 1.650 tokens. */
@@ -517,7 +599,9 @@ const MAX_TOKENS_INSTAGRAM = 5000
  * pieza, asi que lo que se pide y lo que se mide no se pueden desfasar.
  */
 export function contratoInstagram(
-  perfil: Pick<PerfilMarca, "laminas_min" | "laminas_max" | "hashtags_min" | "hashtags_max" | "emojis_instagram">
+  perfil: Pick<PerfilMarca, "laminas_min" | "laminas_max" | "hashtags_min" | "hashtags_max" | "emojis_instagram">,
+  /** La plantilla dibuja listas numeradas: se ofrecen las laminas de pasos. */
+  listas = false
 ): string {
   const laminas = rango(perfil.laminas_min, perfil.laminas_max)
   const sinHashtags = perfil.hashtags_max === 0
@@ -529,7 +613,8 @@ El array slides va en orden y tiene ${perfil.laminas_min === perfil.laminas_max 
 PLANEA CADA LÁMINA ANTES DE ESCRIBIRLA. Cada elemento de slides lleva primero tres campos: "funcion" (tensión, hecho, mecanismo, criterio, síntesis...), "aporta" (qué deja abierto o qué hace necesaria la siguiente) y "fuente" (de qué parte del contenido sale lo que afirma, o "criterio de la marca" si es opinión de la marca). Escríbelos primero y después el texto, de modo que el texto cumpla esa función y no afirme nada que su fuente no diga. Estos tres campos no se publican.
 ${sinHashtags ? "La marca no usa hashtags: \"hashtags\" va vacío." : `Hashtags: ${rango(perfil.hashtags_min, perfil.hashtags_max)}, específicos y buscables.`}
 ${perfil.emojis_instagram ? "Emojis: solo si ayudan a leer, nunca de adorno." : "Emojis: ninguno, en ningún campo."}
-El caption termina pidiendo la misma acción que el cierre, con sus mismas palabras clave.
+${listas ? `Una lámina "text" puede ir como lista: en lugar de "body" lleva "items", de 3 a 5 pasos o puntos (cada uno una oración de hasta 90 caracteres), y si hace falta "lead", una etiqueta corta encima del título (hasta 30 caracteres). Se dibuja como lista numerada. Úsala solo cuando el contenido de esa lámina es de verdad una serie de pasos o de puntos, nunca para partir un párrafo.
+` : ""}El caption termina pidiendo la misma acción que el cierre, con sus mismas palabras clave.
 El cierre no va en slides: va en "cierre" y pide el CTA de la clasificación o, si no viene, el CTA de la marca que mejor encaje con la pieza. Si la marca no tiene ningún CTA, "cierre" es null.`
 }
 
@@ -584,7 +669,7 @@ export async function generarInstagram(
   accountId: string,
   input: LinkedinJobInput,
   model: string,
-  system: string
+  system: Sistema
 ): Promise<{ respuesta: unknown; uso: UsoClaude }> {
   const prompt = promptInstagram(input)
   const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: MAX_TOKENS_INSTAGRAM })
@@ -604,7 +689,7 @@ export async function corregirCarrusel(
   accountId: string,
   input: LinkedinJobInput,
   model: string,
-  system: string,
+  system: Sistema,
   anterior: { version: unknown; hallazgos: Hallazgo[]; arreglos: Arreglo[]; correcciones: Correccion[] },
   origen: Correccion["origen"],
   ctx?: ContextoRevision

@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache"
 
 import { agenteReal, guardarAjustes, type Agente, type Modo } from "@/engine/agents/settings"
-import { PROMPT_DE_FABRICA, tienePrompt } from "@/engine/agents/prompts"
+import type { Receta } from "@/engine/agents/armador"
+import { PROMPT_DE_FABRICA, promptPara, tienePrompt } from "@/engine/agents/prompts"
+import { parseSituacion, type Situacion } from "@/engine/marca/cuando"
 import { fichaDe, type ClaveAgente } from "@/lib/agentes-catalogo"
 import { MODELOS_DISPONIBLES } from "@/lib/modelos-ia"
 import { idDeCuentaActual } from "@/lib/accounts"
@@ -261,5 +263,27 @@ export async function ejecutarAgente(
     return { ok: true, resumen }
   } catch (error) {
     return fail(error, "No se pudo ejecutar el agente.") as { ok: false; error: string }
+  }
+}
+
+export type Simulacion =
+  | { ok: true; fijo: string; resto: string; receta: Receta }
+  | { ok: false; error: string }
+
+/**
+ * El prompt que recibiria el agente con una situacion inventada: sin llamar a
+ * Claude ni escribir nada. Se lee igual en Facebook, que usa el de Instagram.
+ */
+export async function simularPrompt(clave: string, situacion: Situacion): Promise<Simulacion> {
+  try {
+    const ficha = fichaDe(clave)
+    if (!ficha) return { ok: false, error: "Ese agente no existe." }
+    const agent = agenteReal((ficha.espejoDe ?? ficha.clave) as Agente)
+    if (!tienePrompt(agent)) return { ok: false, error: "Este agente no usa prompt." }
+    const { fijo, resto, receta } = await promptPara(await idDeCuentaActual(), agent, parseSituacion(situacion))
+    return { ok: true, fijo, resto, receta }
+  } catch (error) {
+    const r = fail(error, "No se pudo armar el prompt.")
+    return r.ok ? { ok: false, error: "No se pudo armar el prompt." } : r
   }
 }

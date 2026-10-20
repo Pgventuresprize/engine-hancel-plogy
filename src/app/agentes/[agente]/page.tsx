@@ -10,7 +10,18 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { modeloDe } from "@/engine/agents/modelos"
 import { PromptFinal } from "@/components/agentes/prompt-final"
-import { PROMPT_DE_FABRICA, promptDe, tienePrompt, type AgenteConPrompt } from "@/engine/agents/prompts"
+import { SimuladorPrompt } from "@/components/agentes/simulador-prompt"
+import { simularPrompt } from "@/app/agentes/actions"
+import {
+  AGENTES_POR_PIEZA,
+  PROMPT_DE_FABRICA,
+  promptDe,
+  tienePrompt,
+  type AgenteConPrompt,
+} from "@/engine/agents/prompts"
+import type { Situacion } from "@/engine/marca/cuando"
+import { identidadEditorial } from "@/engine/marca/editorial"
+import { ctasUsables } from "@/engine/marca/editorial-modelo"
 import { agenteReal, ajustesDe, type Agente } from "@/engine/agents/settings"
 import { proximasPasadas } from "@/engine/agents/turno"
 import { skillsDe, skillsDeAgente } from "@/engine/marca/skills"
@@ -69,7 +80,11 @@ export default async function AgentePage({
     ? (propios.prompt?.trim() || PROMPT_DE_FABRICA[real as AgenteConPrompt])
     : null
   const modelo = conPrompt ? await modeloDe(accountId, real as AgenteConPrompt) : null
-  const promptFinal = conPrompt ? await promptDe(accountId, real as AgenteConPrompt) : null
+  // Instagram y LinkedIn escriben con la pieza ya clasificada y su prompt
+  // cambia con ella: ahi se enseña el simulador en vez de un prompt fijo.
+  const porPieza = conPrompt && (AGENTES_POR_PIEZA as readonly string[]).includes(real)
+  const promptFinal = conPrompt && !porPieza ? await promptDe(accountId, real as AgenteConPrompt) : null
+  const simulador = porPieza ? await datosDelSimulador(accountId, ficha.clave) : null
   const susSkills = conPrompt ? skillsDeAgente(await skillsDe(accountId), real as AgenteConPrompt) : []
 
   return (
@@ -127,6 +142,7 @@ export default async function AgentePage({
         ) : null}
 
         {promptFinal ? <PromptFinal prompt={promptFinal} /> : null}
+        {simulador ? <SimuladorPrompt clave={ficha.clave} {...simulador} /> : null}
 
         {conPrompt && promptActual ? (
           <PromptEditor
@@ -205,4 +221,24 @@ export default async function AgentePage({
       </div>
     </DashboardShell>
   )
+}
+
+/** Las listas de la marca para el simulador y la primera simulacion, con su primer pilar y su primer CTA. */
+async function datosDelSimulador(accountId: string, clave: string) {
+  const editorial = await identidadEditorial(accountId)
+  const ctas = ctasUsables(editorial.ctas).map((c) => ({ id: c.id, name: c.name, tipo: c.tipo }))
+  const situacionInicial: Situacion = {
+    pilar: editorial.pilares[0]?.id ?? null,
+    objetivo: null,
+    cta_tipo: ctas[0]?.tipo ?? null,
+    formato: null,
+    logro: false,
+    poco_material: false,
+  }
+  return {
+    pilares: editorial.pilares.map((p) => ({ id: p.id, name: p.name })),
+    ctas,
+    situacionInicial,
+    inicial: await simularPrompt(clave, situacionInicial),
+  }
 }

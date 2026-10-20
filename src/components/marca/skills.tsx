@@ -11,11 +11,26 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { AGENTES_CON_MARCA, type AgenteConMarca } from "@/engine/marca/bloque"
+import { NOMBRE_OBJETIVO, OBJETIVOS } from "@/engine/marca/clasificacion"
+import {
+  describirCuando,
+  esSiempre,
+  FORMATOS_ANGULO,
+  NOMBRE_FORMATO,
+  NOMBRE_SENAL,
+  NOMBRE_TIPO_CTA,
+  SENALES,
+  SIEMPRE,
+  type Cuando,
+} from "@/engine/marca/cuando"
+import { TIPOS_CTA } from "@/engine/marca/editorial-modelo"
 import { NOMBRE_AGENTE, TOPES_SKILL, type CamposSkill, type Skill } from "@/engine/marca/skills-modelo"
 
 import { CampoTexto, useFormulario } from "./campos"
 
-const VACIA: CamposSkill = { nombre: "", descripcion: "", texto: "", original: "", agentes: [], activo: true }
+const VACIA: CamposSkill = { nombre: "", descripcion: "", texto: "", original: "", agentes: [], cuando: SIEMPRE, activo: true }
+
+type Pilar = { id: string; name: string }
 
 /** El `name:` y el `description:` de la cabecera de un SKILL.md, si la tiene. */
 function cabeceraDe(texto: string): { name?: string; description?: string } {
@@ -34,7 +49,8 @@ function cabeceraDe(texto: string): { name?: string; description?: string } {
  * vistazo que tiene cada agente. El orden importa: es el orden en que entran
  * en el prompt.
  */
-export function PestanaSkills({ skills }: { skills: Skill[] }) {
+export function PestanaSkills({ skills, pilares }: { skills: Skill[]; pilares: Pilar[] }) {
+  const nombrePilar = (id: string) => pilares.find((p) => p.id === id)?.name ?? "(pilar borrado)"
   const [abierta, setAbierta] = React.useState<string | null>(null)
   const [nueva, setNueva] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -118,6 +134,11 @@ export function PestanaSkills({ skills }: { skills: Skill[] }) {
                         </Badge>
                       ))
                     )}
+                    {!esSiempre(s.cuando) ? (
+                      <Badge variant="outline" className="font-normal">
+                        Solo con: {describirCuando(s.cuando, nombrePilar)}
+                      </Badge>
+                    ) : null}
                     <span className="text-muted-foreground self-center text-xs tabular-nums">
                       · {s.texto.length} caracteres en el prompt
                     </span>
@@ -127,6 +148,7 @@ export function PestanaSkills({ skills }: { skills: Skill[] }) {
               {abierta === s.id ? (
                 <EditorSkill
                   inicial={s}
+                  pilares={pilares}
                   guardar={(campos) => guardarSkillMarca(s.id, campos)}
                   onBorrar={() => {
                     if (!window.confirm(`¿Borrar la skill "${s.nombre}"? Se pierden su texto y su original.`)) return
@@ -144,6 +166,7 @@ export function PestanaSkills({ skills }: { skills: Skill[] }) {
           <CardContent className="py-3">
             <EditorSkill
               inicial={VACIA}
+              pilares={pilares}
               guardar={async (campos) => {
                 const r = await guardarSkillMarca(null, campos)
                 if (r.ok) setNueva(false)
@@ -167,11 +190,13 @@ export function PestanaSkills({ skills }: { skills: Skill[] }) {
 
 function EditorSkill({
   inicial,
+  pilares,
   guardar,
   onBorrar,
   onCancelar,
 }: {
   inicial: CamposSkill
+  pilares: Pilar[]
   guardar: (campos: CamposSkill) => Promise<{ ok: true } | { ok: false; error: string }>
   onBorrar?: () => void
   onCancelar?: () => void
@@ -183,6 +208,7 @@ function EditorSkill({
       texto: inicial.texto,
       original: inicial.original,
       agentes: inicial.agentes,
+      cuando: inicial.cuando,
       activo: inicial.activo,
     },
     guardar
@@ -285,6 +311,8 @@ function EditorSkill({
           Cada agente recibe solo lo que le toca: una skill de captions no le sirve al análisis y encarece cada llamada.
         </p>
       </div>
+
+      <CuandoEntra cuando={v.cuando} pilares={pilares} onChange={(c) => f.set("cuando", c)} />
 
       <div className="flex items-center gap-2">
         <Switch id={id("activo")} checked={v.activo} onCheckedChange={(x) => f.set("activo", Boolean(x))} />
@@ -395,6 +423,108 @@ function EditorSkill({
           </Button>
         ) : null}
       </div>
+    </div>
+  )
+}
+
+/** Un grupo de opciones que se marcan y desmarcan, como los agentes. */
+function Opciones<T extends string>({
+  titulo,
+  opciones,
+  marcadas,
+  onChange,
+}: {
+  titulo: string
+  opciones: { valor: T; nombre: string }[]
+  marcadas: T[]
+  onChange: (v: T[]) => void
+}) {
+  if (opciones.length === 0) return null
+  return (
+    <div className="grid gap-1">
+      <span className="text-muted-foreground text-xs">{titulo}</span>
+      <div className="flex flex-wrap gap-1.5">
+        {opciones.map((o) => {
+          const activa = marcadas.includes(o.valor)
+          return (
+            <button
+              key={o.valor}
+              type="button"
+              onClick={() => onChange(activa ? marcadas.filter((x) => x !== o.valor) : [...marcadas, o.valor])}
+              aria-pressed={activa}
+              className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
+                activa ? "border-primary bg-primary text-primary-foreground" : "hover:bg-accent border-input"
+              }`}
+            >
+              {o.nombre}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Con que piezas entra la skill. Sin nada marcado entra siempre, que es lo que
+ * hacen todas hasta que se elija otra cosa.
+ */
+function CuandoEntra({
+  cuando,
+  pilares,
+  onChange,
+}: {
+  cuando: Cuando
+  pilares: Pilar[]
+  onChange: (c: Cuando) => void
+}) {
+  const set = <K extends keyof Cuando>(clave: K, valor: Cuando[K]) => onChange({ ...cuando, [clave]: valor })
+  const nombrePilar = (id: string) => pilares.find((p) => p.id === id)?.name ?? "(pilar borrado)"
+  return (
+    <div className="grid gap-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <Label>Cuándo entra</Label>
+        <span className="text-muted-foreground text-xs">
+          {esSiempre(cuando) ? "Siempre" : `Solo con: ${describirCuando(cuando, nombrePilar)}`}
+        </span>
+      </div>
+      <div className="grid gap-3 rounded-md border p-3">
+        <Opciones
+          titulo="Pilar"
+          opciones={pilares.map((p) => ({ valor: p.id, nombre: p.name }))}
+          marcadas={cuando.pilares}
+          onChange={(v) => set("pilares", v)}
+        />
+        <Opciones
+          titulo="Objetivo"
+          opciones={OBJETIVOS.map((o) => ({ valor: o, nombre: NOMBRE_OBJETIVO[o] }))}
+          marcadas={cuando.objetivos}
+          onChange={(v) => set("objetivos", v)}
+        />
+        <Opciones
+          titulo="Tipo de CTA"
+          opciones={TIPOS_CTA.map((t) => ({ valor: t, nombre: NOMBRE_TIPO_CTA[t] }))}
+          marcadas={cuando.cta_tipos}
+          onChange={(v) => set("cta_tipos", v)}
+        />
+        <Opciones
+          titulo="Formato del ángulo"
+          opciones={FORMATOS_ANGULO.map((f) => ({ valor: f, nombre: NOMBRE_FORMATO[f] }))}
+          marcadas={cuando.formatos as (typeof FORMATOS_ANGULO)[number][]}
+          onChange={(v) => set("formatos", v)}
+        />
+        <Opciones
+          titulo="Señales de la noticia"
+          opciones={SENALES.map((x) => ({ valor: x, nombre: NOMBRE_SENAL[x] }))}
+          marcadas={cuando.senales}
+          onChange={(v) => set("senales", v)}
+        />
+      </div>
+      <p className="text-muted-foreground text-xs leading-relaxed">
+        Sin nada marcado, entra siempre. Entre grupos se tienen que cumplir todos; dentro de un grupo basta uno. Las
+        condiciones se miran en Instagram y LinkedIn, que escriben con la pieza ya clasificada; en los demás agentes una
+        skill con condiciones no entra.
+      </p>
     </div>
   )
 }
