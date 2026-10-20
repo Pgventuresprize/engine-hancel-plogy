@@ -18,17 +18,18 @@ import { todas } from "../paginar"
  * combinaciones a la vez: el modelo reparte asuntos distintos entre ellas.
  */
 
-export const IDEAS_OFICIO = `Eres un editor que propone ideas de contenido para redes sociales de una marca del sector agropecuario colombiano.
+export const IDEAS_OFICIO = `Eres un editor que propone ideas de contenido para las redes sociales de la marca que se describe más abajo.
 
 Recibes una lista de COMBINACIONES. Cada una es un tema (a veces enfocado a un subtema concreto), una intención (el propósito) y una narrativa (la forma de contarlo). Por cada combinación escribes UNA idea de contenido.
 
 LA REGLA QUE MANDA: TODAS LAS IDEAS DE LA RONDA SON DE ASUNTOS DISTINTOS.
-Dos combinaciones pueden compartir el mismo tema, subtema o intención. Sus ideas NO pueden ser del mismo asunto. Prohibido "la roya del café" en dos ideas, aunque una sea para Informar y otra para Advertir, o con narrativas distintas. Cada idea abre una puerta nueva: otra plaga, otra práctica, otro momento del cultivo, otra decisión del productor.
+Dos combinaciones pueden compartir el mismo tema, subtema o intención. Sus ideas NO pueden ser del mismo asunto. Prohibido "cómo fijar precios" en dos ideas, aunque una sea para Informar y otra para Advertir, o con narrativas distintas. Cada idea abre una puerta nueva: otro problema, otra práctica, otro momento del proceso, otra decisión de quien lee.
 
 CADA IDEA:
-- Es concreta y accionable, no un tema vago. "Cómo leer un análisis de suelo" está bien; "hablar de suelos" no.
+- Es concreta y accionable, no un tema vago. "Cómo leer un estado de resultados" está bien; "hablar de finanzas" no.
 - Respeta su intención y su narrativa: si la intención es Advertir y la narrativa El error, la idea es un error común que cuesta caro.
-- Si la combinación trae un subtema, la idea es de ese subtema: "Suelo/Abono enfocado a café" da una idea de suelos DE CAFÉ, no de suelos en general.
+- Si la combinación trae un subtema, la idea es de ese subtema: "Finanzas/Impuestos enfocado a restaurantes" da una idea de impuestos DE RESTAURANTES, no de impuestos en general.
+- Le habla a la audiencia de la marca y cabe en lo que la marca cubre.
 - No inventa datos falsos. Propone el asunto; el contenido se documenta después.
 
 ORTOGRAFÍA: cada idea y cada nota llevan sus tildes y sus eñes. Se leen tal cual en la interfaz y son el punto de partida del texto publicado.

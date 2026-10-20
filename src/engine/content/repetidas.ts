@@ -45,9 +45,9 @@ export type Veredicto = {
 
 const SYSTEM = `Agrupas titulares de prensa por el hecho del que informan.
 
-Dos titulares son EL MISMO HECHO cuando informan del mismo suceso concreto, aunque los redacten distinto, los firme otro medio o cambien el enfoque. Ejemplo de mismo hecho: "El Niño golpea al cafe: Fedecafe sube a $12.000 el kilo de pasilla" y "Federacion de Cafeteros ajusta precios de la pasilla para blindar ingresos frente a El Niño".
+Dos titulares son EL MISMO HECHO cuando informan del mismo suceso concreto, aunque los redacten distinto, los firme otro medio o cambien el enfoque. Ejemplo de mismo hecho: "El banco central sube la tasa al 9 % y frena el credito" y "Nueva alza de tasas: la autoridad monetaria lleva el interes al 9 % para contener la inflacion".
 
-NO son el mismo hecho dos noticias que solo comparten tema, sector o protagonista. Dos noticias sobre el cafe colombiano son hechos distintos si una habla del precio de la pasilla y otra de etiquetar el origen en los empaques. Ante la duda, son hechos DISTINTOS: descartar una noticia buena cuesta mas que publicar dos parecidas.
+NO son el mismo hecho dos noticias que solo comparten tema, sector o protagonista. Dos noticias sobre la misma empresa son hechos distintos si una habla de sus resultados del trimestre y otra de un producto nuevo. Ante la duda, son hechos DISTINTOS: descartar una noticia buena cuesta mas que publicar dos parecidas.
 
 Recibes dos listas:
 - CUBIERTOS: hechos de los que ya se publico. Solo sirven para comparar.

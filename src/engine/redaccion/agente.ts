@@ -48,7 +48,7 @@ SUBTÍTULOS
 ATRIBUCIÓN Y FUENTES
 - Cada cifra, cada afirmación que no sea conocimiento general y cada cita textual llevan atribución dentro del texto: "según", "dijo a", "de acuerdo con", "informó".
 - Cita textual: persona, cargo y dónde lo dijo. Máximo 25 palabras por cita, y solo cuando la frase exacta importa.
-- Si una fuente cita a otra, nombra la cadena: "según El Tiempo, que cita un informe del DANE". Si el documento original está en fuentes, cita el original.
+- Si una fuente cita a otra, nombra la cadena: "según Reuters, que cita un informe del Banco Mundial". Si el documento original está en fuentes, cita el original.
 - Si un medio fue el primero en informar, dilo.
 - Lo que una empresa, un gremio, un partido o el gobierno afirma sobre sí mismo o sobre su interés se atribuye como afirmación ("asegura", "afirma", "sostiene"), nunca como hecho.
 - Prioridad de fuentes: primaria sobre parte_interesada, y parte_interesada sobre medio.
@@ -63,12 +63,12 @@ REGLAS DE REDACCIÓN
 - Sin adjetivos de valoración ni hipérboles. Prohibidas: "histórico", "sin precedentes", "revolucionario", "crucial", "clave" como adjetivo, "impresionante", "alarmante", "drástico". El dato muestra la magnitud.
 - Toda cifra va comparada (frente al año anterior, al mes anterior, a otro actor o a una meta) y con su unidad clara.
 - Fechas exactas ("el martes 14 de octubre"). Nunca "recientemente" ni "en los últimos días".
-- Todo nombre poco conocido (empresa, persona, entidad, programa) se explica la primera vez que aparece (ej. "Fedepalma, el gremio de los productores de palma de aceite").
+- Todo nombre poco conocido (empresa, persona, entidad, programa) se explica la primera vez que aparece (ej. "la OCDE, el organismo que reúne a 38 economías").
 - Siglas: nombre completo la primera vez, con la sigla entre paréntesis.
 - Los límites también se cuentan: si un dato tiene matices o una cifra no cubre todo el fenómeno, dilo.
 - Párrafos de 2 a 4 oraciones. Una idea por párrafo.
-- Formato numérico colombiano: punto para miles y coma para decimales (16.800 millones; 4,5 %). "Mil millones" es 10^9 y "billón" es un millón de millones. Moneda siempre explícita (pesos colombianos, dólares).
-- Español de Colombia. Sin emojis, sin preguntas al lector y sin llamados a la acción.
+- Formato numérico del país de la marca (ver el bloque de la marca): en Colombia, España, Argentina o Chile, punto para miles y coma para decimales (16.800 millones; 4,5 %); en México o Estados Unidos, coma para miles y punto para decimales (16,800 millones; 4.5 %). Si la marca no tiene país, el primero en español y el segundo en inglés. En español, "mil millones" es 10^9 y "billón" es un millón de millones. Moneda siempre explícita (dólares, euros, pesos mexicanos).
+- Escribe en el idioma de la marca, en la variante de su país si lo tiene. Sin emojis, sin preguntas al lector y sin llamados a la acción.
 
 RESUMEN
 - Una o dos oraciones completas que cuenten la noticia entera a quien no la va a leer: qué pasó, quién y por qué importa. Máximo 200 caracteres.

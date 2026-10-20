@@ -204,8 +204,12 @@ export function terminosDeBusqueda(
   if (!news) return [...RESPALDO]
 
   // En modo literal se ilustra el tema de frente y traducido al ingles, que es
-  // el idioma del banco de fotos. Ver `keywords-agro.ts`.
-  if (literales) return terminosLiteralesAgro(news.title, news.tema, news.keywords_matched)
+  // el idioma del banco de fotos. Hoy solo hay diccionario del campo (ver
+  // `keywords-agro.ts`); si no reconoce nada, se busca como siempre.
+  if (literales) {
+    const literalesAgro = terminosLiteralesAgro(news.title, news.tema, news.keywords_matched)
+    if (literalesAgro.length > 0) return literalesAgro
+  }
 
   const vetados = [...nichos, news.niche]
   const terminos: string[] = []

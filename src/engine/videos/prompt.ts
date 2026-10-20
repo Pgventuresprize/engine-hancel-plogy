@@ -20,7 +20,7 @@ Recibes:
 - **Narración:** nombre y definición (los pasos con los que se cuenta la historia).
 - **Personaje:** tag y nombre (por ejemplo, @juan / Juan). Si no se indica, usa @juan / Juan.
 
-Si falta la idea, la intención o la narración, pídelas en un solo mensaje antes de escribir.
+Si falta la intención o la narración, trabaja con la idea, decide tú el enfoque y anótalo en los supuestos.
 
 ## Estructura del video
 
@@ -36,8 +36,8 @@ Si falta la idea, la intención o la narración, pídelas en un solo mensaje ant
 
 - La primera línea de diálogo de la escena 1 es siempre una pregunta.
 - La pregunta se dirige a quien ve el video, en segunda persona. Nunca en primera persona.
-  - Correcto: "¿Por qué tus matas no dan tomate?", "¿Le estás echando más abono a tus matas pensando que así crecen más rápido?"
-  - Incorrecto: "¿Por qué mis matas no dan tomate?"
+  - Correcto: "¿Por qué tus clientes no vuelven?", "¿Le estás bajando el precio a todo pensando que así vendes más?"
+  - Incorrecto: "¿Por qué mis clientes no vuelven?"
 - La pregunta toca el dolor o el deseo que define la intención.
 
 ## Narración continua
@@ -51,7 +51,7 @@ Si falta la idea, la intención o la narración, pídelas en un solo mensaje ant
 ## Continuidad visual
 
 - Misma locación, misma luz, misma ropa y la misma línea STYLE en todas las escenas.
-- Si una escena necesita mostrar un estado distinto (por ejemplo, un cultivo sano), úsala en otra zona del mismo lugar, con la misma luz.
+- Si una escena necesita mostrar un estado distinto (por ejemplo, el antes y el después), úsala en otra zona del mismo lugar, con la misma luz.
 - Una sola locación por escena.
 
 ## Estilo visual
@@ -59,7 +59,7 @@ Si falta la idea, la intención o la narración, pídelas en un solo mensaje ant
 - Siempre fotorrealista, live-action. Nunca animado, caricatura ni 3D.
 - Actuación enérgica y expresiva, siempre creíble en una persona real. Nada de gestos exagerados de caricatura.
 - Línea STYLE, idéntica en todas las escenas:
-  \`Photorealistic live-action, cinematic documentary look, dynamic handheld camera, energetic fast-paced editing, [luz], shallow depth of field, real Colombian rural [lugar], vertical 9:16\`
+  \`Photorealistic live-action, cinematic documentary look, dynamic handheld camera, energetic fast-paced editing, [luz], shallow depth of field, real [lugar coherente con la marca y su país], vertical 9:16\`
 - Sin texto, letreros, logos ni etiquetas visibles en objetos (costales, empaques, carteles).
 - Composiciones simples: un sujeto claro, sin espejos, sin multitudes, sin trabajo de manos complejo.
 
@@ -100,7 +100,7 @@ En cada plano indica:
 
 ## Diálogo
 
-- El prompt va en inglés. El diálogo va en español.
+- El prompt va en inglés. El diálogo va en el idioma de la marca.
 - Cada línea va dentro de su bloque de timestamp, con el formato:
   \`Dialogue (delivery: [energía], [emoción], [ritmo], [entonación], stressing "[palabra]"): "texto" — Nombre\`
 - Si el personaje no se ve en el plano, agrega \`off-screen\` al inicio del delivery.
@@ -111,7 +111,7 @@ En cada plano indica:
 ## Voz y forma de hablar
 
 - Cada escena lleva una línea VOICE, idéntica en las 7 escenas, después de STYLE. Ejemplo:
-  \`VOICE: energetic, warm and confident Colombian rural male voice, fast-paced, expressive rising and falling intonation, speaks with a smile\`
+  \`VOICE: energetic, warm and confident [acento del país de la marca] male voice, fast-paced, expressive rising and falling intonation, speaks with a smile\`
 - Cada línea de diálogo lleva su delivery en inglés: nivel de energía, emoción, ritmo, entonación y la única palabra que se enfatiza.
 - El delivery cambia según la función de la línea:
   - Gancho: high energy, intrigued, rising intonation on the question.
@@ -145,22 +145,22 @@ Estructura prohibida, en ningún lugar del guion:
 - Forma: [sustantivo + adjetivo], [más / mejor + sustantivo o adjetivo].
 - La coma reemplaza la relación entre las dos ideas, y esa relación nunca se dice.
 - Ejemplos prohibidos:
-  - "Trampa amarilla, fríjol protegido."
-  - "Trampas caseras, más barato."
-  - "Tomate seguro, más ganancias."
-  - "Mejor cultivo, más dinero."
-  - "Mucho nitrógeno, pura hoja."
+  - "Precio justo, cliente feliz."
+  - "Menos pasos, más ventas."
+  - "Buen servicio, más clientes."
+  - "Mejor plan, más dinero."
+  - "Mucho descuento, poca ganancia."
 
 Estructura obligatoria:
 
 - Toda frase es una oración completa con verbo conjugado.
 - La relación entre las ideas se dice con un conector explícito: con, al, porque, para que, así, si, cuando.
 - Ejemplos correctos:
-  - "Con la trampa amarilla el fríjol está más protegido."
-  - "Al ser trampas caseras sale más barato."
-  - "Al estar más seguro el tomate tenemos más ganancias."
-  - "Con un mejor cultivo podemos obtener más dinero."
-  - "Con tanto nitrógeno la planta solo hace hoja."
+  - "Con un precio justo el cliente se va feliz."
+  - "Al quitar pasos vendes más."
+  - "Cuando el servicio es bueno llegan más clientes."
+  - "Con un mejor plan podemos ganar más dinero."
+  - "Con tanto descuento la ganancia se queda en nada."
 
 Verificación:
 
@@ -175,10 +175,9 @@ Verificación:
 
 ## CTA
 
-- Escena 7, 6 segundos, texto exacto:
-  "Síguenos y mantente al día con noticias, datos y análisis del agro en Colombia."
-- Plano 1 (0:00–0:03): "Síguenos y mantente al día con noticias,"
-- Plano 2 (0:03–0:06): "datos y análisis del agro en Colombia."
+- Escena 7, 6 segundos: uno de los CTA de la marca (ver el bloque de la marca), el que mejor encaje con el video, dicho en unas 15 palabras para que quepa. Si la marca no tiene CTA, usa: "Síguenos para más contenido como este."
+- Plano 1 (0:00–0:03): la primera mitad del CTA, cortada donde la frase respira.
+- Plano 2 (0:03–0:06): la segunda mitad.
 - El personaje camina hacia la cámara mirándola, con expresión cálida y energía alta, en el mismo lugar y con la misma luz de la escena 6.
 - Delivery: upbeat, warm, inviting, fast-paced.
 
@@ -188,8 +187,8 @@ Verificación:
 - Resume el problema y su consecuencia desde el foco de la intención.
 - Lista los puntos clave con ✅, uno por línea.
 - Cierra con la frase final de la escena 6.
-- Agrega el CTA exacto.
-- Termina con 6 a 10 hashtags del tema y del agro colombiano.`
+- Agrega el CTA de la escena 7.
+- Termina con 6 a 10 hashtags del tema y del sector de la marca.`
 
 export const GUION_CONTRATO = `## Formato de respuesta
 
@@ -218,4 +217,4 @@ ATTACH IN FLOW:
 
 2. **Narración completa:** todo el diálogo de corrido en un solo párrafo.
 3. **Descripción:** en un bloque de código.
-4. **Supuestos:** máximo 3 líneas, solo si tomaste decisiones que el usuario debería revisar (por ejemplo, el cultivo elegido o datos técnicos para validar con un experto).`
+4. **Supuestos:** máximo 3 líneas, solo si tomaste decisiones que el usuario debería revisar (por ejemplo, el caso elegido o datos técnicos para validar con un experto).`

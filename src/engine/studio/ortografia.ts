@@ -1,4 +1,5 @@
 import { llamarClaude, parsearJSONDeClaude } from "../claude/messages"
+import { perfilDe } from "../marca/perfil"
 import { arreglarOrtografia } from "../render/carousel"
 
 /**
@@ -28,15 +29,23 @@ Corriges solo:
 
 NO cambias nada más: ni palabras, ni orden, ni puntuación, ni el sentido, ni la longitud. No mejoras el estilo. Si un texto ya está bien, lo devuelves idéntico.
 
-Cuidado con las palabras que cambian de sentido según la tilde: decide por el contexto. "esta" demostrativo ("esta finca") no lleva tilde; "está" verbo ("el suelo está ácido") sí. "que" relativo no; "qué" interrogativo o exclamativo sí. "perdida" participio no; "pérdida" sustantivo sí.
+Cuidado con las palabras que cambian de sentido según la tilde: decide por el contexto. "esta" demostrativo ("esta empresa") no lleva tilde; "está" verbo ("el precio está alto") sí. "que" relativo no; "qué" interrogativo o exclamativo sí. "perdida" participio no; "pérdida" sustantivo sí.
 
 RESPONDE SOLO con este JSON, sin texto alrededor:
 {"textos":["<texto 1 corregido>","<texto 2 corregido>"]}
 
 Exactamente el mismo número de textos y en el mismo orden.`
 
-/** Corrige una lista de textos. Nunca lanza: ante cualquier fallo, la red fija. */
+/**
+ * Corrige una lista de textos. Nunca lanza: ante cualquier fallo, la red fija.
+ *
+ * Solo para marcas que escriben en español: el corrector y la red son de
+ * español, y sobre un texto en ingles no tienen nada que hacer.
+ */
 export async function corregirTextos(accountId: string, textos: string[]): Promise<string[]> {
+  const { idioma } = await perfilDe(accountId).catch(() => ({ idioma: "es" }))
+  if (idioma !== "es") return textos
+
   const conRed = (lista: string[]) => lista.map(arreglarOrtografia)
   const indices = textos.map((t, i) => (t.trim() ? i : -1)).filter((i) => i >= 0)
   if (indices.length === 0) return textos

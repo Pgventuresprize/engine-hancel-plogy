@@ -75,6 +75,13 @@ async function collectCandidates(
   recorder: EventRecorder,
   signal?: AbortSignal
 ): Promise<{ searches: SearchOutcome[]; candidates: RawNewsInsert[] }> {
+  if (specs.length === 0) {
+    recorder.emit("search.failed", "Sin temas de noticias: no se buscó nada", {
+      error: "Esta cuenta no tiene temas activos. Configúralos en la taxonomía del agente de extracción.",
+    })
+    return { searches: [], candidates: [] }
+  }
+
   // En tandas de 4, no todas de golpe. Serper corta a 5 peticiones por segundo,
   // y un Promise.all sobre las ~70 busquedas de una cuenta las disparaba todas
   // a la vez: la mitad volvia con 429 y esa mitad del contenido no se traia.

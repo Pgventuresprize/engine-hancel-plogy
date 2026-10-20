@@ -137,15 +137,17 @@ function normalizar(texto: string): string {
     .trim()
 }
 
-/** Cuando no hay nada reconocible, algo del campo siempre ilustra. */
-const RESPALDO = ["farmland colombia", "farmer working field", "crop harvest", "rural landscape"]
+/** Para completar cuando la noticia si es del campo. */
+const RESPALDO = ["farmland", "farmer working field", "crop harvest", "rural landscape"]
 
 /**
  * Traduce lo que reconozca y descarta lo que no es fotografiable.
  *
  * Solo devuelve terminos traducidos: una palabra en español que no este en el
  * diccionario da resultados genericos en Pexels, que es justo lo que se quiere
- * evitar aqui.
+ * evitar aqui. Si no reconoce nada, la noticia no es del campo y devuelve una
+ * lista vacia: quien llama busca entonces como siempre, en vez de llenar de
+ * cultivos el carrusel de una marca que no es agro.
  */
 export function terminosLiteralesAgro(
   titulo: string,
@@ -169,6 +171,5 @@ export function terminosLiteralesAgro(
     }
   }
 
-  // Sin nada reconocible, el campo generico ilustra mejor que una foto al azar.
-  return terminos.length > 0 ? [...terminos, ...RESPALDO].slice(0, 6) : [...RESPALDO]
+  return terminos.length > 0 ? [...terminos, ...RESPALDO].slice(0, 6) : []
 }

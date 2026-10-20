@@ -37,19 +37,24 @@ const MAX_CONTENIDO = 9000
 
 // --------------------------------------------------------------- clasificar
 
-/** Entidades del Estado, organismos y academia: lo que dicen es el dato original. */
+/**
+ * Entidades del Estado, organismos y academia: lo que dicen es el dato
+ * original. Por el dominio, que vale en cualquier pais (".gov" cubre tambien
+ * ".gov.co" o ".gov.uk"), mas los organismos internacionales que no lo usan.
+ */
 const PRIMARIAS = [
-  ".gov.co", ".gob.", ".gov", ".edu.co", ".edu", ".mil.co",
-  "dane.gov.co", "banrep.gov.co", "minagricultura", "ica.gov.co", "agronet", "upra.gov.co",
-  "finagro.com.co", "agrosavia", "procolombia", "fao.org", "worldbank.org", "usda.gov", "cepal.org", "iica.int",
+  ".gov", ".gob", ".gouv", ".edu", ".mil", ".int", "europa.eu",
+  "worldbank.org", "imf.org", "oecd.org", ".un.org", "cepal.org", "fao.org", "iadb.org", "bis.org",
 ]
 
-/** Gremios, empresas y asociaciones: hablan de lo suyo y por su interes. */
+/**
+ * Gremios, asociaciones y comunicados: hablan de lo suyo y por su interes. Las
+ * webs de las propias empresas no se distinguen por el dominio y quedan como
+ * medio; el agente ya atribuye lo que una empresa dice de si misma.
+ */
 const INTERESADAS = [
-  "fedegan", "federaciondecafeteros", "cafedecolombia", "fedepalma", "asbama", "augura", "asocana", "procana",
-  "fenavi", "porkcolombia", "asohofrucol", "fedearroz", "fenalce", "fedepapa", "fedecacao", "asocolflores",
-  "analac", "sac.org.co", "fedeacua", "conalgodon", "fedepanela", "andi.com.co", "fenalco", "camara",
-  "asoporcicultores", "fedecafe", "acosemillas", "andesco",
+  "camara", "chamber", "asociacion", "association", "federacion", "federation", "gremio",
+  "prnewswire", "businesswire", "globenewswire",
 ]
 
 export function tipoDeFuente(url: string): TipoFuente {

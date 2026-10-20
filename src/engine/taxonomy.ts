@@ -1,4 +1,4 @@
-import { FALLBACK_SEARCHES, type SearchSpec } from "./config"
+import type { SearchSpec } from "./config"
 import { supabaseAdmin } from "./supabase-admin"
 
 export type Category = {
@@ -64,8 +64,9 @@ export async function getTaxonomy(accountId: string): Promise<CategoryWithSegmen
  * Las busquedas que el motor va a ejecutar: solo segmentos activos dentro de
  * categorias activas.
  *
- * Si no hay ninguna configurada todavia cae al respaldo de `config.ts`, para
- * que una base recien creada siga funcionando sin configurar nada a mano.
+ * Si no hay ninguna, no se busca nada. Antes caia a dieciseis busquedas de
+ * tecnologia y startups: una cuenta nueva, de lo que fuera, se llenaba de
+ * noticias de otra marca y gastaba busquedas en ellas.
  */
 export async function getActiveSearches(accountId: string): Promise<SearchSpec[]> {
   const taxonomy = await getTaxonomy(accountId)
@@ -88,5 +89,5 @@ export async function getActiveSearches(accountId: string): Promise<SearchSpec[]
         }))
     )
 
-  return searches.length > 0 ? searches : FALLBACK_SEARCHES
+  return searches
 }

@@ -70,7 +70,7 @@ export function EditorPilares({ pilares, listas }: { pilares: Pilar[]; listas: L
           <Input
             value={nuevoPilar}
             disabled={pending}
-            placeholder="Nuevo pilar: Cultivos, Precios…"
+            placeholder="Nuevo pilar: Tendencias, Guías…"
             onChange={(e) => setNuevoPilar(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && crearPilar()}
           />
