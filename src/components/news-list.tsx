@@ -12,6 +12,7 @@ import { GenerateContentButton } from "@/components/contenido/generate-content-b
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { nombreMaterial } from "@/engine/content/material"
 import { formatDateTime, formatNumber, statusLabel } from "@/lib/format"
 import type { RawNews } from "@/lib/types"
 import { ExternalLinkIcon, FileTextIcon, ImageOffIcon } from "lucide-react"
@@ -143,8 +144,8 @@ export function NewsList({ items }: { items: RawNews[] }) {
                       <Meta label="Estado">{statusLabel(item.status)}</Meta>
                       <Meta label="Relevancia">{item.relevance_score ?? "—"}</Meta>
                       <Meta label="Query usada">{item.query_used ?? "—"}</Meta>
-                      <Meta label="Descarga de contenido">
-                        {statusLabel(item.content_fetch_status)}
+                      <Meta label="Material">
+                        {nombreMaterial(item.content_fetch_status) ?? "—"}
                       </Meta>
                       <Meta label="Creada">{formatDateTime(item.created_at)}</Meta>
                       <Meta label="Analizada">{formatDateTime(item.analyzed_at)}</Meta>
@@ -203,8 +204,8 @@ export function NewsList({ items }: { items: RawNews[] }) {
                         </div>
                       ) : (
                         <p className="text-muted-foreground rounded-lg border border-dashed p-4 text-sm">
-                          Todavia no se ha descargado el articulo (estado:{" "}
-                          {statusLabel(item.content_fetch_status)}).
+                          Todavia no hay texto consolidado (material:{" "}
+                          {nombreMaterial(item.content_fetch_status) ?? "sin analizar"}).
                         </p>
                       )}
                     </div>

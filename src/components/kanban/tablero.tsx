@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { FichaDialog } from "@/components/kanban/ficha-dialog"
+import { conPocoMaterial, nombreMaterial } from "@/engine/content/material"
 import type { Etapa, Ficha, ModoDeEtapa, Tablero as TableroDatos } from "@/lib/kanban-data"
 import { PlayIcon } from "lucide-react"
 
@@ -452,6 +453,14 @@ function Tarjeta({
           {ficha.bajoUmbral ? (
             <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-400">
               Bajo umbral
+            </Badge>
+          ) : null}
+
+          {/* Mientras no haya contenido: despues ya no se puede hacer nada con
+              ello y solo seria ruido en la tarjeta. */}
+          {ficha.analizada && ficha.piezas.length === 0 && conPocoMaterial(ficha.estadoContenido) ? (
+            <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-400">
+              {nombreMaterial(ficha.estadoContenido)}
             </Badge>
           ) : null}
 

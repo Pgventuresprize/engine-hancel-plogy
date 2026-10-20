@@ -41,6 +41,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { conPocoMaterial, nombreMaterial } from "@/engine/content/material"
 import { NOMBRE_OBJETIVO, type Clasificacion } from "@/engine/marca/clasificacion"
 import type { Ficha, PiezaDelTablero } from "@/lib/kanban-data"
 import { formatDateTime } from "@/lib/format"
@@ -179,12 +180,23 @@ function PanelNoticia({ ficha }: { ficha: Ficha }) {
   // Generar solo tiene sentido mientras no haya nada generado: con el angulo ya
   // hecho, lo que se quiere es regenerar la pieza, que es otra cosa.
   const yaArranco = ficha.angulo !== null || ficha.piezas.length > 0
+  // No se bloquea: quien la elige a mano puede saber algo que el texto no dice.
+  // Pero tiene que saber que el agente va a escribir con muy poco.
+  const pocoMaterial = !yaArranco && conPocoMaterial(ficha.estadoContenido)
 
   return (
     <div className="flex flex-col gap-3 text-sm">
       <Campo etiqueta="Traida">{formatDateTime(ficha.creada)}</Campo>
       {ficha.fechaSerper ? <Campo etiqueta="Publicada">{ficha.fechaSerper}</Campo> : null}
       <Campo etiqueta="Snippet">{ficha.snippet ?? "(sin snippet)"}</Campo>
+
+      {pocoMaterial ? (
+        <p className="rounded-md border border-amber-400 bg-amber-50 p-2.5 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+          <strong>{nombreMaterial(ficha.estadoContenido)}.</strong> Los agentes solo tendrían el titular y un resumen
+          corto, y para llenar las láminas tienden a inventar. En automático no pasa sola; el motivo está en la
+          pestaña Análisis.
+        </p>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2 border-t pt-3">
         <Button
@@ -198,11 +210,12 @@ function PanelNoticia({ ficha }: { ficha: Ficha }) {
         {!yaArranco ? (
           <Button
             size="sm"
+            variant={pocoMaterial ? "outline" : "default"}
             disabled={pending}
             onClick={() => correr(() => encolarContenido(ficha.newsId))}
           >
             <SparklesIcon />
-            {pending ? "Generando…" : "Generar contenido"}
+            {pending ? "Generando…" : pocoMaterial ? "Generar igual" : "Generar contenido"}
           </Button>
         ) : (
           <span className="text-muted-foreground text-xs">
@@ -243,7 +256,14 @@ function PanelAnalisis({ ficha }: { ficha: Ficha }) {
         <Badge variant={ficha.score !== null && ficha.score >= 8 ? "default" : "secondary"}>
           Score {ficha.score ?? "-"}/10
         </Badge>
-        {ficha.estadoContenido ? <Badge variant="outline">{ficha.estadoContenido}</Badge> : null}
+        {ficha.estadoContenido ? (
+          <Badge
+            variant="outline"
+            className={conPocoMaterial(ficha.estadoContenido) ? "border-amber-400 text-amber-700 dark:text-amber-400" : undefined}
+          >
+            {nombreMaterial(ficha.estadoContenido)}
+          </Badge>
+        ) : null}
         {(ficha.keywords ?? []).map((k) => (
           <Badge key={k} variant="outline" className="font-normal">
             {k}

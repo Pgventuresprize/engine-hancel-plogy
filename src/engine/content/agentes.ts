@@ -234,16 +234,16 @@ Si la noticia es un logro, un reconocimiento o un récord del país de la marca 
 - LÍMITE DURO DEL HOOK: 95 caracteres contando espacios, y cuéntalos. Si no cabe, quita adjetivos y conectores; la cifra y el actor no se tocan nunca.
 - PROHIBIDO: el patrón de dos fragmentos con coma, la fórmula "No es X, es Y", frases abstractas sin actor, preguntas genéricas.
 
-ESTRUCTURA: EXACTAMENTE 5 LÁMINAS
+ESTRUCTURA: DE 3 A 5 LÁMINAS, SEGÚN LO QUE DÉ LA NOTICIA
 - LÁMINA 1 (portada): solo el hook.
 - LÁMINA 2: NO repite el hecho del hook. Cierra el hueco que abrió: el porqué, el mecanismo, la condición o lo que viene ahora.
-- LÁMINAS 3 y 4: una idea cada una. Título = oración completa y concreta (nada de etiquetas tipo "El dato clave"; di lo que pasa) más cuerpo breve.
-- LÁMINA 5: la tesis, en una oración clara que cierre el argumento.
+- LÁMINAS DEL MEDIO (ninguna, una o dos): una idea cada una, y cada una sale de un dato o un hecho del contenido. Título = oración completa y concreta (nada de etiquetas tipo "El dato clave"; di lo que pasa) más cuerpo breve.
+- ÚLTIMA LÁMINA: la tesis, en una oración clara que cierre el argumento.
 
-Son cinco y no más. Con cinco hay que elegir qué se cuenta, y eso se nota: nada de láminas que repiten lo dicho dos antes para llenar.
+Cinco es el máximo, no la meta. Cada lámina se apoya en algo que dice el contenido: si la noticia da para tres, son tres. Rellenar con ideas que la noticia no sostiene, o con cifras y conclusiones que no trae, es peor que un carrusel corto. Y nada de láminas que repiten lo dicho dos antes.
 
 EL CIERRE: LA LÁMINA DEL CTA
-Después de las cinco va una lámina más, el cierre, y la escribes tú aparte, en "cierre". Es la acción que pide el CTA de la clasificación, dicha con las palabras de esta pieza. No resume ni concluye: invita a hacer una cosa concreta.
+Después de la última va una lámina más, el cierre, y la escribes tú aparte, en "cierre". Es la acción que pide el CTA de la clasificación, dicha con las palabras de esta pieza. No resume ni concluye: invita a hacer una cosa concreta.
 - "title": la acción, en una oración corta de hasta 40 caracteres. "Sigue a [la marca]", "Comenta [la palabra] y te lo mandamos".
 - "body": una frase de hasta 140 caracteres con la razón para hacerlo, en la voz de la marca y conectada con el tema del carrusel.
 - Si la descripción del CTA trae una frase de ejemplo, es una guía: úsala si encaja con la pieza y adáptala si no.
@@ -278,9 +278,9 @@ Esta búsqueda va a un buscador de internet, no a un banco de fotos: pide la cos
 Antes de responder relee y confirma cinco cosas: que no hay guiones largos, que ningún título pasa de 65 caracteres, que el dato más fuerte está en el hook y no en la lámina 2, que el cierre pide el CTA y que el texto lleva todas sus tildes y sus eñes.`
 
 export const INSTAGRAM_CONTRATO = `RESPONDE SOLO con este JSON, sin texto alrededor:
-{"slide_count":5,"caption":"<2 a 4 frases con la tesis y el cta, oraciones completas>","hashtags":["<3 a 6 en minúscula sin espacios>"],"fotos":["<5 a 8 búsquedas en inglés>"],"elemento":"<una búsqueda en español de la cosa concreta>","slides":[{"n":1,"type":"photo_hook","hook":"<máx 95 caracteres>"},{"n":2,"type":"text","title":"<máx 65 caracteres>","body":"<máx 2 frases>"}],"cierre":{"title":"<máx 40 caracteres: la acción del CTA>","body":"<máx 140 caracteres: la razón para hacerlo>"}}
+{"slide_count":<3 a 5>,"caption":"<2 a 4 frases con la tesis y el cta, oraciones completas>","hashtags":["<3 a 6 en minúscula sin espacios>"],"fotos":["<5 a 8 búsquedas en inglés>"],"elemento":"<una búsqueda en español de la cosa concreta>","slides":[{"n":1,"type":"photo_hook","hook":"<máx 95 caracteres>"},{"n":2,"type":"text","title":"<máx 65 caracteres>","body":"<máx 2 frases>"}],"cierre":{"title":"<máx 40 caracteres: la acción del CTA>","body":"<máx 140 caracteres: la razón para hacerlo>"}}
 
-El array slides va en orden y tiene 5 elementos: el primero photo_hook, los otros cuatro text.
+El array slides va en orden y tiene de 3 a 5 elementos, tantos como sostenga el contenido: el primero photo_hook, los demás text.
 El cierre no va en slides: va en "cierre" y pide el CTA de la clasificación o, si no viene, el CTA de la marca que mejor encaje con la pieza. Si la marca no tiene ningún CTA, "cierre" es null.`
 
 export async function generarInstagram(

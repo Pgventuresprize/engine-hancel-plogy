@@ -39,15 +39,27 @@ export type CitaWeb = {
 }
 
 /**
+ * Lo que trajo una busqueda: el texto con sus citas, o por que no trajo nada.
+ *
+ * El motivo no es un detalle. Antes cualquier fallo devolvia null y el analisis
+ * seguia con el snippet sin decir nada: con la clave caducada, todas las
+ * noticias se analizaron sin material durante dias y solo se noto por los
+ * carruseles, que salian inventando para llenar las laminas.
+ */
+export type Busqueda =
+  | { ok: true; texto: string; citas: CitaWeb[] }
+  | { ok: false; motivo: string }
+
+/**
  * Busca en la web y devuelve el texto sintetizado con sus citas.
  *
  * El texto trae marcas [1], [2]... que apuntan a `citas` en el mismo orden.
  * Antes solo se guardaba el texto y las fuentes se perdian; la redaccion las
  * necesita para atribuir cada dato.
  */
-export async function investigarEnLaWeb(consulta: string): Promise<{ texto: string; citas: CitaWeb[] } | null> {
+export async function investigarEnLaWeb(consulta: string): Promise<Busqueda> {
   const clave = await claveComposio()
-  if (!clave) return null
+  if (!clave) return { ok: false, motivo: "no hay clave de Composio configurada" }
 
   try {
     const res = await fetch(EJECUTAR, {
@@ -56,7 +68,7 @@ export async function investigarEnLaWeb(consulta: string): Promise<{ texto: stri
       body: JSON.stringify({ entity_id: "default", arguments: { query: consulta } }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     })
-    if (!res.ok) return null
+    if (!res.ok) return { ok: false, motivo: motivoHttp(res.status) }
 
     const json = (await res.json()) as {
       data?: {
@@ -65,7 +77,7 @@ export async function investigarEnLaWeb(consulta: string): Promise<{ texto: stri
       }
     }
     const texto = json.data?.answer?.trim()
-    if (!texto) return null
+    if (!texto) return { ok: false, motivo: "la búsqueda no trajo resultados" }
     const citas = (json.data?.citations ?? [])
       .map((c) => ({
         url: (c.url || c.id || "").trim(),
@@ -75,10 +87,19 @@ export async function investigarEnLaWeb(consulta: string): Promise<{ texto: stri
         imagen: c.image?.trim() || null,
       }))
       .filter((c) => /^https?:\/\//.test(c.url))
-    return { texto, citas }
-  } catch {
-    return null
+    return { ok: true, texto, citas }
+  } catch (e) {
+    const tiempo = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")
+    return { ok: false, motivo: tiempo ? `Composio no respondió en ${TIMEOUT_MS / 1000} s` : "no se pudo llegar a Composio" }
   }
+}
+
+/** Lo que significa cada codigo, dicho para quien tiene que arreglarlo. */
+function motivoHttp(status: number): string {
+  if (status === 401 || status === 403) return `Composio rechazó la clave (HTTP ${status}), hay que poner una clave de proyecto válida`
+  if (status === 402) return "Composio no tiene saldo (HTTP 402)"
+  if (status === 429) return "Composio limitó las peticiones (HTTP 429)"
+  return `Composio falló (HTTP ${status})`
 }
 
 /**

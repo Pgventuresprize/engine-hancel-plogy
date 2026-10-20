@@ -325,7 +325,7 @@ export async function investigarNoticia(
 
   if (!fuentes.some((f) => f.origen === "busqueda")) {
     const busqueda = await investigarEnLaWeb(`${news.title} ${news.tema}`.trim())
-    if (busqueda) {
+    if (busqueda.ok) {
       await guardarBusqueda(accountId, news.id, busqueda)
       fuentes = await fuentesDe(news.id)
     }

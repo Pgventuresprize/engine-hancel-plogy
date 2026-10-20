@@ -2,9 +2,10 @@ import { llamarClaude, parsearJSONDeClaude } from "../claude/messages"
 import { modelosClaude } from "../claude/modelos"
 import { supabaseAdmin } from "../supabase-admin"
 import { getSettings } from "../schedule"
-import { guardarBusqueda, guardarFuenteNoticia } from "../redaccion/fuentes"
+import { guardarBusqueda, guardarFuenteNoticia, leerPagina } from "../redaccion/fuentes"
 import { DIAS_DE_FRESCURA, diasDeAntiguedad, esVieja } from "./frescura"
-import { investigarEnLaWeb } from "./composio"
+import { investigarEnLaWeb, type Busqueda } from "./composio"
+import { estadoDelMaterial, nombreMaterial } from "./material"
 
 /**
  * El analisis: puntua la noticia con el material que le traen.
@@ -22,10 +23,10 @@ import { investigarEnLaWeb } from "./composio"
  * fijo: cada cuenta se puntua con su vara.
  */
 
-export const ANALISIS_OFICIO = `Eres un analista editorial. Te dan una noticia y el material que otro sistema ya recolecto de la web sobre ese hecho. Tu trabajo es consolidar y calificar. NO investigas ni buscas: trabajas solo con lo que se te entrega.
+export const ANALISIS_OFICIO = `Eres un analista editorial. Te dan una noticia, el texto de su propia pagina y el material que otro sistema ya recolecto de la web sobre ese hecho. Tu trabajo es consolidar y calificar. NO investigas ni buscas: trabajas solo con lo que se te entrega.
 
 PASO 1: CONSOLIDAR
-Con el titular, el snippet y el material recolectado, escribe un texto limpio y estructurado con la informacion factual del hecho: solo hechos con su contexto, sin opiniones ni relleno, sin referencias tipo [1]. Maximo 8000 caracteres. Si el material es pobre, consolida lo que haya y no inventes nada.
+Con el titular, el snippet, el articulo y el material recolectado, escribe un texto limpio y estructurado con la informacion factual del hecho: solo hechos con su contexto, sin opiniones ni relleno, sin referencias tipo [1]. Conserva todas las cifras, nombres, fechas y declaraciones que traiga el material: este texto es lo unico con lo que escribiran los demas agentes, y lo que no pongas aqui no lo van a tener. Maximo 8000 caracteres. Si el material es pobre, consolida lo que haya y no inventes nada.
 
 PASO 2: CALIFICAR (1-10, promedio ponderado)
 1. MATERIALIDAD (30%): el hecho cambia algo concreto (capacidad, posicion competitiva, regulacion, capital, personas). Alto si altera a 2+ actores.
@@ -67,12 +68,10 @@ Esta cuenta no cubre politica. Si el eje de la noticia es politico, lleva "polit
 NO es politica (se califica normal): una medida concreta ya adoptada o con fecha y monto (ley, decreto, resolucion, arancel, subsidio, linea de credito, precio, programa), contada por lo que cambia para el sector de la marca; cifras oficiales; informes de gremios o de empresas.
 LA PRUEBA: si lo noticioso es una decision que ya cambia algo para el sector, es sector. Si lo noticioso es la disputa, la presion o el posicionamiento, es politica.
 
-FILTRO DURO: si NO es un hecho verificable (opinion, prediccion sin gatillo, listicle generico), relevance_score = 1-2 sin importar lo demas.
-
-content_fetch_status: "success" si el material recolectado era sustancioso, "partial" si apenas habia mas que el snippet, "failed" si no llego nada.`
+FILTRO DURO: si NO es un hecho verificable (opinion, prediccion sin gatillo, listicle generico), relevance_score = 1-2 sin importar lo demas.`
 
 export const ANALISIS_CONTRATO = `RESPONDE SOLO con este JSON, sin texto alrededor, sin saltos de linea y sin comillas dobles dentro de ninguna cadena (usa comillas simples y separa ideas con espacios dentro de full_content):
-{"vetada":<true|false>,"motivo_veto":"<una frase, solo si vetada es true>","fecha_hecho":"<YYYY-MM-DD o null si no se puede saber>","vieja":<true|false>,"politica":<true|false>,"full_content":"<el texto consolidado, en un solo bloque sin saltos de linea>","content_fetch_status":"success|partial|failed","relevance_score":<entero 1-10>,"keywords_matched":["<4 a 6 keywords en minuscula>"],"analysis_notes":"<2-3 frases: primero el score global y por que; luego el angulo editorial mas prometedor si lo hay>"}`
+{"vetada":<true|false>,"motivo_veto":"<una frase, solo si vetada es true>","fecha_hecho":"<YYYY-MM-DD o null si no se puede saber>","vieja":<true|false>,"politica":<true|false>,"full_content":"<el texto consolidado, en un solo bloque sin saltos de linea>","relevance_score":<entero 1-10>,"keywords_matched":["<4 a 6 keywords en minuscula>"],"analysis_notes":"<2-3 frases: primero el score global y por que; luego el angulo editorial mas prometedor si lo hay>"}`
 
 type ResultadoAnalisis = {
   /**
@@ -89,7 +88,6 @@ type ResultadoAnalisis = {
   vieja: boolean
   politica: boolean
   full_content: string | null
-  content_fetch_status: string
   relevance_score: number
   keywords_matched: string[]
   analysis_notes: string
@@ -108,9 +106,6 @@ function normaliza(bruto: unknown): ResultadoAnalisis {
       typeof o.full_content === "string" && o.full_content.trim()
         ? o.full_content.trim().slice(0, 8000)
         : null,
-    content_fetch_status: ["success", "partial", "failed"].includes(String(o.content_fetch_status))
-      ? String(o.content_fetch_status)
-      : "partial",
     relevance_score: Number.isFinite(score) ? Math.min(10, Math.max(1, Math.round(score))) : 1,
     keywords_matched: Array.isArray(o.keywords_matched)
       ? o.keywords_matched.filter((k): k is string => typeof k === "string").slice(0, 8)
@@ -132,8 +127,35 @@ type Pendiente = {
   image_url: string | null
 }
 
-/** Tope de material web por noticia: mas que esto es pagar contexto de mas. */
+/**
+ * Tope de material por noticia: mas que esto es pagar contexto de mas. Se
+ * reparte entre el articulo y la busqueda; si solo hay uno, se lo lleva entero.
+ */
 const MAX_MATERIAL = 12_000
+
+/** El material, en el orden en que lo lee el agente: primero el propio articulo. */
+function bloqueMaterial(articulo: string | null, web: string | null): string {
+  const cupo = articulo && web ? MAX_MATERIAL / 2 : MAX_MATERIAL
+  return `ARTICULO DE LA NOTICIA (el texto de su propia pagina)
+${articulo ? articulo.slice(0, cupo) : "(no se pudo leer la pagina de la noticia)"}
+
+MATERIAL RECOLECTADO DE LA WEB
+${web ? web.slice(0, cupo) : "(no se pudo recolectar material de la web)"}${articulo || web ? "" : "\n\nNo hay mas que el titular y el snippet: consolida solo eso."}`
+}
+
+/**
+ * De donde salio el material, para la ficha. Es lo que dice por que una
+ * noticia tiene poco: sin esto, una clave caducada pasaba por "noticia pobre".
+ */
+function notaDeMaterial(articulo: string | null, busqueda: Busqueda, consolidado: string | null): string {
+  const n = (t: string) => t.length.toLocaleString("es-CO")
+  const estado = estadoDelMaterial(consolidado)
+  const partes = [
+    articulo ? `artículo leído (${n(articulo)} car.)` : "no se pudo leer la página de la noticia",
+    busqueda.ok ? `búsqueda web con ${busqueda.citas.length} fuentes` : `sin búsqueda web: ${busqueda.motivo}`,
+  ]
+  return `${nombreMaterial(estado)} (${consolidado ? n(consolidado) : 0} car.). ${partes.join("; ")}.`
+}
 
 /**
  * Analiza hasta `limite` noticias pendientes de una cuenta.
@@ -199,11 +221,16 @@ export async function analizarPendientes(
             return
           }
 
-          // Composio sale a la web; el modelo no. Si no trae nada se analiza con
-          // el snippet: una noticia sin material no es un fallo, es una noticia
-          // con menos contexto, y el propio agente la marca 'failed'.
-          const busqueda = await investigarEnLaWeb(`${noticia.title} ${noticia.tema}`.trim())
-          const material = busqueda?.texto ?? null
+          // Composio sale a la web y, a la vez, se lee la pagina de la propia
+          // noticia; el modelo no sale a ningun sitio. El articulo es la red de
+          // la busqueda: si Composio cae, el agente tiene al menos lo que la
+          // noticia dice. Sin ninguno de los dos se analiza con el snippet: no
+          // es un fallo, es una noticia con poco material, y queda marcada.
+          const [busqueda, pagina] = await Promise.all([
+            investigarEnLaWeb(`${noticia.title} ${noticia.tema}`.trim()),
+            leerPagina(noticia.link),
+          ])
+          const articulo = pagina?.texto ?? null
 
           const prompt = `NOTICIA A CONSOLIDAR Y CALIFICAR
 - titulo: ${noticia.title}
@@ -214,8 +241,7 @@ export async function analizarPendientes(
 - fecha que reporta el buscador: ${noticia.date_serper ?? "(sin fecha)"} (traida el ${new Date(noticia.created_at).toISOString().slice(0, 10)})
 - hoy es: ${hoy}
 
-MATERIAL RECOLECTADO DE LA WEB
-${material ? material.slice(0, MAX_MATERIAL) : "(no se pudo recolectar material; trabaja con el titular y el snippet)"}`
+${bloqueMaterial(articulo, busqueda.ok ? busqueda.texto : null)}`
 
           const r = await llamarClaude({
             accountId,
@@ -244,12 +270,14 @@ ${material ? material.slice(0, MAX_MATERIAL) : "(no se pudo recolectar material;
             .update({
               full_content: res.full_content,
               content_fetched_at: new Date().toISOString(),
-              content_fetch_status: res.content_fetch_status,
+              // Por el largo de lo consolidado, no por lo que opine el agente:
+              // es lo que decide si la noticia puede pasar sola a contenido.
+              content_fetch_status: estadoDelMaterial(res.full_content),
               relevance_score: res.relevance_score,
               keywords_matched: res.keywords_matched,
               analysis_notes: res.vetada
                 ? `Vetada: ${res.motivoVeto || "tema que esta cuenta no cubre"}`
-                : `${motivo}${res.analysis_notes}`,
+                : `${motivo}${res.analysis_notes} ${notaDeMaterial(articulo, busqueda, res.full_content)}`,
               // Vetada no es "analizada con mala nota": es un tema que no se
               // cubre. Con su propio estado no entra en la seleccion, no se
               // puede arrastrar y queda a la vista para poder revisarlo.
@@ -266,7 +294,7 @@ ${material ? material.slice(0, MAX_MATERIAL) : "(no se pudo recolectar material;
           // falle no invalida el analisis.
           try {
             await guardarFuenteNoticia(accountId, noticia)
-            if (busqueda) await guardarBusqueda(accountId, noticia.id, busqueda)
+            if (busqueda.ok) await guardarBusqueda(accountId, noticia.id, busqueda)
           } catch {
             // La redaccion vuelve a buscar si no encuentra fuentes guardadas.
           }

@@ -720,6 +720,9 @@ export async function runContentTick(
         .eq("account_id", cuenta.id)
         .eq("status", "analyzed")
         .gte("relevance_score", config.score_threshold)
+        // Con poco material no avanza sola: los agentes que escriben llenarian
+        // las laminas inventando. A mano se puede, con aviso (ver material.ts).
+        .eq("content_fetch_status", "success")
         // El umbral solo rige para lo que entro despues de fijarlo: cambiarlo no
         // resucita noticias viejas que en su dia no llegaron.
         .gte("created_at", config.score_threshold_updated_at)
