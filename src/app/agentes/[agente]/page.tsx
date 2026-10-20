@@ -13,6 +13,7 @@ import { PromptFinal } from "@/components/agentes/prompt-final"
 import { PROMPT_DE_FABRICA, promptDe, tienePrompt, type AgenteConPrompt } from "@/engine/agents/prompts"
 import { agenteReal, ajustesDe, type Agente } from "@/engine/agents/settings"
 import { proximasPasadas } from "@/engine/agents/turno"
+import { skillsDe, skillsDeAgente } from "@/engine/marca/skills"
 import { REDES, NOMBRE_DE_RED } from "@/engine/content/types"
 import { getSettings } from "@/engine/schedule"
 import { idDeCuentaActual } from "@/lib/accounts"
@@ -69,6 +70,7 @@ export default async function AgentePage({
     : null
   const modelo = conPrompt ? await modeloDe(accountId, real as AgenteConPrompt) : null
   const promptFinal = conPrompt ? await promptDe(accountId, real as AgenteConPrompt) : null
+  const susSkills = conPrompt ? skillsDeAgente(await skillsDe(accountId), real as AgenteConPrompt) : []
 
   return (
     <DashboardShell title={ficha.nombre}>
@@ -106,6 +108,34 @@ export default async function AgentePage({
                 : undefined
             }
           />
+        ) : null}
+
+        {conPrompt ? (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Skills de marca</CardTitle>
+              <p className="text-muted-foreground mt-1 text-sm">
+                Lo que tu marca le enseña a este agente además de su oficio. Entran en su prompt en este orden.
+              </p>
+            </CardHeader>
+            <CardContent className="flex flex-wrap items-center gap-1.5">
+              {susSkills.length === 0 ? (
+                <span className="text-muted-foreground text-sm">Ninguna.</span>
+              ) : (
+                susSkills.map((s) => (
+                  <Badge key={s.id} variant="secondary" className="font-normal">
+                    {s.nombre}
+                  </Badge>
+                ))
+              )}
+              <Link
+                href="/configuracion/marca?tab=skills"
+                className="text-muted-foreground hover:text-foreground ml-auto text-xs underline-offset-2 hover:underline"
+              >
+                Editar en Marca
+              </Link>
+            </CardContent>
+          </Card>
         ) : null}
 
         {promptFinal ? <PromptFinal prompt={promptFinal} /> : null}

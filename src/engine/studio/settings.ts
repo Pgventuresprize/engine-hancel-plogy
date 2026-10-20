@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "../supabase-admin"
 import { CONTENIDO_CONTRATO, CONTENIDO_OFICIO } from "./prompts"
 import { IDEAS_CONTRATO, IDEAS_OFICIO } from "../ideas/generar"
-import { armarPrompt, bloqueMarca, datosParaPrompt } from "../marca/prompt"
+import { datosParaPrompt, promptArmado } from "../marca/prompt"
 
 /**
  * La configuracion de las dos agentes del pipeline nuevo.
@@ -36,16 +36,8 @@ export async function studioConfig(accountId: string): Promise<StudioConfig> {
   return {
     modelIdeas: s.model_ideas?.trim() || "claude-sonnet-5",
     modelContenido: s.model_contenido?.trim() || "claude-sonnet-5",
-    promptIdeas: armarPrompt({
-      oficio: a.ideas_prompt?.trim() || IDEAS_OFICIO,
-      marca: bloqueMarca(marca, "ideas"),
-      contrato: IDEAS_CONTRATO,
-    }),
-    promptContenido: armarPrompt({
-      oficio: a.content_prompt?.trim() || CONTENIDO_OFICIO,
-      marca: bloqueMarca(marca, "contenido"),
-      contrato: CONTENIDO_CONTRATO,
-    }),
+    promptIdeas: promptArmado(marca, "ideas", a.ideas_prompt?.trim() || IDEAS_OFICIO, IDEAS_CONTRATO),
+    promptContenido: promptArmado(marca, "contenido", a.content_prompt?.trim() || CONTENIDO_OFICIO, CONTENIDO_CONTRATO),
   }
 }
 

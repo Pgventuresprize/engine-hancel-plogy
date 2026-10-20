@@ -5,9 +5,9 @@ import { NOMBRE_IDIOMA, nombrePais, type PerfilMarca } from "./perfil-modelo"
  * El bloque de marca que se mete en el prompt de cada agente.
  *
  * El prompt de un agente se arma por capas: el oficio (como se hace el
- * trabajo, igual para todas las marcas), la marca (esto), y al final el
- * contrato (el formato exacto de la respuesta, que nada pisa). Las skills y
- * los ejemplos de la marca se meteran entre la marca y el contrato.
+ * trabajo, igual para todas las marcas), la marca (esto), las skills de la
+ * marca (skills-modelo.ts) y al final el contrato (el formato exacto de la
+ * respuesta, que nada pisa). Los ejemplos se meteran antes del contrato.
  *
  * Cada agente lee solo lo que le sirve: al de analisis no le hace falta la voz
  * ni el CTA, y al redactor de noticias no le conviene la voz de marca, que es
@@ -171,12 +171,13 @@ Lo escribió la propia marca. Cuando choque con un ejemplo o una costumbre de la
 }
 
 /**
- * Las capas en su orden. El contrato va siempre al final: es lo que el motor
- * sabe leer, y si una regla de marca o un prompt editado lo contradijera, la
- * pieza no se podria guardar.
+ * Las capas en su orden: oficio, marca, skills de la marca y contrato. El
+ * contrato va siempre al final: es lo que el motor sabe leer, y si una regla de
+ * marca, una skill o un prompt editado lo contradijera, la pieza no se podria
+ * guardar.
  */
-export function armarPrompt(capas: { oficio: string; marca: string; contrato: string }): string {
-  return [capas.oficio, capas.marca, capas.contrato]
+export function armarPrompt(capas: { oficio: string; marca: string; skills?: string; contrato: string }): string {
+  return [capas.oficio, capas.marca, capas.skills ?? "", capas.contrato]
     .map((t) => t.trim())
     .filter(Boolean)
     .join("\n\n")

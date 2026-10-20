@@ -9,5 +9,6 @@ export const PESTANAS = [
   { valor: "editorial", etiqueta: "Editorial" },
   { valor: "cta", etiqueta: "CTA" },
   { valor: "visual", etiqueta: "Visual" },
+  { valor: "skills", etiqueta: "Skills" },
 ] as const
 export type Pestana = (typeof PESTANAS)[number]["valor"]

@@ -8,7 +8,7 @@ import type { Completitud, Pendiente } from "@/lib/marca-data"
 import { PESTANAS, type Pestana } from "./pestanas"
 
 /**
- * Las cinco pestanas de Marca, con el indicador de lo que falta encima.
+ * Las pestanas de Marca, con el indicador de lo que falta encima.
  *
  * La pestana abierta va en la URL (?tab=voz) para que recargar, o volver de
  * otra pantalla, no devuelva a la primera.

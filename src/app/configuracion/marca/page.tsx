@@ -4,6 +4,7 @@ import { EditorLista } from "@/components/marca/editor-lista"
 import { PestanaIdentidad } from "@/components/marca/identidad"
 import { MarcaTabs } from "@/components/marca/marca-tabs"
 import { PESTANAS, type Pestana } from "@/components/marca/pestanas"
+import { PestanaSkills } from "@/components/marca/skills"
 import { PestanaVisual } from "@/components/marca/visual"
 import { PestanaVoz } from "@/components/marca/voz"
 import { pexelsConfigurado } from "@/engine/render/pexels"
@@ -24,7 +25,7 @@ export const metadata = { title: "Marca · Engine Hancel" }
 export default async function MarcaPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const [{ tab }, datos] = await Promise.all([searchParams, datosDeMarca()])
   const inicial: Pestana = PESTANAS.some((p) => p.valor === tab) ? (tab as Pestana) : "identidad"
-  const { perfil, editorial, variables, estilo, paleta, completitud } = datos
+  const { perfil, editorial, variables, estilo, paleta, skills, completitud } = datos
 
   return (
     <DashboardShell title="Marca">
@@ -67,6 +68,7 @@ export default async function MarcaPage({ searchParams }: { searchParams: Promis
             ),
             cta: <EditorCtas ctas={editorial.ctas} />,
             visual: <PestanaVisual estilo={estilo} paleta={paleta} pexelsConfigurado={pexelsConfigurado()} />,
+            skills: <PestanaSkills skills={skills} />,
           }}
         />
       </div>

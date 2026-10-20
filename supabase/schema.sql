@@ -1425,3 +1425,30 @@ alter table public.content_ctas
 -- Pilar, audiencia, vertical, objetivo y CTA de cada angulo, como foto de ids
 -- y nombres. Ver migraciones/2026-10-20-clasificacion-angulo.sql.
 alter table public.content_angles add column if not exists clasificacion jsonb;
+
+-- ============================================================ skills de marca
+-- Instrucciones propias de cada marca para sus agentes. Ver
+-- migraciones/2026-10-20-skills-marca.sql.
+create table if not exists public.brand_skills (
+  id          uuid primary key default gen_random_uuid(),
+  account_id  uuid not null references public.accounts (id) on delete cascade,
+  nombre      text not null,
+  descripcion text not null default '',
+  texto       text not null default '',
+  original    text not null default '',
+  agentes     text[] not null default '{}',
+  activo      boolean not null default true,
+  position    integer not null default 0,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+
+  constraint brand_skills_nombre_len      check (char_length(nombre) between 1 and 80),
+  constraint brand_skills_descripcion_len check (char_length(descripcion) <= 300),
+  constraint brand_skills_texto_len       check (char_length(texto) <= 8000),
+  constraint brand_skills_original_len    check (char_length(original) <= 200000),
+  constraint brand_skills_agentes_check   check (
+    agentes <@ array['analisis', 'angulo', 'instagram', 'linkedin', 'redaccion', 'ideas', 'contenido', 'guion']::text[]
+  )
+);
+create index if not exists brand_skills_account_idx on public.brand_skills (account_id, position);
+alter table public.brand_skills enable row level security;

@@ -1,0 +1,24 @@
+import { armarPrompt, bloqueMarca, type AgenteConMarca, type DatosDeMarca } from "./bloque"
+import { bloqueSkills, type Skill } from "./skills-modelo"
+
+/**
+ * Todo lo de la marca que entra en un prompt, y el prompt armado con ello.
+ * Puro: lo usan el motor y la pantalla de "Ver prompt final" con los mismos
+ * datos.
+ */
+
+export type DatosParaPrompt = DatosDeMarca & { skills: Skill[] }
+
+export function promptArmado(
+  datos: DatosParaPrompt,
+  agente: AgenteConMarca,
+  oficio: string,
+  contrato: string
+): string {
+  return armarPrompt({
+    oficio,
+    marca: bloqueMarca(datos, agente),
+    skills: bloqueSkills(datos.skills, agente),
+    contrato,
+  })
+}
