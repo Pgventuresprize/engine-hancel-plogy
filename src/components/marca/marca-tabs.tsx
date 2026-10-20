@@ -5,14 +5,7 @@ import * as React from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { Completitud, Pendiente } from "@/lib/marca-data"
 
-export const PESTANAS = [
-  { valor: "identidad", etiqueta: "Identidad" },
-  { valor: "voz", etiqueta: "Voz" },
-  { valor: "editorial", etiqueta: "Editorial" },
-  { valor: "cta", etiqueta: "CTA" },
-  { valor: "visual", etiqueta: "Visual" },
-] as const
-export type Pestana = (typeof PESTANAS)[number]["valor"]
+import { PESTANAS, type Pestana } from "./pestanas"
 
 /**
  * Las cinco pestanas de Marca, con el indicador de lo que falta encima.
