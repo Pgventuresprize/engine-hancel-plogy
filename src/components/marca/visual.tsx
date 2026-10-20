@@ -223,7 +223,9 @@ export function PestanaVisual({
         <div>
           <Label>Lámina de cierre</Label>
           <p className="text-muted-foreground mt-1 text-xs">
-            Cierra todos los carruseles. El usuario de la marca sale de la pestaña Identidad.
+            Cierra todos los carruseles. Su texto lo escribe el agente con el CTA de cada pieza; el de aquí es el
+            respaldo, para cuando no hay CTA. El estilo Perfil solo se usa si el CTA pide seguir. El usuario de la
+            marca sale de la pestaña Identidad.
           </p>
         </div>
         <Opciones

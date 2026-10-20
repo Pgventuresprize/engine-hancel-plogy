@@ -351,10 +351,10 @@ export type Variante =
 /**
  * La lamina de cierre.
  *
- * Cierra todos los carruseles, siempre. Va aparte del guion que escribe el
- * agente a proposito: es una constante de la marca, no contenido de la
- * noticia, y no tiene sentido pedirsela al modelo cada vez ni dejar que se le
- * olvide. Lo unico que se elige es que dice.
+ * Cierra todos los carruseles, siempre. Su texto lo escribe el agente con el
+ * CTA que se eligio para la pieza (ver `estiloConCierre` en carousel.ts); el
+ * que se guarda aqui es el de respaldo, para un guion que no lo trae o una
+ * marca sin CTA. El estilo si es de la marca.
  */
 export type EstiloCierre = "marca" | "perfil"
 

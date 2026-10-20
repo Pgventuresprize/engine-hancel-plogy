@@ -191,6 +191,14 @@ export function arreglarOrtografia(texto: string): string {
   )
 }
 
+/**
+ * El cierre que escribio el agente con el CTA de la pieza.
+ *
+ * `tipo` es el del CTA (seguir, comentar...) y lo pone el motor, no el modelo.
+ * Sin el no se sabe que pide, y el cierre se dibuja como siempre.
+ */
+export type CierreDelGuion = { titulo: string; texto: string; tipo: string | null }
+
 export function parseInstagramResponse(respuesta: unknown): {
   caption: string
   hashtags: string[]
@@ -199,6 +207,8 @@ export function parseInstagramResponse(respuesta: unknown): {
   fotos: string[]
   /** La cosa concreta que va recortada en la portada. Vacio = sin elemento. */
   elemento: string
+  /** Null = no lo escribio (un guion de antes, o una marca sin CTA): va el de la marca. */
+  cierre: CierreDelGuion | null
 } {
   const raiz = (respuesta ?? {}) as Record<string, unknown>
 
@@ -244,7 +254,56 @@ export function parseInstagramResponse(respuesta: unknown): {
       ? raiz.elemento.trim()
       : ""
 
-  return { caption, hashtags, slides, fotos, elemento }
+  return { caption, hashtags, slides, fotos, elemento, cierre: cierreDelGuion(raiz.cierre) }
+}
+
+/**
+ * Al agente se le piden 40 y 140 caracteres. Los topes de aqui son mas
+ * holgados a proposito: son una red contra un texto desbocado, no la regla, y
+ * cortar la invitacion a media frase seria peor que dejarla un poco larga.
+ */
+const TOPE_CIERRE = { titulo: 70, texto: 200 }
+
+function cierreDelGuion(valor: unknown): CierreDelGuion | null {
+  if (!valor || typeof valor !== "object" || Array.isArray(valor)) return null
+  const c = valor as Record<string, unknown>
+  const limpio = (v: unknown, tope: number) =>
+    typeof v === "string" ? hastaPalabra(arreglarOrtografia(v.trim()), tope) : ""
+
+  const titulo = limpio(c.title, TOPE_CIERRE.titulo)
+  if (!titulo) return null
+  return {
+    titulo,
+    texto: limpio(c.body, TOPE_CIERRE.texto),
+    tipo: typeof c.tipo === "string" && c.tipo ? c.tipo : null,
+  }
+}
+
+/** Corta en la ultima palabra entera que cabe. */
+function hastaPalabra(texto: string, tope: number): string {
+  if (texto.length <= tope) return texto
+  const cortado = texto.slice(0, tope)
+  const espacio = cortado.lastIndexOf(" ")
+  return (espacio > tope * 0.5 ? cortado.slice(0, espacio) : cortado).replace(/[\s,;:]+$/, "")
+}
+
+/**
+ * El estilo de esta pieza: el de la marca con el cierre que escribio el agente.
+ *
+ * El de la marca queda de respaldo. La captura con el boton de seguir solo se
+ * usa si el CTA pide seguir; con otro ("Comenta...") enseñaria el gesto
+ * equivocado, asi que la lamina sale en el estilo de marca.
+ */
+export function estiloConCierre(estilo: Estilo, cierre: CierreDelGuion | null): Estilo {
+  if (!cierre) return estilo
+  return {
+    ...estilo,
+    cierre: {
+      estilo: cierre.tipo && cierre.tipo !== "seguir" ? "marca" : estilo.cierre.estilo,
+      titulo: cierre.titulo,
+      texto: cierre.texto,
+    },
+  }
 }
 
 /**
@@ -263,19 +322,21 @@ export async function generarCarrusel(
   /** Dibuja ademas la portada suelta que usa Facebook. */
   conPortadaFacebook = false
 ): Promise<CarouselPayload> {
-  const { caption, hashtags, slides, fotos, elemento } = parseInstagramResponse(respuesta)
+  const { caption, hashtags, slides, fotos, elemento, cierre } = parseInstagramResponse(respuesta)
+  // De aqui en adelante el estilo ya lleva el cierre de esta pieza.
+  estilo = estiloConCierre(estilo, cierre)
 
   // Plogy tiene su propia estructura de laminas, no la clasica recoloreada.
   if (estilo.plantilla === "plogy") {
-    return generarCarruselPlogy(pieceKey, { caption, hashtags, slides, fotos, elemento }, news, estilo, nichos, conPortadaFacebook)
+    return generarCarruselPlogy(pieceKey, { caption, hashtags, slides, fotos, elemento, cierre }, news, estilo, nichos, conPortadaFacebook)
   }
 
-  // El cierre es una lamina de marca, no del guion: se añade aqui y no se le
-  // pide al agente. Va siempre, porque la llamada a seguir la cuenta es lo
-  // unico que convierte un carrusel en algo que deja audiencia detras, y
-  // dejarla al criterio de cada generacion era garantizar que faltara. Si el
-  // guion ya llega al tope de Instagram se recorta una lamina para hacerle
-  // sitio, en vez de pasarse.
+  // El cierre va siempre, porque pedir algo al final es lo unico que convierte
+  // un carrusel en algo que deja audiencia detras. Su texto lo escribe el
+  // agente con el CTA que se eligio para la pieza; si no lo escribio, va el de
+  // la marca. Va aparte de las laminas del guion para que no se pierda entre
+  // ellas. Si el guion ya llega al tope de Instagram se recorta una lamina para
+  // hacerle sitio, en vez de pasarse.
   if (slides.length >= MAX_SLIDES) slides.length = MAX_SLIDES - 1
 
   const variantes = repartirVariantes(slides, estilo.usarFotos && pexelsConfigurado())
@@ -561,13 +622,16 @@ async function generarCarruselPlogy(
     )
   }
 
-  // El cierre: la marca y una sola accion, en el fondo que le toque.
+  // El cierre: la marca y una sola accion, en el fondo que le toque. El boton
+  // de seguir solo si es lo que pide el CTA: debajo de un "Comenta..." manda
+  // al lector a otra parte.
   imagenes.push(
     await renderPlogy({
       composicion: "cierre",
       fondo: slides.length % 2 === 0 ? "tinta" : "papel",
       titular: estilo.cierre.titulo,
       cuerpo: estilo.cierre.texto,
+      botonSeguir: !guion.cierre?.tipo || guion.cierre.tipo === "seguir",
       n: total,
       total,
       tema,

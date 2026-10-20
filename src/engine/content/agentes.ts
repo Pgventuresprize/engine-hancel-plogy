@@ -242,6 +242,13 @@ ESTRUCTURA: EXACTAMENTE 5 LÁMINAS
 
 Son cinco y no más. Con cinco hay que elegir qué se cuenta, y eso se nota: nada de láminas que repiten lo dicho dos antes para llenar.
 
+EL CIERRE: LA LÁMINA DEL CTA
+Después de las cinco va una lámina más, el cierre, y la escribes tú aparte, en "cierre". Es la acción que pide el CTA de la clasificación, dicha con las palabras de esta pieza. No resume ni concluye: invita a hacer una cosa concreta.
+- "title": la acción, en una oración corta de hasta 40 caracteres. "Sigue a [la marca]", "Comenta [la palabra] y te lo mandamos".
+- "body": una frase de hasta 140 caracteres con la razón para hacerlo, en la voz de la marca y conectada con el tema del carrusel.
+- Si la descripción del CTA trae una frase de ejemplo, es una guía: úsala si encaja con la pieza y adáptala si no.
+- No prometas nada que el CTA no prometa.
+
 CONTENIDO
 Escribe en el idioma indicado en las variables. Texto cortísimo por lámina: título de hasta 65 caracteres y cuerpo de hasta 2 frases. Toma postura, no resumas neutral. Cambia adjetivos por datos concretos cuando estén en el input. Explica nombres poco conocidos la primera vez. No inventes datos. Sin hipérboles ni emojis salvo que el tono lo pida.
 
@@ -268,12 +275,13 @@ Devuelve "elemento": UNA búsqueda corta, EN ESPAÑOL, de la cosa concreta.
 
 Esta búsqueda va a un buscador de internet, no a un banco de fotos: pide la cosa exacta con su nombre propio.
 
-Antes de responder relee y confirma cuatro cosas: que no hay guiones largos, que ningún título pasa de 65 caracteres, que el dato más fuerte está en el hook y no en la lámina 2, y que el texto lleva todas sus tildes y sus eñes.`
+Antes de responder relee y confirma cinco cosas: que no hay guiones largos, que ningún título pasa de 65 caracteres, que el dato más fuerte está en el hook y no en la lámina 2, que el cierre pide el CTA y que el texto lleva todas sus tildes y sus eñes.`
 
 export const INSTAGRAM_CONTRATO = `RESPONDE SOLO con este JSON, sin texto alrededor:
-{"slide_count":5,"caption":"<2 a 4 frases con la tesis y el cta, oraciones completas>","hashtags":["<3 a 6 en minúscula sin espacios>"],"fotos":["<5 a 8 búsquedas en inglés>"],"elemento":"<una búsqueda en español de la cosa concreta>","slides":[{"n":1,"type":"photo_hook","hook":"<máx 95 caracteres>"},{"n":2,"type":"text","title":"<máx 65 caracteres>","body":"<máx 2 frases>"}]}
+{"slide_count":5,"caption":"<2 a 4 frases con la tesis y el cta, oraciones completas>","hashtags":["<3 a 6 en minúscula sin espacios>"],"fotos":["<5 a 8 búsquedas en inglés>"],"elemento":"<una búsqueda en español de la cosa concreta>","slides":[{"n":1,"type":"photo_hook","hook":"<máx 95 caracteres>"},{"n":2,"type":"text","title":"<máx 65 caracteres>","body":"<máx 2 frases>"}],"cierre":{"title":"<máx 40 caracteres: la acción del CTA>","body":"<máx 140 caracteres: la razón para hacerlo>"}}
 
-El array slides va en orden y tiene 5 elementos: el primero photo_hook, los otros cuatro text.`
+El array slides va en orden y tiene 5 elementos: el primero photo_hook, los otros cuatro text.
+El cierre no va en slides: va en "cierre" y pide el CTA de la clasificación o, si no viene, el CTA de la marca que mejor encaje con la pieza. Si la marca no tiene ningún CTA, "cierre" es null.`
 
 export async function generarInstagram(
   accountId: string,
@@ -297,5 +305,18 @@ ${bloqueVariables(input.variables)}`
 
   const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: 3600 })
   if (!r.ok) throw new Error(r.error)
-  return { respuesta: parsearJSONDeClaude(r.texto), uso: r.uso }
+  return { respuesta: conTipoDeCta(parsearJSONDeClaude(r.texto), input), uso: r.uso }
+}
+
+/**
+ * Le pone al cierre el tipo de su CTA. No lo escribe el modelo: sale de la
+ * clasificacion, y decide como se dibuja la lamina (la captura con el boton de
+ * seguir solo tiene sentido si lo que se pide es seguir).
+ */
+function conTipoDeCta(bruto: unknown, input: LinkedinJobInput): unknown {
+  const tipo = input.angle.clasificacion?.cta?.tipo
+  if (!tipo || !bruto || typeof bruto !== "object" || Array.isArray(bruto)) return bruto
+  const r = bruto as Record<string, unknown>
+  if (!r.cierre || typeof r.cierre !== "object" || Array.isArray(r.cierre)) return bruto
+  return { ...r, cierre: { ...(r.cierre as Record<string, unknown>), tipo } }
 }

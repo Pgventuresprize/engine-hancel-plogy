@@ -47,6 +47,8 @@ export type LaminaPlogy = {
   foto?: string | null
   /** El elemento de la noticia (un logo, un producto), para la portada. */
   inserto?: string | null
+  /** El boton "Seguir" del cierre. Por defecto si; no cuando el CTA pide otra cosa. */
+  botonSeguir?: boolean
   n: number
   total: number
   tema: string
@@ -377,20 +379,22 @@ function Lamina(l: LaminaPlogy) {
               <Texto texto={l.cuerpo} tamano={36} color={suave} alinear="center" />
             </div>
           ) : null}
-          <div
-            style={{
-              display: "flex",
-              padding: "18px 40px",
-              borderRadius: 999,
-              backgroundColor: PLOGY.naranja,
-              fontFamily: "Plogy Texto",
-              fontWeight: 700,
-              fontSize: 30,
-              color: PLOGY.tinta,
-            }}
-          >
-            Seguir {l.handle}
-          </div>
+          {l.botonSeguir !== false ? (
+            <div
+              style={{
+                display: "flex",
+                padding: "18px 40px",
+                borderRadius: 999,
+                backgroundColor: PLOGY.naranja,
+                fontFamily: "Plogy Texto",
+                fontWeight: 700,
+                fontSize: 30,
+                color: PLOGY.tinta,
+              }}
+            >
+              Seguir {l.handle}
+            </div>
+          ) : null}
         </div>
       </Marco>
     )
