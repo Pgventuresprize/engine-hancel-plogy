@@ -94,6 +94,46 @@ Al retomar uno, se detalla como bloque antes de construir.
   encarece.
 - **Cuándo:** si Composio da problemas.
 
+## Marca desde las referencias
+
+### Importar la marca entera desde una carpeta
+- **Qué es:** adjuntar la carpeta de referencias de una marca (para Plogy,
+  `PLOGY\plogy carruseles`: el kit de agentes, el brand kit, las fotos de
+  `assets refference`, las skills y los PDF) y que la app extraiga todo lo que
+  necesita para armarla: identidad, voz, editorial y CTA, colores, tipografías,
+  logos, imágenes, ejemplos, y cómo se diseña cada carrusel (layout, estética,
+  tipos de lámina). Como el importador de ejemplos: Claude propone, el código
+  comprueba contra los archivos y la persona revisa campo por campo antes de
+  guardar. Es el Paso 2 del roadmap, ampliado.
+- **Por qué esperó:** el importador de ejemplos (2026-10-20) resolvió primero lo
+  que mejora el texto. Lo visual necesita antes la biblioteca de imágenes
+  (Paso 3) y una plantilla que dibuje esos tipos de lámina (Paso 4).
+- **Cuándo:** después de los Pasos 3 y 4. Reutiliza el flujo del importador de
+  ejemplos (subir, extraer, comprobar, revisar, guardar).
+
+### Carruseles de Plogy como los del visor del kit
+- **Qué es:** que los carruseles de Plogy salgan visualmente como los de
+  `PLOGY_Carousel_Agent_Kit\piezas\visor.html`, tal cual: su estética, su
+  layout, sus láminas de dato, listas, tablas, citas y cierre de vidrio sobre
+  foto. El texto sigue con lo que ya tiene Hancel (revisor, receta, ejemplos,
+  CTA por pieza). Es la meta del Paso 4 (plantilla editorial).
+- **Por qué esperó:** se pidió anotarlo y cerrar antes el Paso 1.
+- **Cuándo:** Paso 4. Los ejemplos ya guardan el tipo de cada lámina y una línea
+  de lo visual, que es lo que la plantilla necesitará para elegir el diseño.
+
+### Guardar las imágenes de las láminas en los ejemplos
+- **Qué es:** subir las capturas o el `carrusel.html` de una pieza y que queden
+  junto a su ejemplo (la opción C del importador).
+- **Por qué esperó:** el agente que escribe no dibuja, así que hoy las imágenes
+  solo servirían para mirarlas en Marca › Ejemplos.
+- **Cuándo:** con el Paso 4, cuando un agente elija el diseño de cada lámina y
+  las use de referencia. Se cruza con la biblioteca de imágenes (Paso 3).
+
+### Importar ejemplos desde .html, PDF o Word
+- **Qué es:** que el importador de ejemplos lea también el `carrusel.html` del
+  kit, un PDF o un .docx, y no solo .md y .txt.
+- **Cuándo:** con "Importar la marca entera desde una carpeta", que los necesita.
+
 ## Producto y operación
 
 ### Programador automático (scheduler)

@@ -481,6 +481,33 @@ function reglaDeCopia(campos: Campo[], ctx: ContextoRevision): Hallazgo[] {
 
 const EMOJI = /(?![©®™])\p{Extended_Pictographic}/u
 
+const FORMULA_NO_ES = /\b(ya )?no (es|son|fue|era)\b[^.;:!?]{1,90}?,\s*(sino\s+)?(es|son|fue|era)\b/i
+/** La misma formula partida en dos frases: "No es miedo. Es criterio." */
+const FORMULA_NO_ES_EN_DOS = /\b(ya )?no (es|son|fue|era)\b[^.;:!?\n]{1,60}\.\s+(es|son|fue|era)\b/i
+
+/**
+ * Lo que el revisor castiga en un texto cualquiera, en una linea cada cosa.
+ * Para los ejemplos que se importan: el agente imita lo que ve, asi que un
+ * vicio en un ejemplo acaba en todas las piezas. Aqui cuenta tambien la
+ * formula partida en dos frases, que en un ejemplo pesa igual.
+ */
+export function viciosDeTexto(texto: string, frasesProhibidas: string[]): string[] {
+  const vicios: string[] = []
+  for (const regla of [FORMULA_NO_ES, FORMULA_NO_ES_EN_DOS]) {
+    const formula = regla.exec(texto)
+    if (formula) vicios.push(`Usa la fórmula «No es X, es Y»: ${cita(fragmento(texto, formula.index, 60))}`)
+  }
+  const guion = texto.search(/[—–]/)
+  if (guion >= 0) vicios.push(`Tiene un guion largo o medio: ${cita(fragmento(texto, guion))}`)
+  for (const frase of frasesProhibidas) {
+    if (contieneFrase(texto, frase)) vicios.push(`Usa «${frase}», que está en las frases prohibidas de la marca.`)
+  }
+  for (const frase of FRASES_DE_FABRICA) {
+    if (contieneFrase(texto, frase)) vicios.push(`Usa «${frase}», una muletilla que suena a texto genérico.`)
+  }
+  return vicios
+}
+
 function reglasDeTexto(campos: Campo[], ctx: ContextoRevision, emojisPermitidos: boolean): Hallazgo[] {
   const hallazgos: Hallazgo[] = []
   const cifras = cifrasDelMaterial(ctx.material)
@@ -523,7 +550,7 @@ function reglasDeTexto(campos: Campo[], ctx: ContextoRevision, emojisPermitidos:
 
     // "No es X, es Y", y sus variantes con "sino" o "ya no es". El oficio la
     // prohibe y es la muletilla que mas se colaba: tres de cinco carruseles.
-    const formula = /\b(ya )?no (es|son|fue|era)\b[^.;:!?]{1,90}?,\s*(sino\s+)?(es|son|fue|era)\b/i.exec(texto)
+    const formula = FORMULA_NO_ES.exec(texto)
     if (formula) {
       hallazgos.push({
         regla: "no_es_x_es_y",

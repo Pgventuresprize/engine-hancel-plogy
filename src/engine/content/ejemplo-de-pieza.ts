@@ -44,7 +44,9 @@ export async function guardarPiezaComoEjemplo(accountId: string, pieceId: string
     const cierre = ((respuesta ?? {}) as { cierre?: { title?: string; body?: string } | null }).cierre ?? null
     texto = textoDeCarrusel({
       laminas: slides.map((s) =>
-        s.type === "photo_hook" ? { hook: s.hook } : { title: s.title, body: s.body, lead: s.lead, items: s.items }
+        s.type === "photo_hook"
+          ? { hook: s.hook }
+          : { tipo: s.items?.length ? "lista" : null, title: s.title, body: s.body, lead: s.lead, items: s.items }
       ),
       cierre,
       caption,

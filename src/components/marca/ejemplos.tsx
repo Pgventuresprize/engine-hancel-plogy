@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { ChevronDownIcon, PlusIcon, Trash2Icon } from "lucide-react"
+import { ChevronDownIcon, FileUpIcon, PlusIcon, Trash2Icon } from "lucide-react"
 
 import { borrarEjemploMarca, guardarEjemploMarca } from "@/app/configuracion/marca/ejemplos-actions"
 import { Badge } from "@/components/ui/badge"
@@ -22,6 +22,7 @@ import {
 } from "@/engine/marca/ejemplos-modelo"
 
 import { CampoTexto, useFormulario } from "./campos"
+import { ImportarEjemplos } from "./importar-ejemplos"
 
 type Pilar = { id: string; name: string }
 
@@ -48,6 +49,7 @@ const SELECT =
 export function PestanaEjemplos({ ejemplos, pilares }: { ejemplos: Ejemplo[]; pilares: Pilar[] }) {
   const [abierto, setAbierto] = React.useState<string | null>(null)
   const [nuevo, setNuevo] = React.useState(false)
+  const [importando, setImportando] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [pending, startTransition] = React.useTransition()
   const nombrePilar = (id: string | null) => (id ? (pilares.find((p) => p.id === id)?.name ?? "(pilar borrado)") : null)
@@ -66,9 +68,10 @@ export function PestanaEjemplos({ ejemplos, pilares }: { ejemplos: Ejemplo[]; pi
 
       {error ? <p className="text-destructive text-sm">{error}</p> : null}
 
-      {ejemplos.length === 0 && !nuevo ? (
+      {ejemplos.length === 0 && !nuevo && !importando ? (
         <p className="text-muted-foreground rounded-lg border border-dashed p-4 text-sm">
-          Todavía no hay ejemplos. Puedes crearlos aquí o con «Guardar como ejemplo» en la ficha de una pieza que te guste.
+          Todavía no hay ejemplos. Puedes importarlos desde un archivo, crearlos aquí o usar «Guardar como ejemplo» en la
+          ficha de una pieza que te guste.
         </p>
       ) : null}
 
@@ -127,6 +130,8 @@ export function PestanaEjemplos({ ejemplos, pilares }: { ejemplos: Ejemplo[]; pi
         ))}
       </div>
 
+      {importando ? <ImportarEjemplos pilares={pilares} onCerrar={() => setImportando(false)} /> : null}
+
       {nuevo ? (
         <Card className="border-dashed">
           <CardContent className="py-3">
@@ -143,11 +148,17 @@ export function PestanaEjemplos({ ejemplos, pilares }: { ejemplos: Ejemplo[]; pi
           </CardContent>
         </Card>
       ) : (
-        <div>
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => setNuevo(true)} disabled={pending}>
             <PlusIcon />
             Nuevo ejemplo
           </Button>
+          {!importando ? (
+            <Button variant="outline" onClick={() => setImportando(true)} disabled={pending}>
+              <FileUpIcon />
+              Importar desde archivo
+            </Button>
+          ) : null}
         </div>
       )}
     </div>

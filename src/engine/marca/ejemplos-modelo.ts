@@ -147,13 +147,56 @@ export function bloqueEjemplos(entran: Ejemplo[]): string {
   if (entran.length === 0) return ""
   return [
     `# EJEMPLOS DE LA MARCA
-${entran.length === 1 ? "Una pieza" : `${entran.length} piezas`} de la marca que salieron bien. Sirven para el tono, la densidad y cómo avanza una pieza. No son plantilla: no copies sus frases, sus datos, su número de láminas ni su estructura. Los datos de esta pieza salen solo de su contenido.`,
+${entran.length === 1 ? "Una pieza" : `${entran.length} piezas`} de la marca que salieron bien. Sirven para el tono, la densidad y cómo avanza una pieza. No son plantilla: no copies sus frases, sus datos, su número de láminas ni su estructura. Los datos de esta pieza salen solo de su contenido.
+Entre paréntesis va el tipo de cada lámina (dato, lista, cita…): mira qué tipo usa la marca para cada cosa, no el orden. Una línea [Visual: …] describe un gráfico de la pieza original; tú escribes solo el texto.`,
     ...entran.map((e) => `## Ejemplo: ${e.nombre}\nPor qué es buena: ${e.por_que.trim()}\n\n${e.texto.trim()}`),
   ].join("\n\n")
 }
 
+/**
+ * Que hace cada lamina en la pieza. Va en el texto del ejemplo, entre
+ * parentesis, para que el agente vea como reparte la marca los tipos (un dato
+ * fuerte va solo en su lamina, los pasos van en lista) y no solo lo que dice.
+ */
+export const TIPOS_LAMINA = ["portada", "idea", "dato", "lista", "comparacion", "cita", "tabla", "ejemplo", "cierre"] as const
+export type TipoLamina = (typeof TIPOS_LAMINA)[number]
+
+export const NOMBRE_TIPO_LAMINA: Record<TipoLamina, string> = {
+  portada: "portada",
+  idea: "idea",
+  dato: "dato",
+  lista: "lista",
+  comparacion: "comparación",
+  cita: "cita",
+  tabla: "tabla",
+  ejemplo: "ejemplo",
+  cierre: "cierre",
+}
+
+/** Lo que es cada tipo, para quien clasifica las laminas. */
+export const QUE_ES_TIPO_LAMINA: Record<TipoLamina, string> = {
+  portada: "la primera lámina, el gancho",
+  idea: "una afirmación con su explicación; la lámina corriente",
+  dato: "la lámina la carga una cifra o un hecho concreto",
+  lista: "pasos, criterios o elementos en lista, numerada o no",
+  comparacion: "dos o más cosas lado a lado: antes y después, sí y no, A frente a B",
+  cita: "palabras textuales de alguien, con quién las dijo",
+  tabla: "datos en filas o columnas",
+  ejemplo: "un caso concreto, real o hipotético",
+  cierre: "la última lámina, la que pide la acción",
+}
+
 /** Una lamina tal como se guarda en un ejemplo. */
-export type LaminaDeEjemplo = { hook?: string | null; lead?: string | null; title?: string | null; body?: string | null; items?: string[] | null }
+export type LaminaDeEjemplo = {
+  tipo?: TipoLamina | null
+  hook?: string | null
+  lead?: string | null
+  title?: string | null
+  body?: string | null
+  items?: string[] | null
+  /** El grafico de la pieza original (una tabla, una maqueta), en una linea. */
+  visual?: string | null
+}
 
 /**
  * Un carrusel en texto, con el mismo formato para los que vienen del kit y los
@@ -166,10 +209,12 @@ export function textoDeCarrusel(c: {
   hashtags?: string[]
 }): string {
   const laminas = c.laminas.map((l, i) => {
-    const cabeza = `Lámina ${i + 1}${i === 0 ? " (portada)" : ""}:`
-    if (l.hook) return `${cabeza} ${l.hook.trim()}`
+    const tipo = l.tipo ?? (i === 0 ? "portada" : null)
+    const cabeza = `Lámina ${i + 1}${tipo ? ` (${NOMBRE_TIPO_LAMINA[tipo]})` : ""}:`
+    const visual = l.visual?.trim() ? `[Visual: ${l.visual.trim()}]` : ""
+    if (l.hook) return [`${cabeza} ${l.hook.trim()}`, visual].filter(Boolean).join("\n")
     const lista = l.items?.length ? l.items.map((x, j) => `${j + 1}. ${x.trim()}`).join("\n") : ""
-    return [`${cabeza}${l.lead ? ` [${l.lead.trim()}]` : ""} ${(l.title ?? "").trim()}`, l.body?.trim() ?? "", lista]
+    return [`${cabeza}${l.lead ? ` [${l.lead.trim()}]` : ""} ${(l.title ?? "").trim()}`, visual, l.body?.trim() ?? "", lista]
       .filter(Boolean)
       .join("\n")
   })

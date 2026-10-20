@@ -12,7 +12,8 @@ import { pexelsConfigurado } from "@/engine/render/pexels"
 import { datosDeMarca } from "@/lib/marca-data"
 
 export const dynamic = "force-dynamic"
-export const maxDuration = 60
+// Importar ejemplos desde un archivo llama a Claude una vez por pieza.
+export const maxDuration = 300
 
 export const metadata = { title: "Marca · Engine Hancel" }
 
