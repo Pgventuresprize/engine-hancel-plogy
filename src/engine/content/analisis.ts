@@ -128,19 +128,25 @@ type Pendiente = {
 }
 
 /**
- * Tope de material por noticia: mas que esto es pagar contexto de mas. Se
- * reparte entre el articulo y la busqueda; si solo hay uno, se lo lleva entero.
+ * Topes de material por noticia: mas que esto es pagar contexto de mas.
+ *
+ * El articulo entra entero (el lector ya lo deja en 9.000): es el hecho mismo.
+ * Repartir a medias con la busqueda le cortaba el final, y con el se iban
+ * datos que la busqueda no traia. La busqueda es contexto y se queda con su
+ * parte, o con todo el espacio si no hay articulo.
  */
-const MAX_MATERIAL = 12_000
+const MAX_ARTICULO = 9_000
+const MAX_WEB = 6_000
+const MAX_WEB_SIN_ARTICULO = 12_000
 
 /** El material, en el orden en que lo lee el agente: primero el propio articulo. */
 function bloqueMaterial(articulo: string | null, web: string | null): string {
-  const cupo = articulo && web ? MAX_MATERIAL / 2 : MAX_MATERIAL
+  const cupoWeb = articulo ? MAX_WEB : MAX_WEB_SIN_ARTICULO
   return `ARTICULO DE LA NOTICIA (el texto de su propia pagina)
-${articulo ? articulo.slice(0, cupo) : "(no se pudo leer la pagina de la noticia)"}
+${articulo ? articulo.slice(0, MAX_ARTICULO) : "(no se pudo leer la pagina de la noticia)"}
 
 MATERIAL RECOLECTADO DE LA WEB
-${web ? web.slice(0, cupo) : "(no se pudo recolectar material de la web)"}${articulo || web ? "" : "\n\nNo hay mas que el titular y el snippet: consolida solo eso."}`
+${web ? web.slice(0, cupoWeb) : "(no se pudo recolectar material de la web)"}${articulo || web ? "" : "\n\nNo hay mas que el titular y el snippet: consolida solo eso."}`
 }
 
 /**
