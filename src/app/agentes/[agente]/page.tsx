@@ -96,20 +96,8 @@ export default async function AgentePage({
           ) : null}
         </Card>
 
-        {conPrompt && promptActual ? (
-          <PromptEditor
-            clave={ficha.clave}
-            prompt={promptActual}
-            editado={Boolean(propios.prompt)}
-            soloLectura={espejo}
-            nota={
-              espejo
-                ? "Es el mismo guion que escribe Instagram: de ahi sale la pieza de Facebook sin gastar una segunda generacion."
-                : undefined
-            }
-          />
-        ) : null}
-
+        {/* Lo que recibe el agente va antes que el editor del oficio: el
+            editor es muy alto y dejaba esto fuera de la vista. */}
         {conPrompt ? (
           <Card>
             <CardHeader className="pb-3">
@@ -139,6 +127,20 @@ export default async function AgentePage({
         ) : null}
 
         {promptFinal ? <PromptFinal prompt={promptFinal} /> : null}
+
+        {conPrompt && promptActual ? (
+          <PromptEditor
+            clave={ficha.clave}
+            prompt={promptActual}
+            editado={Boolean(propios.prompt)}
+            soloLectura={espejo}
+            nota={
+              espejo
+                ? "Es el mismo guion que escribe Instagram: de ahi sale la pieza de Facebook sin gastar una segunda generacion."
+                : undefined
+            }
+          />
+        ) : null}
 
         {conPrompt && modelo ? (
           <ModeloEditor clave={ficha.clave} modelo={modelo} soloLectura={espejo} />
