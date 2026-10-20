@@ -19,7 +19,6 @@ import type { ContentAngle, ContentPiece, Red, Variables } from "@/engine/conten
 import { parseVariables, validateVariables } from "@/engine/content/variables"
 import { disconnectLinkedin } from "@/engine/publish/linkedin"
 import { publishPiece } from "@/engine/publish/publish-piece"
-import { FUENTES, PALETAS } from "@/engine/render/theme"
 import { supabaseAdmin } from "@/engine/supabase-admin"
 import type { RawNews } from "@/lib/types"
 
@@ -606,68 +605,8 @@ export async function runTickNow(): Promise<ActionResult> {
   }
 }
 
-// ------------------------------------------------------------- configuracion
-
-export async function updateCarouselStyle(form: FormData): Promise<ActionResult> {
-  const paleta = text(form, "paleta")
-  const fuente = text(form, "fuente")
-
-  if (!(paleta in PALETAS)) return { ok: false, error: "Esa paleta no existe." }
-  if (!(fuente in FUENTES)) return { ok: false, error: "Esa tipografia no existe." }
-
-  const marca = text(form, "marca").slice(0, 40)
-
-  try {
-    const accountId = await idDeCuentaActual()
-
-    // El formulario no trae todo el aspecto: los logos se suben aparte y la
-    // plantilla, o lo que se añada despues, vive en otras pantallas. Se parte de
-    // lo guardado y se pisa solo lo que trae el formulario; reemplazar el
-    // documento entero borraba en silencio todo lo demas.
-    const { data: previa } = await supabaseAdmin()
-      .from("generation_config")
-      .select("carousel")
-      .eq("account_id", accountId)
-      .maybeSingle()
-    const anterior = { ...((previa as { carousel?: Record<string, unknown> } | null)?.carousel ?? {}) }
-    // `logo` a secas es de cuando solo habia uno: arrastrarlo haria resucitar
-    // una version ya quitada.
-    delete anterior.logo
-
-    const { error } = await supabaseAdmin()
-      .from("generation_config")
-      .upsert(
-        {
-          account_id: accountId,
-          carousel: {
-            ...anterior,
-            paleta,
-            fuente,
-            marca,
-            logos: anterior.logos ?? {},
-            mostrarPaginacion: form.get("mostrarPaginacion") === "true",
-            usarFotos: form.get("usarFotos") === "true",
-            fotosLiterales: form.get("fotosLiterales") === "true",
-            cierre: {
-              estilo: form.get("cierreEstilo") === "perfil" ? "perfil" : "marca",
-              titulo: text(form, "cierreTitulo").slice(0, 40),
-              texto: text(form, "cierreTexto").slice(0, 140),
-            },
-          },
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "account_id" }
-      )
-
-    if (error) throw new Error(error.message)
-    refresh()
-    return { ok: true }
-  } catch (error) {
-    return fail(error, "No se pudo guardar el aspecto.")
-  }
-}
-
 // --------------------------------------------------------------- logo de marca
+// El resto del aspecto se guarda en app/configuracion/marca/actions.ts.
 
 /** Lo que admite el logo: mapas de bits, que es lo unico que Satori dibuja. */
 const TIPOS_DE_LOGO = ["image/png", "image/jpeg", "image/webp"]

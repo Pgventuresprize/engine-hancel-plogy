@@ -124,6 +124,122 @@ export type NombrePaleta = keyof typeof PALETAS
 export const PALETA_POR_DEFECTO = "negro"
 
 /**
+ * Los colores propios de una marca.
+ *
+ * Las paletas de arriba son puntos de partida; lo que la marca guarda son sus
+ * colores. Se piensan como un sistema y no como "fondo y texto": tinta y papel
+ * son los dos extremos, superficie el fondo alterno claro, acento el color de
+ * marca y acentoTexto su version legible sobre papel (un naranja puro sobre
+ * blanco no pasa contraste en texto corrido).
+ */
+export type ColoresMarca = {
+  tinta: string
+  papel: string
+  superficie: string
+  acento: string
+  acentoTexto: string
+  /** De 0 a 5 cortes. Vacio = la marca no usa degradado. */
+  degradado: string[]
+}
+
+/** Sobre que fondo se dibuja el carrusel clasico con los colores de la marca. */
+export type FondoBase = "claro" | "oscuro"
+
+const HEX = /^#[0-9a-f]{6}$/i
+
+export function esHex(valor: unknown): valor is string {
+  return typeof valor === "string" && HEX.test(valor.trim())
+}
+
+function rgb(hex: string): [number, number, number] {
+  const h = hex.replace("#", "")
+  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) as [number, number, number]
+}
+
+function rgba(hex: string, alfa: number): string {
+  const [r, g, b] = rgb(hex)
+  return `rgba(${r}, ${g}, ${b}, ${alfa})`
+}
+
+/** Mezcla `a` con `b`; `t` = 0 es `a`, 1 es `b`. */
+function mezclar(a: string, b: string, t: number): string {
+  const [ra, ga, ba] = rgb(a)
+  const [rb, gb, bb] = rgb(b)
+  const canal = (x: number, y: number) => Math.round(x + (y - x) * t).toString(16).padStart(2, "0")
+  return `#${canal(ra, rb)}${canal(ga, gb)}${canal(ba, bb)}`
+}
+
+/** Contraste WCAG entre dos colores: 1 (nada) a 21 (negro sobre blanco). */
+export function contraste(a: string, b: string): number {
+  const luz = (hex: string) => {
+    const [r, g, b2] = rgb(hex).map((c) => {
+      const s = c / 255
+      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+    })
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b2
+  }
+  const [x, y] = [luz(a), luz(b)].sort((m, n) => n - m)
+  return (x + 0.05) / (y + 0.05)
+}
+
+/** Lo guardado, si es valido; null si la marca no tiene colores propios. */
+export function parseColores(valor: unknown): ColoresMarca | null {
+  const raw = (valor ?? {}) as Record<string, unknown>
+  const claves = ["tinta", "papel", "superficie", "acento", "acentoTexto"] as const
+  if (!claves.every((c) => esHex(raw[c]))) return null
+  const degradado = Array.isArray(raw.degradado) ? raw.degradado.filter(esHex).slice(0, 5) : []
+  return {
+    tinta: String(raw.tinta).toUpperCase(),
+    papel: String(raw.papel).toUpperCase(),
+    superficie: String(raw.superficie).toUpperCase(),
+    acento: String(raw.acento).toUpperCase(),
+    acentoTexto: String(raw.acentoTexto).toUpperCase(),
+    degradado: degradado.map((c) => c.toUpperCase()),
+  }
+}
+
+/** Una paleta de las de arriba, leida como colores de marca: el punto de partida. */
+export function coloresDePaleta(p: Paleta): { colores: ColoresMarca; fondo: FondoBase } {
+  const claro = p.fondoClaro === true
+  return {
+    fondo: claro ? "claro" : "oscuro",
+    colores: {
+      tinta: (claro ? p.texto : p.fondo).toUpperCase(),
+      papel: (claro ? p.fondo : p.texto).toUpperCase(),
+      superficie: (claro ? p.fondoAlterno : mezclar(p.texto, p.fondo, 0.05)).toUpperCase(),
+      acento: p.acento.toUpperCase(),
+      acentoTexto: p.acento.toUpperCase(),
+      degradado: [],
+    },
+  }
+}
+
+/**
+ * Los colores de la marca, como paleta del carrusel clasico.
+ *
+ * Los velos y fundidos salen del propio fondo con transparencia, igual que en
+ * las paletas hechas a mano, para que el texto sobre una foto se lea con
+ * cualquier color que elija la marca.
+ */
+export function paletaDesdeColores(c: ColoresMarca, fondo: FondoBase): Paleta {
+  const claro = fondo === "claro"
+  const base = claro ? c.papel : c.tinta
+  const texto = claro ? c.tinta : c.papel
+  return {
+    fondo: base,
+    fondoAlterno: claro ? c.superficie : mezclar(c.tinta, c.papel, 0.07),
+    texto,
+    textoSuave: mezclar(texto, base, 0.38),
+    acento: claro ? c.acentoTexto : c.acento,
+    velo: rgba(base, claro ? 0.8 : 0.66),
+    veloFuerte: rgba(base, claro ? 0.9 : 0.82),
+    fundido: [rgba(base, 0), rgba(base, claro ? 0.94 : 0.92), base],
+    veloTecho: rgba(base, claro ? 0.62 : 0.55),
+    fondoClaro: claro,
+  }
+}
+
+/**
  * Las familias disponibles. El render acepta cualquiera que este en `fonts/`
  * con estos cuatro pesos.
  */
@@ -257,16 +373,23 @@ export type Cierre = {
   texto: string
 }
 
+// Neutro: es lo que ve una marca que todavia no escribio su cierre.
 export const CIERRE_POR_DEFECTO: Cierre = {
   estilo: "marca",
   titulo: "Síguenos",
-  texto: "para no perderte ningún hecho importante del agro colombiano",
+  texto: "para más contenido como este",
 }
 
 /** Lo que el usuario puede cambiar desde la interfaz. */
 export type Estilo = {
   paleta: Paleta
+  /** Los colores propios de la marca, si los guardo. Mandan sobre la paleta. */
+  colores: ColoresMarca | null
+  fondoBase: FondoBase
+  /** La de los titulares. El carrusel clasico la usa para todo. */
   fuente: NombreFuente
+  /** La del texto corrido, para las plantillas que separan las dos. */
+  fuenteTexto: NombreFuente
   /** Rotulo de la esquina superior. Vacio = sin rotulo. */
   marca: string
   /** Numerar las laminas y mostrar el "desliza". */
@@ -314,7 +437,10 @@ export type Estilo = {
 
 export const ESTILO_POR_DEFECTO: Estilo = {
   paleta: PALETA,
+  colores: null,
+  fondoBase: "oscuro",
   fuente: FUENTE_POR_DEFECTO,
+  fuenteTexto: FUENTE_POR_DEFECTO,
   // Vacio por defecto: el rotulo lo pone quien quiera, no el motor.
   marca: "",
   mostrarPaginacion: true,
@@ -331,10 +457,19 @@ export const ESTILO_POR_DEFECTO: Estilo = {
 /** Arma el estilo a partir de lo guardado en `generation_config.carousel`. */
 export function estiloDesdeConfig(valor: unknown): Estilo {
   const raw = (valor ?? {}) as Record<string, unknown>
-  const paleta =
+  const preset =
     typeof raw.paleta === "string" && raw.paleta in PALETAS
       ? PALETAS[raw.paleta]
       : PALETAS[PALETA_POR_DEFECTO]
+  // Los colores propios mandan sobre la paleta, que queda como punto de partida.
+  const colores = parseColores(raw.colores)
+  const fondoBase: FondoBase =
+    raw.fondo === "claro" || raw.fondo === "oscuro" ? raw.fondo : preset.fondoClaro ? "claro" : "oscuro"
+  const paleta = colores ? paletaDesdeColores(colores, fondoBase) : preset
+  const fuenteDe = (v: unknown): NombreFuente | null =>
+    typeof v === "string" && v in FUENTES ? (v as NombreFuente) : null
+  // `fuente` a secas es de cuando habia una sola: se lee como la de titulares.
+  const fuente = fuenteDe(raw.fuenteTitulos) ?? fuenteDe(raw.fuente) ?? FUENTE_POR_DEFECTO
 
   const logos = (raw.logos ?? {}) as Record<string, unknown>
   const url = (valor: unknown) =>
@@ -347,10 +482,10 @@ export function estiloDesdeConfig(valor: unknown): Estilo {
 
   return {
     paleta,
-    fuente:
-      typeof raw.fuente === "string" && raw.fuente in FUENTES
-        ? (raw.fuente as NombreFuente)
-        : FUENTE_POR_DEFECTO,
+    colores,
+    fondoBase,
+    fuente,
+    fuenteTexto: fuenteDe(raw.fuenteTexto) ?? fuente,
     marca: typeof raw.marca === "string" ? raw.marca.trim().slice(0, 40) : "",
     mostrarPaginacion: raw.mostrarPaginacion !== false,
     usarFotos: raw.usarFotos !== false,

@@ -5,6 +5,8 @@ import { EditorPilares } from "@/components/capas/editor-pilares"
 import { EditorPlantillas } from "@/components/capas/editor-plantillas"
 import { EditorSimple } from "@/components/capas/editor-simple"
 import { VistaCanales } from "@/components/capas/vista-canales"
+import { EditorCtas } from "@/components/marca/editor-ctas"
+import { identidadEditorial } from "@/engine/marca/editorial"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CANALES } from "@/lib/canales-catalogo"
 import { getIntenciones, getListas, getPilares, getSimples } from "@/lib/capas-data"
@@ -29,17 +31,21 @@ export const metadata = { title: "Capas · Engine Hancel" }
  */
 export default async function CapasPage() {
   await exigirAdvance()
-  const [pilares, intenciones, narrativas, ctas, cuenta, plantillas, listas] = await Promise.all([
+  const [pilares, intenciones, narrativas, cuenta, plantillas, listas] = await Promise.all([
     getPilares(),
     getIntenciones(),
     getSimples("content_narratives"),
-    getSimples("content_ctas"),
     cuentaActual(),
     getPlantillas(),
     getListas(),
   ])
 
-  const [linkedin, meta] = await Promise.all([getLinkedinStatus(cuenta.id), redesMetaListas(cuenta.id)])
+  // Los CTA son los mismos que se editan en Marca, con todos sus campos.
+  const [linkedin, meta, { ctas }] = await Promise.all([
+    getLinkedinStatus(cuenta.id),
+    redesMetaListas(cuenta.id),
+    identidadEditorial(cuenta.id),
+  ])
   const conectados = {
     linkedin: linkedin.connected && !linkedin.expired,
     instagram: meta.instagram,
@@ -83,14 +89,7 @@ export default async function CapasPage() {
           </TabsContent>
 
           <TabsContent value="cta">
-            <EditorSimple
-              tabla="content_ctas"
-              filas={ctas}
-              titulo="Llamadas a la accion"
-              descripcion="El objetivo a convertir del contenido. El agente elige una al generar."
-              ejemploNombre="Seguir, Guardar, Escribir al DM…"
-              ejemploDescripcion="Ej: invita a guardar el post para consultarlo despues."
-            />
+            <EditorCtas ctas={ctas} />
           </TabsContent>
 
           <TabsContent value="canales">
