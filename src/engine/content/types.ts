@@ -1,3 +1,5 @@
+import type { Clasificacion } from "../marca/clasificacion"
+
 /**
  * Tipos de la etapa 2: de una noticia analizada a una pieza de LinkedIn.
  *
@@ -98,6 +100,8 @@ export type ContentAngle = {
   angle: string
   thesis: string | null
   playbook_format: string | null
+  /** Pilar, audiencia, vertical, objetivo y CTA. Null en los angulos anteriores. */
+  clasificacion: Clasificacion | null
   status: AngleStatus
   position: number
   created_at: string
@@ -203,6 +207,8 @@ export type LinkedinJobInput = {
     angle: string
     thesis: string | null
     playbook_format: string | null
+    /** Ausente en los trabajos encolados antes de que existiera. */
+    clasificacion?: Clasificacion | null
   }
   raw_news: AngleJobInput["raw_news"]
   variables: Variables
@@ -213,6 +219,7 @@ export type AnglePayload = {
   angle: string
   thesis: string | null
   playbook_format: string | null
+  clasificacion: Clasificacion | null
 }
 
 /** El post dentro de `jobs_linkedin.respuesta`. */

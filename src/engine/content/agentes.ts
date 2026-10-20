@@ -1,4 +1,6 @@
 import { llamarClaude, parsearJSONDeClaude, type UsoClaude } from "../claude/messages"
+import { bloqueClasificacion, bloqueParaClasificar, resolverClasificacion } from "../marca/clasificacion"
+import { identidadEditorial } from "../marca/editorial"
 import { corregirTextos } from "../studio/ortografia"
 import type { AngleJobInput, LinkedinJobInput, Variables } from "./types"
 
@@ -27,6 +29,15 @@ function bloqueVariables(v: Variables): string {
   return [`- tono: ${v.tono}`, `- longitud: ${v.longitud}`, `- idioma: ${v.idioma}`].join("\n")
 }
 
+/**
+ * La clasificacion del angulo, si la trae, con una linea en blanco a cada lado.
+ * Un trabajo encolado antes de que existiera no la trae y sale igual que antes.
+ */
+function conClasificacion(input: LinkedinJobInput): string {
+  const bloque = bloqueClasificacion(input.angle.clasificacion)
+  return bloque ? `\n${bloque}\n` : ""
+}
+
 // ------------------------------------------------------------------- angulo
 
 export const ANGULO_OFICIO = `Eres un analista editorial. Decides el angulo editorial de una noticia: la lectura no obvia del hecho, no lo que paso sino lo que revela sobre algo mas grande (cambio de poder, contradiccion, patron, consecuencia ignorada).
@@ -36,6 +47,13 @@ Por la noticia que se te da, decide:
 1. ANGULO: 2-3 frases con lo que el hecho revela. Preguntate: que no estan contando los medios generalistas por falta de contexto.
 2. TESIS: una sola frase refutable que el lector no tenia antes. Si nadie puede estar en desacuerdo, es obviedad y no sirve. Formato: "Esto sugiere que X, lo que probablemente se traducira en Y".
 3. FORMATO (elige uno): lanzamiento_con_consecuencias, movimiento_personas_capital, dato_que_cambia_marco, regulacion_con_impacto, convergencia, contradiccion, antes_y_despues, patron_silencioso.
+4. CLASIFICACION, con las listas de la marca que vienen en el mensaje:
+   - PILAR: el territorio de la marca al que pertenece el angulo (no la noticia en bruto: el angulo). Si toca otro de refilon, ese es el secundario; si no, null.
+   - AUDIENCIA: a quien le cambia mas algo este angulo.
+   - VERTICAL: el terreno concreto del que habla.
+   - OBJETIVO: lo que la pieza busca. Una tesis que posiciona criterio es autoridad; un dato que sorprende a cualquiera es alcance; una pregunta abierta que divide opiniones es comunidad; un problema que la marca resuelve es conversion.
+   - CTA: el que mejor sirve a ese objetivo. Uno que pide comentar sirve a comunidad, uno que pide seguir sirve a alcance, uno comercial o de mensaje directo sirve a conversion. Si ninguno encaja, el mas cercano.
+   Si una lista viene vacia, ese campo es null. Nunca inventes un codigo.
 
 REGLAS
 - Escribe en el idioma indicado en las variables.
@@ -44,7 +62,7 @@ REGLAS
 - TRABAJAS SOBRE EL HECHO, NO SOBRE SU FIABILIDAD. El contenido que recibes es lo que paso. Nunca es tu tema si el titular es "comprobable", si la fuente es fiable o si el dato esta "confirmado": eso ya lo decidio quien te paso esta noticia. Da el hecho por bueno y cuenta lo que revela. Prohibido cualquier angulo o tesis del tipo "un titular dijo que X pero no se puede comprobar", "la noticia afirma sin pruebas", "habria que verificar": eso no es un angulo, es desconfianza, y aqui el hecho ya esta dado.`
 
 export const ANGULO_CONTRATO = `RESPONDE SOLO con este JSON, sin texto alrededor:
-{"angle":"<2-3 frases>","thesis":"<1 frase refutable>","playbook_format":"<uno de los formatos>"}`
+{"angle":"<2-3 frases>","thesis":"<1 frase refutable>","playbook_format":"<uno de los formatos>","pilar":"<codigo P o null>","pilar_secundario":"<codigo P o null>","audiencia":"<codigo A o null>","vertical":"<codigo V o null>","objetivo":"<alcance|comunidad|autoridad|conversion>","cta":"<codigo C o null>"}`
 
 /** `system` es el prompt ya armado: oficio, marca y contrato (ver agents/prompts.ts). */
 export async function generarAngulo(
@@ -54,6 +72,10 @@ export async function generarAngulo(
   system: string
 ): Promise<{ respuesta: unknown; uso: UsoClaude }> {
   const n = input.raw_news
+  // Las listas se leen al llamar, no al encolar: un trabajo que espero en la
+  // cola clasifica con la marca de hoy. Los codigos se traducen aqui mismo,
+  // con las mismas listas que vio el agente.
+  const editorial = await identidadEditorial(accountId)
   const prompt = `NOTICIA
 - titulo: ${n.title}
 - fuente: ${n.source ?? "desconocida"}
@@ -62,11 +84,18 @@ export async function generarAngulo(
 - contenido: ${n.full_content ?? n.snippet ?? "(sin contenido)"}
 
 VARIABLES
-${bloqueVariables(input.variables)}`
+${bloqueVariables(input.variables)}
 
-  const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: 800 })
+${bloqueParaClasificar(editorial)}`
+
+  const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: 1000 })
   if (!r.ok) throw new Error(r.error)
-  return { respuesta: parsearJSONDeClaude(r.texto), uso: r.uso }
+  const bruto = parsearJSONDeClaude(r.texto)
+  const respuesta =
+    bruto && typeof bruto === "object" && !Array.isArray(bruto)
+      ? { ...(bruto as Record<string, unknown>), clasificacion: resolverClasificacion(bruto, editorial) }
+      : bruto
+  return { respuesta, uso: r.uso }
 }
 
 // ------------------------------------------------------------------ linkedin
@@ -126,7 +155,7 @@ export async function generarLinkedin(
 - angulo: ${input.angle.angle}
 - tesis: ${input.angle.thesis ?? "(sin tesis)"}
 - formato: ${input.angle.playbook_format ?? "(sin formato)"}
-
+${conClasificacion(input)}
 NOTICIA
 - titulo: ${n.title}
 - fuente: ${n.source ?? "desconocida"}
@@ -257,7 +286,7 @@ export async function generarInstagram(
 - angulo: ${input.angle.angle}
 - tesis: ${input.angle.thesis ?? "(sin tesis)"}
 - formato: ${input.angle.playbook_format ?? "(sin formato)"}
-
+${conClasificacion(input)}
 NOTICIA
 - titulo: ${n.title}
 - fuente: ${n.source ?? "desconocida"}

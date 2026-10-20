@@ -41,6 +41,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { NOMBRE_OBJETIVO, type Clasificacion } from "@/engine/marca/clasificacion"
 import type { Ficha, PiezaDelTablero } from "@/lib/kanban-data"
 import { formatDateTime } from "@/lib/format"
 
@@ -261,6 +262,31 @@ function PanelAnalisis({ ficha }: { ficha: Ficha }) {
 
 // -------------------------------------------------------------------- angulo
 
+/**
+ * De que pilar es, para quien, que busca y que CTA pide: lo decidio el agente
+ * de angulo con las listas de la marca. Los angulos anteriores no lo traen.
+ */
+function EtiquetasClasificacion({ c }: { c: Clasificacion | null }) {
+  if (!c) return null
+  const etiquetas = [
+    c.pilar ? { k: "Pilar", v: c.pilar_secundario ? `${c.pilar.nombre} · ${c.pilar_secundario.nombre}` : c.pilar.nombre } : null,
+    c.audiencia ? { k: "Audiencia", v: c.audiencia.nombre } : null,
+    c.vertical ? { k: "Vertical", v: c.vertical.nombre } : null,
+    c.objetivo ? { k: "Objetivo", v: NOMBRE_OBJETIVO[c.objetivo] } : null,
+    c.cta ? { k: "CTA", v: c.cta.nombre } : null,
+  ].filter((e): e is { k: string; v: string } => e !== null)
+  if (etiquetas.length === 0) return null
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {etiquetas.map((e) => (
+        <Badge key={e.k} variant="secondary" className="font-normal">
+          <span className="text-muted-foreground">{e.k}:</span> {e.v}
+        </Badge>
+      ))}
+    </div>
+  )
+}
+
 function PanelAngulo({ ficha, redesHechas }: { ficha: Ficha; redesHechas: Set<string> }) {
   const { pending, error, correr } = useAccion()
   const a = ficha.angulo
@@ -269,6 +295,7 @@ function PanelAngulo({ ficha, redesHechas }: { ficha: Ficha; redesHechas: Set<st
   return (
     <div className="flex flex-col gap-3 text-sm">
       {a.playbook_format ? <Badge variant="outline">{a.playbook_format}</Badge> : null}
+      <EtiquetasClasificacion c={a.clasificacion} />
       <Campo etiqueta="Angulo">{a.angle}</Campo>
       {a.thesis ? <Campo etiqueta="Tesis">{a.thesis}</Campo> : null}
 

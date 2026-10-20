@@ -106,6 +106,7 @@ export function buildLinkedinInput(
       angle: angle.angle,
       thesis: angle.thesis,
       playbook_format: angle.playbook_format,
+      clasificacion: angle.clasificacion ?? null,
     },
     raw_news: newsInput(news),
     variables,

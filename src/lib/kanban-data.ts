@@ -4,6 +4,7 @@ import type { ContentAngle, ContentPiece, PiecePayload } from "@/engine/content/
 import { comoHora } from "@/engine/agents/turno"
 import { redesActivas as redesActivas_ } from "@/engine/agents/redes"
 import { ajustesDe, type Agente } from "@/engine/agents/settings"
+import { parseClasificacion } from "@/engine/marca/clasificacion"
 import { supabaseAdmin } from "@/engine/supabase-admin"
 import { idDeCuentaActual } from "@/lib/accounts"
 import type { RawNews } from "@/lib/types"
@@ -76,7 +77,7 @@ export type Ficha = {
   contenido: string | null
   estadoContenido: string | null
 
-  angulo: Pick<ContentAngle, "id" | "angle" | "thesis" | "playbook_format" | "status"> | null
+  angulo: Pick<ContentAngle, "id" | "angle" | "thesis" | "playbook_format" | "clasificacion" | "status"> | null
   piezas: PiezaDelTablero[]
 
   /** La primera imagen ya generada, para verla en la tarjeta sin abrirla. */
@@ -255,6 +256,7 @@ export async function getTablero(): Promise<Tablero> {
           angle: a.angle,
           thesis: a.thesis,
           playbook_format: a.playbook_format,
+          clasificacion: parseClasificacion(a.clasificacion),
           status: a.status,
         }
       : null

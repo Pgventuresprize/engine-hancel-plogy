@@ -422,6 +422,7 @@ export async function runContentTick(
       angle: angulo.angle,
       thesis: angulo.thesis,
       playbook_format: angulo.playbook_format,
+      clasificacion: angulo.clasificacion,
       position: index,
     }))
 

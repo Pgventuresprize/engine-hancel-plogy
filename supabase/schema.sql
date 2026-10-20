@@ -1419,3 +1419,9 @@ alter table public.content_ctas add column if not exists activo boolean not null
 alter table public.content_ctas drop constraint if exists content_ctas_tipo_check;
 alter table public.content_ctas
   add constraint content_ctas_tipo_check check (tipo in ('seguir', 'comentar', 'palabra', 'dm', 'comercial'));
+
+
+-- ====================================================== clasificacion angulo
+-- Pilar, audiencia, vertical, objetivo y CTA de cada angulo, como foto de ids
+-- y nombres. Ver migraciones/2026-10-20-clasificacion-angulo.sql.
+alter table public.content_angles add column if not exists clasificacion jsonb;

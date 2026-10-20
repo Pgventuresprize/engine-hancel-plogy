@@ -1,3 +1,4 @@
+import { parseClasificacion } from "../marca/clasificacion"
 import type { AnglePayload, PiecePayload } from "./types"
 
 /**
@@ -55,6 +56,8 @@ export function parseAngleResponse(respuesta: unknown): AnglePayload[] {
       angle,
       thesis: texto(obj.thesis) ?? texto(obj.tesis),
       playbook_format: texto(obj.playbook_format) ?? texto(obj.formato),
+      // Ya traducida a filas de la marca por generarAngulo; aqui solo se lee.
+      clasificacion: parseClasificacion(obj.clasificacion),
     })
   }
 
