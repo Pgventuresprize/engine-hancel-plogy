@@ -201,8 +201,9 @@ function EditorSkill({
 
   /**
    * Lee los archivos en el navegador y deja su texto en el original: no se
-   * suben a ningun sitio. Uno solo, con el original vacio, entra tal cual;
-   * varios, o encima de lo que ya hay, se añaden con su nombre de cabecera.
+   * suben a ningun sitio. Cada archivo entra con una cabecera que dice cual
+   * es, con el nombre de su skill si lo trae: varios SKILL.md se llaman igual,
+   * y sin ella no se sabria donde acaba uno y empieza el siguiente.
    */
   const adjuntar = async (lista: FileList | null) => {
     const archivos = [...(lista ?? [])]
@@ -219,10 +220,13 @@ function EditorSkill({
     const leidos = await Promise.all(
       archivos.map(async (a) => ({ nombre: a.name, texto: (await a.text()).replace(/\r\n/g, "\n").trim() }))
     )
-    const nuevo =
-      leidos.length === 1 && !v.original.trim()
-        ? leidos[0].texto
-        : [v.original.trim(), ...leidos.map((l) => `===== ${l.nombre} =====\n${l.texto}`)].filter(Boolean).join("\n\n")
+    const titulo = (l: { nombre: string; texto: string }) => {
+      const skill = cabeceraDe(l.texto).name
+      return skill ? `${skill} (${l.nombre})` : l.nombre
+    }
+    const nuevo = [v.original.trim(), ...leidos.map((l) => `===== ${titulo(l)} =====\n${l.texto}`)]
+      .filter(Boolean)
+      .join("\n\n")
     if (nuevo.length > TOPES_SKILL.original) {
       setAvisoArchivo({ ok: false, texto: `No cabe: el original quedaría en ${nuevo.length} caracteres y el tope es ${TOPES_SKILL.original}.` })
       return
@@ -359,8 +363,9 @@ function EditorSkill({
               Usar el original
             </Button>
             {originalLargo ? (
-              <span className="text-xs text-amber-600">
-                Pasa de {TOPES_SKILL.texto} caracteres: solo cabe el principio.
+              <span className="text-muted-foreground text-xs">
+                El original cabe entero. Solo «Usar el original» se quedaría con los primeros {TOPES_SKILL.texto} caracteres:
+                al prompt va el texto operativo, con las reglas.
               </span>
             ) : null}
           </div>
