@@ -58,10 +58,12 @@ export type EstiloPlantilla = {
    */
   estiloVisual: string
   cierre: {
-    /** "agente": la ultima lamina la escribe el agente con el CTA. "fijo": siempre igual. */
-    modo: "agente" | "fijo"
-    titulo: string
-    texto: string
+    /**
+     * La ultima lamina la escribe siempre el agente, con el CTA de la pieza.
+     * Hubo un modo "fijo" (siempre la misma); se quito el 2026-10-20 porque un
+     * texto fijo no sabe de que hablo la pieza. Lo guardado asi se lee como agente.
+     */
+    modo: "agente"
   }
 }
 
@@ -76,7 +78,7 @@ const BASE: Omit<EstiloPlantilla, "colores" | "fuente" | "estiloVisual" | "velo"
   logo: true,
   numeracion: true,
   textoDesliza: "DESLIZA →",
-  cierre: { modo: "agente", titulo: "Síguenos", texto: "" },
+  cierre: { modo: "agente" },
 }
 
 const DESCRIPCION_DATAVIZ =
@@ -169,7 +171,7 @@ export function normalizarEstilo(v: unknown, tipo: TipoEstilo = "fotografico"): 
     textoDesliza: typeof e.textoDesliza === "string" ? e.textoDesliza : d.textoDesliza,
     velo: Number.isFinite(velo) ? Math.min(0.9, Math.max(0, velo)) : d.velo,
     estiloVisual: typeof e.estiloVisual === "string" && e.estiloVisual.trim() ? e.estiloVisual : d.estiloVisual,
-    cierre: { ...d.cierre, ...(e.cierre ?? {}) },
+    cierre: { modo: "agente" },
   }
 }
 

@@ -117,9 +117,16 @@ Al retomar uno, se detalla como bloque antes de construir.
   layout, sus láminas de dato, listas, tablas, citas y cierre de vidrio sobre
   foto. El texto sigue con lo que ya tiene Hancel (revisor, receta, ejemplos,
   CTA por pieza). Es la meta del Paso 4 (plantilla editorial).
+- **Cómo (decidido 2026-10-20):** no se configura a mano. La plantilla "plogy"
+  de hoy no sirve. El importador analiza las piezas que la marca ya tiene
+  (sus carruseles, su brand kit, sus fotos) y genera el design system y las
+  plantillas de cada tipo de lámina a partir de ellas. Una marca que ya tiene
+  plantillas no tiene que configurar nada; una que no tiene, parte de las
+  neutras.
 - **Por qué esperó:** se pidió anotarlo y cerrar antes el Paso 1.
-- **Cuándo:** Paso 4. Los ejemplos ya guardan el tipo de cada lámina y una línea
-  de lo visual, que es lo que la plantilla necesitará para elegir el diseño.
+- **Cuándo:** Paso 4, junto con "Importar la marca entera desde una carpeta".
+  Los ejemplos ya guardan el tipo de cada lámina y una línea de lo visual, que
+  es lo que la plantilla necesitará para elegir el diseño.
 
 ### Guardar las imágenes de las láminas en los ejemplos
 - **Qué es:** subir las capturas o el `carrusel.html` de una pieza y que queden

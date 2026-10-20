@@ -373,11 +373,12 @@ export type Cierre = {
   texto: string
 }
 
-// Neutro: es lo que ve una marca que todavia no escribio su cierre.
+// Sin texto: el cierre lo escribe el agente en cada pieza, con su CTA. La marca
+// solo elige como se ve.
 export const CIERRE_POR_DEFECTO: Cierre = {
   estilo: "marca",
-  titulo: "Síguenos",
-  texto: "para más contenido como este",
+  titulo: "",
+  texto: "",
 }
 
 /** Lo que el usuario puede cambiar desde la interfaz. */
@@ -501,16 +502,11 @@ export function estiloDesdeConfig(valor: unknown): Estilo {
   }
 }
 
+/**
+ * El titulo y el texto que guardaron las cuentas antes (el cierre de respaldo)
+ * se ignoran: un texto fijo no sabe de que hablo la pieza.
+ */
 function cierreDesdeConfig(valor: unknown): Cierre {
   const raw = (valor ?? {}) as Record<string, unknown>
-  const texto = (campo: unknown, porDefecto: string, tope: number) =>
-    typeof campo === "string" && campo.trim().length > 0
-      ? campo.trim().slice(0, tope)
-      : porDefecto
-
-  return {
-    estilo: raw.estilo === "perfil" ? "perfil" : "marca",
-    titulo: texto(raw.titulo, CIERRE_POR_DEFECTO.titulo, 40),
-    texto: texto(raw.texto, CIERRE_POR_DEFECTO.texto, 140),
-  }
+  return { ...CIERRE_POR_DEFECTO, estilo: raw.estilo === "perfil" ? "perfil" : "marca" }
 }

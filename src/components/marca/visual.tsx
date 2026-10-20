@@ -223,9 +223,9 @@ export function PestanaVisual({
         <div>
           <Label>Lámina de cierre</Label>
           <p className="text-muted-foreground mt-1 text-xs">
-            Cierra todos los carruseles. Su texto lo escribe el agente con el CTA de cada pieza; el de aquí es el
-            respaldo, para cuando no hay CTA. El estilo Perfil solo se usa si el CTA pide seguir. El usuario de la
-            marca sale de la pestaña Identidad.
+            Cierra todos los carruseles. Su texto lo escribe siempre el agente, con el CTA de cada pieza y lo que
+            enseñó el carrusel; aquí solo eliges cómo se ve. El estilo Perfil solo se usa si el CTA pide seguir. El
+            usuario de la marca sale de la pestaña Identidad.
           </p>
         </div>
         <Opciones
@@ -236,18 +236,6 @@ export function PestanaVisual({
             { valor: "perfil", etiqueta: "Perfil" },
           ]}
           onChange={(x) => f.set("cierre", { ...v.cierre, estilo: x })}
-        />
-        <Input
-          maxLength={40}
-          placeholder="Síguenos"
-          value={v.cierre.titulo}
-          onChange={(e) => f.set("cierre", { ...v.cierre, titulo: e.target.value })}
-        />
-        <Input
-          maxLength={140}
-          placeholder="para más contenido como este"
-          value={v.cierre.texto}
-          onChange={(e) => f.set("cierre", { ...v.cierre, texto: e.target.value })}
         />
       </div>
 

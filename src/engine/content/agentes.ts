@@ -78,7 +78,6 @@ export async function contextoDeRevision(accountId: string, input: LinkedinJobIn
   const ctas = ctasUsables(editorial.ctas)
   return {
     reglas: reglasDe(perfil),
-    marcaTieneCta: ctas.length > 0,
     material: materialDe(input.raw_news),
     ejemplos: ejemplos.filter((e) => e.activo).map((e) => ({ nombre: e.nombre, texto: e.texto })),
     textoCtas: ctas.map((c) => `${c.name}. ${c.description ?? ""}`).join("\n"),
@@ -624,7 +623,7 @@ ${sinHashtags ? "La marca no usa hashtags: \"hashtags\" va vacío." : `Hashtags:
 ${perfil.emojis_instagram ? "Emojis: solo si ayudan a leer, nunca de adorno." : "Emojis: ninguno, en ningún campo."}
 ${listas ? `Una lámina "text" puede ir como lista: en lugar de "body" lleva "items", de 3 a 5 pasos o puntos (cada uno una oración de hasta 90 caracteres), y si hace falta "lead", una etiqueta corta encima del título (hasta 30 caracteres). Se dibuja como lista numerada. Úsala solo cuando el contenido de esa lámina es de verdad una serie de pasos o de puntos, nunca para partir un párrafo.
 ` : ""}El caption termina pidiendo la misma acción que el cierre, con sus mismas palabras clave.
-El cierre no va en slides: va en "cierre" y pide el CTA de la clasificación o, si no viene, el CTA de la marca que mejor encaje con la pieza. Si la marca no tiene ningún CTA, "cierre" es null.`
+El cierre no va en slides: va en "cierre" y siempre lo escribes tú, para esta pieza: nunca va vacío ni es null. Pide el CTA de la clasificación o, si no viene, el CTA de la marca que mejor encaje con la pieza. Si la marca no tiene ningún CTA, invita a seguir su cuenta: el título con el nombre o la cuenta de la marca y el cuerpo con una razón ligada a lo que enseñó este carrusel, nunca "para más contenido" ni "no te pierdas nada".`
 }
 
 function promptInstagram(input: LinkedinJobInput): string {

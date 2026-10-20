@@ -151,11 +151,8 @@ export async function guardarVisual(campos: CamposVisual): Promise<ActionResult>
       mostrarPaginacion: campos.mostrarPaginacion,
       usarFotos: campos.usarFotos,
       fotosLiterales: campos.fotosLiterales,
-      cierre: {
-        estilo: campos.cierre.estilo === "perfil" ? "perfil" : "marca",
-        titulo: campos.cierre.titulo.trim().slice(0, 40),
-        texto: campos.cierre.texto.trim().slice(0, 140),
-      },
+      // Solo como se ve: el texto del cierre lo escribe el agente en cada pieza.
+      cierre: { estilo: campos.cierre.estilo === "perfil" ? "perfil" : "marca" },
       // `logo` a secas es de cuando solo habia uno: arrastrarlo haria resucitar
       // una version ya quitada.
     }, ["logo"])

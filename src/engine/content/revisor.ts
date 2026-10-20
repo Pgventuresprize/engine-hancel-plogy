@@ -93,8 +93,6 @@ export type ContextoRevision = {
   reglas: ReglasMarca
   /** El texto de la noticia que vio el agente: titulo, resumen y material. */
   material: string
-  /** Si la marca tiene algun CTA que usar: entonces el carrusel lleva cierre. */
-  marcaTieneCta: boolean
   /** Los ejemplos activos de la marca: la pieza no puede copiar de ellos. */
   ejemplos?: { nombre: string; texto: string }[]
   /**
@@ -743,13 +741,14 @@ export function revisarCarrusel(respuesta: unknown, ctx: ContextoRevision): Hall
         pide: `Deja la razón en ${TOPES_CARRUSEL.cierreTexto} caracteres o menos.`,
       })
     }
-  } else if (ctx.marcaTieneCta) {
+  } else {
+    // Frena siempre: no hay texto de respaldo, y un carrusel sin cierre no pide nada.
     hallazgos.push({
       regla: "sin_cierre",
-      nivel: "aviso",
+      nivel: "frena",
       donde: "cierre",
-      detalle: "El guion no trae cierre: la última lámina saldrá con el texto de respaldo de Marca › Visual.",
-      pide: "Escribe el cierre con el CTA de la clasificación.",
+      detalle: "El guion no trae cierre: el carrusel saldría sin lámina de cierre.",
+      pide: "Escribe el cierre con el CTA de la clasificación, o invitando a seguir la cuenta si no hay CTA, ligado a lo que enseñó este carrusel.",
     })
   }
 

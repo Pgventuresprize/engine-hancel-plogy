@@ -309,7 +309,7 @@ function hastaPalabra(texto: string, tope: number): string {
 /**
  * El estilo de esta pieza: el de la marca con el cierre que escribio el agente.
  *
- * El de la marca queda de respaldo. La captura con el boton de seguir solo se
+ * La marca solo pone como se ve el cierre; el texto es siempre del agente. La captura con el boton de seguir solo se
  * usa si el CTA pide seguir; con otro ("Comenta...") enseñaria el gesto
  * equivocado, asi que la lamina sale en el estilo de marca.
  */
@@ -350,22 +350,24 @@ export async function generarCarrusel(
     return generarCarruselPlogy(pieceKey, { caption, hashtags, slides, fotos, elemento, cierre, plan }, news, estilo, nichos, conPortadaFacebook)
   }
 
-  // El cierre va siempre, porque pedir algo al final es lo unico que convierte
-  // un carrusel en algo que deja audiencia detras. Su texto lo escribe el
-  // agente con el CTA que se eligio para la pieza; si no lo escribio, va el de
-  // la marca. Va aparte de las laminas del guion para que no se pierda entre
-  // ellas. Si el guion ya llega al tope de Instagram se recorta una lamina para
-  // hacerle sitio, en vez de pasarse.
-  if (slides.length >= MAX_SLIDES) slides.length = MAX_SLIDES - 1
+  // El cierre lo escribe siempre el agente, con el CTA de la pieza y lo que
+  // enseño el carrusel: no hay texto fijo de respaldo. Un guion sin cierre sale
+  // sin esa lamina, y el revisor lo frena para que no se publique asi. Va aparte
+  // de las laminas del guion para que no se pierda entre ellas. Si el guion ya
+  // llega al tope de Instagram se recorta una lamina para hacerle sitio, en vez
+  // de pasarse.
+  if (cierre && slides.length >= MAX_SLIDES) slides.length = MAX_SLIDES - 1
 
   const variantes = repartirVariantes(slides, estilo.usarFotos && pexelsConfigurado())
-  slides.push({
-    n: slides.length + 1,
-    type: "text",
-    title: estilo.cierre.titulo,
-    body: estilo.cierre.texto,
-  })
-  variantes.push("cierre")
+  if (cierre) {
+    slides.push({
+      n: slides.length + 1,
+      type: "text",
+      title: cierre.titulo,
+      body: cierre.texto,
+    })
+    variantes.push("cierre")
+  }
 
   // El logo y la captura se descargan una vez: Satori necesita los bytes, no
   // una URL. La captura solo si el cierre la va a usar.
@@ -612,7 +614,8 @@ async function generarCarruselPlogy(
   const hallado = news?.account_id ? await buscarInserto(elemento, news.account_id) : null
   const tema = [news?.niche, news?.tema].filter(Boolean).join(" + ")
   const reparto = repartirPlogy(slides.map((s) => ({ items: s.type === "text" ? s.items : null })))
-  const total = slides.length + 1
+  // Sin cierre del agente no hay lamina de cierre (ver generarCarrusel).
+  const total = slides.length + (guion.cierre ? 1 : 0)
   const titularDe = (s: Slide) => (s.type === "photo_hook" ? (s.hook ?? "") : (s.title ?? ""))
 
   const imagenes: Buffer[] = []
@@ -645,21 +648,23 @@ async function generarCarruselPlogy(
   // El cierre: la marca y una sola accion, en el fondo que le toque. El boton
   // de seguir solo si es lo que pide el CTA: debajo de un "Comenta..." manda
   // al lector a otra parte.
-  imagenes.push(
-    await renderPlogy({
-      composicion: "cierre",
-      fondo: slides.length % 2 === 0 ? "tinta" : "papel",
-      titular: estilo.cierre.titulo,
-      cuerpo: estilo.cierre.texto,
-      botonSeguir: !guion.cierre?.tipo || guion.cierre.tipo === "seguir",
-      n: total,
-      total,
-      tema,
-      handle: estilo.marca,
-      logoClaro,
-      logoOscuro,
-    })
-  )
+  if (guion.cierre) {
+    imagenes.push(
+      await renderPlogy({
+        composicion: "cierre",
+        fondo: slides.length % 2 === 0 ? "tinta" : "papel",
+        titular: guion.cierre.titulo,
+        cuerpo: guion.cierre.texto,
+        botonSeguir: !guion.cierre.tipo || guion.cierre.tipo === "seguir",
+        n: total,
+        total,
+        tema,
+        handle: estilo.marca,
+        logoClaro,
+        logoOscuro,
+      })
+    )
+  }
 
   const images = await subirCarrusel(pieceKey, imagenes)
   let portadaFacebook: string | undefined

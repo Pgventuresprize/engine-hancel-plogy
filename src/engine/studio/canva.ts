@@ -99,7 +99,7 @@ export async function guardarImagen(url: string, ruta: string): Promise<string |
 }
 
 /** Ordena las laminas de la pieza en portada, contenido y cierre. */
-function laminasDe(pieza: PiezaParaDibujar, formatId: string, cierreFijo: boolean): (LaminaCompuesta & { pedido: LaminaPieza })[] {
+function laminasDe(pieza: PiezaParaDibujar, formatId: string): (LaminaCompuesta & { pedido: LaminaPieza })[] {
   const a = (l: LaminaPieza, rol: LaminaCompuesta["rol"]) => ({
     rol,
     titulo: (l.hook || l.title || "").trim(),
@@ -123,18 +123,16 @@ function laminasDe(pieza: PiezaParaDibujar, formatId: string, cierreFijo: boolea
     const s = pieza.slides
     // La ultima es el cierre solo si es un cierre de verdad: si el agente la
     // escribio con foto, imagen o grafico, es contenido y se dibuja como tal
-    // (tratarla como cierre perdia su imagen). Un cierre fijo se anade aparte.
+    // (tratarla como cierre perdia su imagen).
     // Las piezas nuevas marcan su cierre (type "cierre"); en las de antes se
     // deduce.
     const ultima = s[s.length - 1]
     const ultimaEsCierre =
-      !cierreFijo &&
-      (ultima.type === "cierre" ||
-        (s.length > 2 && !ultima.foto && !ultima.visual && !ultima.grafico && !(ultima.etiquetas ?? []).length))
+      ultima.type === "cierre" ||
+      (s.length > 2 && !ultima.foto && !ultima.visual && !ultima.grafico && !(ultima.etiquetas ?? []).length)
     const salida = s.map((l, i) =>
       a(l, i === 0 ? "portada" : i === s.length - 1 && ultimaEsCierre ? "cierre" : "contenido")
     )
-    if (cierreFijo) salida.push(a({ n: s.length + 1, type: "cierre" }, "cierre"))
     return salida
   }
   const primera = pieza.slides[0] ?? { n: 1, type: "unica", title: pieza.title, body: pieza.body }
@@ -164,7 +162,7 @@ export async function dibujarConCanva(opciones: {
   const fmt = formatoPorId(formatId)
   const W = fmt?.formato.ancho || 1080
   const H = fmt?.formato.alto || 1350
-  const laminas = laminasDe(pieza, formatId, estilo.estilo.cierre.modo === "fijo")
+  const laminas = laminasDe(pieza, formatId)
   if (estilo.tipo !== "fotografico") {
     for (const l of laminas) {
       l.titulo = sinMarcas(l.titulo)

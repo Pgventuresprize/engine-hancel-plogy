@@ -277,31 +277,11 @@ function FormEstilo({
         ) : null}
       </div>
 
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
         <p className="text-sm font-semibold">Última lámina de los carruseles</p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Campo label="Quién la escribe">
-            <Select value={e.cierre.modo} onValueChange={(v) => set("cierre", { ...e.cierre, modo: v as "agente" | "fijo" })}>
-              <SelectTrigger className="w-full">
-                <SelectValue>{() => (e.cierre.modo === "agente" ? "El agente, con el CTA" : "Siempre la misma")}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="agente">El agente, con el CTA</SelectItem>
-                <SelectItem value="fijo">Siempre la misma</SelectItem>
-              </SelectContent>
-            </Select>
-          </Campo>
-          {e.cierre.modo === "fijo" ? (
-            <>
-              <Campo label="Título">
-                <Input value={e.cierre.titulo} disabled={disabled} onChange={(ev) => set("cierre", { ...e.cierre, titulo: ev.target.value })} />
-              </Campo>
-              <Campo label="Texto">
-                <Input value={e.cierre.texto} disabled={disabled} onChange={(ev) => set("cierre", { ...e.cierre, texto: ev.target.value })} />
-              </Campo>
-            </>
-          ) : null}
-        </div>
+        <p className="text-muted-foreground text-xs">
+          La escribe siempre el agente, con el CTA de cada pieza y lo que enseñó el carrusel.
+        </p>
       </div>
 
       <div className="flex flex-wrap justify-end gap-2 border-t pt-4">

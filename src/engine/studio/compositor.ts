@@ -406,8 +406,9 @@ function pastillas(c: Ctx, etiquetas: string[], x: number, y: number, ancho: num
 function cierre(c: Ctx, l: LaminaCompuesta) {
   const { W, H, k, m, e } = c
   // Sin las marcas de enfasis: en el cierre se veria el asterisco.
-  const titulo = sinMarcas(e.cierre.modo === "fijo" ? e.cierre.titulo : l.titulo)
-  const cuerpo = sinMarcas(e.cierre.modo === "fijo" ? e.cierre.texto : l.cuerpo)
+  // El cierre lo escribe siempre el agente, con el CTA de la pieza.
+  const titulo = sinMarcas(l.titulo)
+  const cuerpo = sinMarcas(l.cuerpo)
   // En un formato bajo el logo encoge y el texto se mide para caber entre el
   // logo y el borde de abajo.
   const lado = Math.min(300 * k, H * 0.26)
