@@ -10,6 +10,7 @@ import {
   PIEZAS_INSTAGRAM,
 } from "../content/agentes"
 import type { Situacion } from "../marca/cuando"
+import type { RedEjemplo } from "../marca/ejemplos-modelo"
 import { datosParaPrompt, type DatosParaPrompt } from "../marca/prompt"
 import { REDACCION_CONTRATO, REDACCION_OFICIO } from "../redaccion/agente"
 import { armarPorPiezas, textoDelPrompt, type Exigencia, type PiezaDeOficio, type PromptPorPiezas } from "./armador"
@@ -77,6 +78,9 @@ export const PIEZAS_DE_OFICIO: Record<AgenteConPrompt, PiezaDeOficio[]> = {
 
 const EXIGENCIAS: Partial<Record<AgenteConPrompt, Exigencia>> = { instagram: exigirInstagram }
 
+/** Los agentes que leen ejemplos, y de que red. */
+const RED_DE_EJEMPLOS: Partial<Record<AgenteConPrompt, RedEjemplo>> = { instagram: "instagram", linkedin: "linkedin" }
+
 /**
  * Los agentes que escriben una pieza ya clasificada: los unicos para los que
  * la situacion cambia el prompt. Los demas reciben siempre lo mismo.
@@ -100,6 +104,7 @@ export function armarPromptDe(
   datos: DatosParaPrompt,
   oficioEditado: string | null,
   situacion: Situacion | null,
+  semilla?: string,
   tope?: number
 ): PromptPorPiezas {
   const contrato = CONTRATO[agent]
@@ -112,6 +117,8 @@ export function armarPromptDe(
     contrato: typeof contrato === "string" ? contrato : contrato(datos),
     situacion,
     exigir: EXIGENCIAS[agent],
+    redEjemplos: RED_DE_EJEMPLOS[agent],
+    semilla,
     tope,
   })
 }
@@ -125,10 +132,12 @@ export function armarPromptDe(
 export async function promptPara(
   accountId: string,
   agent: AgenteConPrompt,
-  situacion: Situacion | null
+  situacion: Situacion | null,
+  /** El id de la noticia: con el mismo, la pieza recibe siempre los mismos ejemplos. */
+  semilla?: string
 ): Promise<PromptPorPiezas> {
   const [datos, ajustes] = await Promise.all([datosParaPrompt(accountId), ajustesDe(accountId, agent)])
-  return armarPromptDe(agent, datos, ajustes.prompt?.trim() || null, situacion)
+  return armarPromptDe(agent, datos, ajustes.prompt?.trim() || null, situacion, semilla)
 }
 
 /** El prompt completo de un agente que no depende de la pieza: oficio, marca, skills y contrato. */

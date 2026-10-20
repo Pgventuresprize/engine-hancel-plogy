@@ -3,6 +3,7 @@ import "server-only"
 import { getGenerationConfig } from "@/engine/content/jobs"
 import { ctasUsables, identidadEditorial, type IdentidadEditorial } from "@/engine/marca/editorial"
 import { perfilDe, type PerfilMarca } from "@/engine/marca/perfil"
+import { ejemplosDe, type Ejemplo } from "@/engine/marca/ejemplos"
 import { skillsDe, type Skill } from "@/engine/marca/skills"
 import { estiloDesdeConfig, type Estilo } from "@/engine/render/theme"
 import type { Variables } from "@/engine/content/types"
@@ -17,20 +18,22 @@ export type DatosMarca = {
   /** La paleta guardada como punto de partida, o la de por defecto. */
   paleta: string
   skills: Skill[]
+  ejemplos: Ejemplo[]
   completitud: Completitud
 }
 
-// Las skills son opcionales: no cuentan para la completitud.
+// Las skills y los ejemplos son opcionales: no cuentan para la completitud.
 export type Pendiente = { campo: string; pestana: "identidad" | "voz" | "editorial" | "cta" | "visual" }
 export type Completitud = { listos: number; total: number; faltan: Pendiente[] }
 
 export async function datosDeMarca(): Promise<DatosMarca> {
   const accountId = await idDeCuentaActual()
-  const [perfil, editorial, config, skills] = await Promise.all([
+  const [perfil, editorial, config, skills, ejemplos] = await Promise.all([
     perfilDe(accountId),
     identidadEditorial(accountId),
     getGenerationConfig(accountId),
     skillsDe(accountId),
+    ejemplosDe(accountId),
   ])
   const carousel = (config.carousel ?? {}) as Record<string, unknown>
   const estilo = estiloDesdeConfig(carousel)
@@ -41,6 +44,7 @@ export async function datosDeMarca(): Promise<DatosMarca> {
     estilo,
     paleta: typeof carousel.paleta === "string" ? carousel.paleta : "negro",
     skills,
+    ejemplos,
     completitud: completitudDe(perfil, editorial, estilo),
   }
 }

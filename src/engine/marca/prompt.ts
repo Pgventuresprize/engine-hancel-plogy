@@ -1,6 +1,7 @@
 import { estiloDesdeConfig } from "../render/theme"
 import { supabaseAdmin } from "../supabase-admin"
 import { promptArmado, type DatosParaPrompt } from "./armado"
+import { ejemplosDe } from "./ejemplos"
 import type { AgenteConMarca } from "./bloque"
 import { identidadEditorial } from "./editorial"
 import { perfilDe } from "./perfil"
@@ -11,7 +12,7 @@ export * from "./armado"
 
 /** Lo que la marca ha escrito, leido de una vez para armar uno o varios prompts. */
 export async function datosParaPrompt(accountId: string): Promise<DatosParaPrompt> {
-  const [perfil, editorial, skills, listas] = await Promise.all([
+  const [perfil, editorial, skills, listas, ejemplos] = await Promise.all([
     perfilDe(accountId),
     identidadEditorial(accountId),
     // Las skills son un extra: si no se pueden leer, el agente trabaja con su
@@ -21,8 +22,13 @@ export async function datosParaPrompt(accountId: string): Promise<DatosParaPromp
       return []
     }),
     plantillaConListas(accountId),
+    // Como las skills: sin ejemplos el agente escribe igual, con sus reglas.
+    ejemplosDe(accountId).catch((e) => {
+      console.error("[marca] No se pudieron leer los ejemplos:", e instanceof Error ? e.message : e)
+      return []
+    }),
   ])
-  return { perfil, editorial, skills, listas }
+  return { perfil, editorial, skills, listas, ejemplos }
 }
 
 /** Si la plantilla del carrusel de la cuenta dibuja listas. Ante la duda, no. */

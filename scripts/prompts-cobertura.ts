@@ -98,7 +98,7 @@ async function main() {
     for (const situacion of lista) {
       try {
         // Sin tope: se mide el tamaño real, no el recortado.
-        const armado = armarPromptDe(agente, datos, editado, situacion, Infinity)
+        const armado = armarPromptDe(agente, datos, editado, situacion, undefined, Infinity)
         const largo = armado.receta.caracteres
         menor = Math.min(menor, largo)
         mayor = Math.max(mayor, largo)

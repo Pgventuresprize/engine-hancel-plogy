@@ -150,12 +150,12 @@ export async function procesarBuzones(
       return { ...r, receta: armado.receta }
     }, disparo, maxPorBuzon),
     await procesarBuzon("jobs_linkedin", "linkedin", async (input, cuenta) => {
-      const armado = await promptPara(cuenta, "linkedin", situacionDe(input as LinkedinJobInput))
+      const armado = await promptPara(cuenta, "linkedin", situacionDe(input as LinkedinJobInput), (input as LinkedinJobInput).raw_news.id)
       const r = await generarLinkedin(cuenta, input as LinkedinJobInput, await modeloDe(cuenta, "linkedin"), armado)
       return { ...r, receta: armado.receta }
     }, disparo, maxPorBuzon),
     await procesarBuzon("jobs_instagram", "instagram", async (input, cuenta) => {
-      const armado = await promptPara(cuenta, "instagram", situacionDe(input as LinkedinJobInput))
+      const armado = await promptPara(cuenta, "instagram", situacionDe(input as LinkedinJobInput), (input as LinkedinJobInput).raw_news.id)
       const r = await generarInstagram(cuenta, input as LinkedinJobInput, await modeloDe(cuenta, "instagram"), armado)
       return { ...r, receta: armado.receta }
     }, disparo, maxPorBuzon),

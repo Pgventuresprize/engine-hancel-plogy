@@ -40,6 +40,7 @@ export type Regla =
   | "longitud_post"
   | "guion_en_nombre"
   | "alcance"
+  | "copia_de_ejemplo"
 
 export type Nivel = "frena" | "aviso"
 
@@ -94,6 +95,13 @@ export type ContextoRevision = {
   material: string
   /** Si la marca tiene algun CTA que usar: entonces el carrusel lleva cierre. */
   marcaTieneCta: boolean
+  /** Los ejemplos activos de la marca: la pieza no puede copiar de ellos. */
+  ejemplos?: { nombre: string; texto: string }[]
+  /**
+   * Los nombres y descripciones de los CTA de la marca. Lo que dicen se puede
+   * repetir aunque un ejemplo lo diga igual: es la misma invitacion de siempre.
+   */
+  textoCtas?: string
 }
 
 /** Lo que la noticia dice: con esto se comprueban las cifras y los nombres. */
@@ -350,25 +358,122 @@ export function alcanceDelAngulo(respuesta: unknown, material: string): Hallazgo
   return reglaDeAlcance(campos, material)
 }
 
+/**
+ * Lo dicho como posibilidad no es un dato: "puede que nadie lo recuerde" es
+ * justo como el oficio pide decirlo. Se mira lo que va justo antes.
+ */
+const POSIBILIDAD = /\b(puede que|pueda que|es probable que|probablemente|posiblemente|quiza|quizas|tal vez|podria|podrian|seguramente|es posible que|si)\b[^.!?;:]{0,40}$/
+
+/** Palabras que no dicen de que se habla: no sirven para saber si el respaldo es el mismo. */
+const VACIAS = new Set([
+  "porque", "cuando", "donde", "sobre", "entre", "desde", "hasta", "puede", "pueden", "tiene", "tienen", "hacer", "hacen",
+  "estos", "estas", "otros", "otras", "mismo", "misma", "nadie", "mayoria", "mayor", "parte", "todos", "todas", "mundo",
+  "miles", "cientos", "decenas", "millones", "ninguna", "ningun", "which", "there", "their", "about", "would", "could",
+  "these", "those", "other", "nobody", "everyone", "everybody", "thousands", "hundreds", "dozens", "millions", "majority",
+  "still", "every", "being", "after", "before", "where", "while", "should", "because",
+])
+
+/** Las raices de un texto: los primeros cinco caracteres de cada palabra con peso. Cruzan idiomas (integraciones, integrations). */
+function raices(texto: string): Set<string> {
+  return new Set(
+    (normalizar(texto).match(/[\p{L}]{5,}/gu) ?? []).filter((w) => !VACIAS.has(w)).map((w) => w.slice(0, 5))
+  )
+}
+
+const frasesDe = (texto: string) => texto.split(/(?<=[.!?;:])\s+|\n+/).filter((f) => f.trim())
+
+/** Las palabras que siguen a una posicion: lo que se esta contando ("la mayoria de *integraciones de IA*"). */
+const loQueSigue = (t: string, desde: number, cuantas: number) =>
+  (t.slice(desde).match(/[\p{L}\p{N}]+/gu) ?? []).slice(0, cuantas).join(" ")
+
+/**
+ * El material respalda una expresion de alcance si alguna frase suya la trae
+ * contando lo mismo: lo que sigue a la expresion en el texto y lo que sigue a
+ * la del material comparten alguna raiz. Que "most" aparezca en "our most
+ * efficient model" no respalda "la mayoria de integraciones"; "most
+ * integrations were built..." si.
+ */
+function respaldada(a: (typeof ALCANCE)[number], loContado: string, frasesDelMaterial: string[]): boolean {
+  const delTexto = raices(loContado)
+  if (delTexto.size === 0) return false
+  return frasesDelMaterial.some((f) => {
+    const n = normalizar(f)
+    const m = new RegExp(a.en.source, "g")
+    for (const hallado of n.matchAll(m)) {
+      for (const r of raices(loQueSigue(n, hallado.index + hallado[0].length, 6))) if (delTexto.has(r)) return true
+    }
+    return false
+  })
+}
+
 function reglaDeAlcance(campos: Campo[], material: string): Hallazgo[] {
-  const fuente = normalizar(material)
+  const delMaterial = frasesDe(material)
   const hallazgos: Hallazgo[] = []
   for (const { donde, texto } of campos) {
     if (donde.startsWith("cierre")) continue
-    const t = normalizar(texto)
-    for (const a of ALCANCE) {
-      const m = a.es.exec(t)
-      if (!m || a.en.test(fuente)) continue
+    for (const frase of frasesDe(texto)) {
+      const t = normalizar(frase)
+      for (const a of ALCANCE) {
+        const m = a.es.exec(t)
+        if (!m) continue
+        if (POSIBILIDAD.test(t.slice(0, m.index))) continue
+        if (respaldada(a, loQueSigue(t, m.index + m[0].length, 5), delMaterial)) continue
+        hallazgos.push({
+          regla: "alcance",
+          nivel: "frena",
+          donde,
+          detalle: `Dice «${m[0]}» y el material no dice ${a.tipo === "cantidad" ? "cuántos son" : "que sea así para todos"}: ${cita(fragmento(frase, m.index, 60))}`,
+          pide:
+            a.tipo === "cantidad"
+              ? "Quita la cantidad o dila como posibilidad («puede afectar a…»). Solo afirma cuántos si el material lo dice de esto mismo."
+              : "Dilo como lo que se sabe («puede que no te llegue el aviso») o atribúyelo a la fuente. Solo afirma «nadie» o «todos» si el material lo dice de esto mismo.",
+        })
+      }
+    }
+  }
+  return hallazgos
+}
+
+/** Cuantas palabras seguidas iguales a un ejemplo ya son copia y no coincidencia. */
+export const PALABRAS_COPIA = 7
+
+const palabrasDe = (texto: string) => texto.match(/[\p{L}\p{N}]+/gu) ?? []
+
+function gramas(texto: string): Set<string> {
+  const p = palabrasDe(normalizar(texto))
+  const salida = new Set<string>()
+  for (let i = 0; i + PALABRAS_COPIA <= p.length; i++) salida.add(p.slice(i, i + PALABRAS_COPIA).join(" "))
+  return salida
+}
+
+/**
+ * Una pieza que repite siete palabras seguidas de un ejemplo lo esta copiando.
+ * Frena: el ejemplo enseña el tono, no se publica dos veces. No cuenta lo que
+ * tambien dice el material (una cita de la fuente) ni lo que dicen los CTA de
+ * la marca, y el cierre no se mira: es la misma invitacion de siempre.
+ */
+function reglaDeCopia(campos: Campo[], ctx: ContextoRevision): Hallazgo[] {
+  if (!ctx.ejemplos?.length) return []
+  const permitidos = new Set([...gramas(ctx.material), ...gramas(ctx.textoCtas ?? "")])
+  const ejemplos = ctx.ejemplos.map((e) => ({ nombre: e.nombre, gramas: gramas(e.texto) }))
+  const hallazgos: Hallazgo[] = []
+  for (const { donde, texto } of campos) {
+    if (donde.startsWith("cierre")) continue
+    const originales = palabrasDe(texto)
+    const p = palabrasDe(normalizar(texto))
+    for (let i = 0; i + PALABRAS_COPIA <= p.length; i++) {
+      const g = p.slice(i, i + PALABRAS_COPIA).join(" ")
+      if (permitidos.has(g)) continue
+      const de = ejemplos.find((e) => e.gramas.has(g))
+      if (!de) continue
       hallazgos.push({
-        regla: "alcance",
+        regla: "copia_de_ejemplo",
         nivel: "frena",
         donde,
-        detalle: `Dice «${m[0]}» y el material no dice ${a.tipo === "cantidad" ? "cuántos son" : "que sea así para todos"}: ${cita(fragmento(texto, m.index, 60))}`,
-        pide:
-          a.tipo === "cantidad"
-            ? "Quita la cantidad o dila como posibilidad («puede afectar a…»). Solo afirma cuántos si el material lo dice."
-            : "Cambia el absoluto por lo que sí se sabe («puede que no te llegue el aviso»). Solo afirma «nadie» o «todos» si el material lo dice.",
+        detalle: `Copia del ejemplo «${de.nombre}»: «…${originales.slice(i, i + PALABRAS_COPIA).join(" ")}…»`,
+        pide: "Escríbelo con tus palabras y desde el contenido de esta pieza: el ejemplo enseña el tono, no se copia.",
       })
+      break
     }
   }
   return hallazgos
@@ -457,7 +562,7 @@ function reglasDeTexto(campos: Campo[], ctx: ContextoRevision, emojisPermitidos:
     }
   }
 
-  return [...hallazgos, ...reglaDeAlcance(campos, ctx.material)]
+  return [...hallazgos, ...reglaDeAlcance(campos, ctx.material), ...reglaDeCopia(campos, ctx)]
 }
 
 // ------------------------------------------------------------------ carrusel

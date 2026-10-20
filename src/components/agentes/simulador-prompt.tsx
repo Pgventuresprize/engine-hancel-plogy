@@ -172,6 +172,9 @@ function Resultado({ fijo, resto, receta }: { fijo: string; resto: string; recet
   )
 }
 
+const etiqueta = (p: { capa: string; nombre: string }) =>
+  p.capa === "skill" ? `Skill: ${p.nombre}` : p.capa === "ejemplo" ? `Ejemplo: ${p.nombre}` : p.nombre
+
 /**
  * Que entro en el prompt y que no, y por que. La usa tambien la ficha de una
  * pieza, con la receta que se guardo al escribirla.
@@ -187,7 +190,7 @@ export function RecetaDelPrompt({ receta }: { receta: Receta }) {
         <span className="font-medium">Entró:</span>
         {receta.entro.map((e, i) => (
           <Badge key={i} variant={e.porCondicion ? "default" : "secondary"} className="font-normal">
-            {e.capa === "skill" ? `Skill: ${e.nombre}` : e.nombre}
+            {etiqueta(e)}
           </Badge>
         ))}
       </div>
@@ -197,7 +200,7 @@ export function RecetaDelPrompt({ receta }: { receta: Receta }) {
           <ul className="text-muted-foreground flex flex-col gap-0.5">
             {receta.fuera.map((f, i) => (
               <li key={i}>
-                {f.capa === "skill" ? `Skill: ${f.nombre}` : f.nombre} · {f.porque}
+                {etiqueta(f)} · {f.porque}
               </li>
             ))}
           </ul>

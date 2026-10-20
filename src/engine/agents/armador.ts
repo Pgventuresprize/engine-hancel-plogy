@@ -1,6 +1,7 @@
 import type { DatosParaPrompt } from "../marca/armado"
 import { bloqueMarca, TOPE_PROMPT, type AgenteConMarca } from "../marca/bloque"
 import { describirSituacion, esSiempre, porQueNoEntra, type Cuando, type Situacion } from "../marca/cuando"
+import { bloqueEjemplos, elegirEjemplos, type RedEjemplo } from "../marca/ejemplos-modelo"
 import { bloqueDeSkills, skillsDeAgente, type Skill } from "../marca/skills-modelo"
 
 /**
@@ -16,7 +17,8 @@ import { bloqueDeSkills, skillsDeAgente, type Skill } from "../marca/skills-mode
  *      entre llamadas seguidas en vez de leerlo de nuevo.
  *   2. Lo que entro por condicion: piezas del oficio de fabrica y skills de la
  *      marca, bajo "PARA ESTA PIEZA".
- *   3. El formato de respuesta, siempre al final, que nada lo pisa.
+ *   3. Los ejemplos de la marca que mas se parecen a la pieza.
+ *   4. El formato de respuesta, siempre al final, que nada lo pisa.
  *
  * Y queda la receta: que entro, que no y por que.
  *
@@ -24,7 +26,7 @@ import { bloqueDeSkills, skillsDeAgente, type Skill } from "../marca/skills-mode
  * los mismos datos.
  */
 
-export type CapaPrompt = "oficio" | "marca" | "skill" | "formato"
+export type CapaPrompt = "oficio" | "marca" | "skill" | "ejemplo" | "formato"
 
 /** Una pieza opcional del oficio de fabrica: vive en el codigo y entra por condicion. */
 export type PiezaDeOficio = {
@@ -71,6 +73,10 @@ export type OpcionesArmado = {
   contrato: string
   situacion: Situacion | null
   exigir?: Exigencia
+  /** La red de los ejemplos que lee este agente. Sin red, no lee ejemplos. */
+  redEjemplos?: RedEjemplo
+  /** El id de la noticia: reparte los ejemplos empatados entre piezas. */
+  semilla?: string
   /** Para la prueba de cobertura; en el motor vale TOPE_PROMPT. */
   tope?: number
 }
@@ -113,27 +119,44 @@ export function armarPorPiezas(o: OpcionesArmado): PromptPorPiezas {
     else porCondicion.push(s)
   }
 
+  const eleccion = o.redEjemplos
+    ? elegirEjemplos(o.datos.ejemplos ?? [], o.redEjemplos, o.situacion, o.semilla)
+    : { entran: [], fuera: [] }
+  for (const f of eleccion.fuera) fuera.push({ capa: "ejemplo", nombre: f.ejemplo.nombre, porque: f.porque })
+  let conEjemplos = eleccion.entran
+
   const marca = bloqueMarca(o.datos, o.agente)
   const fijo = unir([o.oficio, marca, bloqueDeSkills(siempre)])
 
-  const armarResto = (skills: Skill[]) => {
+  const armarResto = () => {
     const piezas = [
-      ...oficioQueEntra.map((p) => `## ${p.nombre}\n${p.texto.trim()}`),
-      ...skills.map((s) => `## ${s.nombre}\n${s.texto.trim()}`),
+      ...oficioQueEntra.map((p) => `## ${p.nombre}
+${p.texto.trim()}`),
+      ...porCondicion.map((s) => `## ${s.nombre}
+${s.texto.trim()}`),
     ]
-    return unir([piezas.length > 0 ? unir([CABECERA_POR_PIEZA(situacion), ...piezas]) : "", o.contrato])
+    return unir([
+      piezas.length > 0 ? unir([CABECERA_POR_PIEZA(situacion), ...piezas]) : "",
+      bloqueEjemplos(conEjemplos),
+      o.contrato,
+    ])
   }
 
-  // Si no cabe, salen primero las ultimas skills de condicion. Lo obligatorio
-  // (oficio, marca, formato) y las skills de siempre no salen nunca: si eso
-  // solo ya no cabe, el aviso de tamaño lo enseña en la ficha del agente.
+  // Si no cabe, salen primero los ejemplos y despues las ultimas skills de
+  // condicion: lo que la marca pidio pesa mas que lo que solo ilustra. Lo
+  // obligatorio (oficio, marca, formato) y las skills de siempre no salen
+  // nunca: si eso solo ya no cabe, el aviso de tamaño lo enseña en la ficha.
   const tope = o.tope ?? TOPE_PROMPT
-  let resto = armarResto(porCondicion)
-  while (porCondicion.length > 0 && fijo.length + 2 + resto.length > tope) {
-    const sale = porCondicion[porCondicion.length - 1]
-    fuera.push({ capa: "skill", nombre: sale.nombre, porque: "no cabía en el prompt" })
-    porCondicion = porCondicion.slice(0, -1)
-    resto = armarResto(porCondicion)
+  let resto = armarResto()
+  while (fijo.length + 2 + resto.length > tope && (conEjemplos.length > 0 || porCondicion.length > 0)) {
+    if (conEjemplos.length > 0) {
+      fuera.push({ capa: "ejemplo", nombre: conEjemplos[conEjemplos.length - 1].nombre, porque: "no cabía en el prompt" })
+      conEjemplos = conEjemplos.slice(0, -1)
+    } else {
+      fuera.push({ capa: "skill", nombre: porCondicion[porCondicion.length - 1].nombre, porque: "no cabía en el prompt" })
+      porCondicion = porCondicion.slice(0, -1)
+    }
+    resto = armarResto()
   }
 
   entro.push({ capa: "oficio", nombre: o.oficioEditado ? "Oficio (editado)" : "Oficio", porCondicion: false })
@@ -141,6 +164,7 @@ export function armarPorPiezas(o: OpcionesArmado): PromptPorPiezas {
   for (const s of siempre) entro.push({ capa: "skill", nombre: s.nombre, porCondicion: false })
   for (const p of oficioQueEntra) entro.push({ capa: "oficio", nombre: p.nombre, porCondicion: true })
   for (const s of porCondicion) entro.push({ capa: "skill", nombre: s.nombre, porCondicion: true })
+  for (const e of conEjemplos) entro.push({ capa: "ejemplo", nombre: e.nombre, porCondicion: true })
   entro.push({ capa: "formato", nombre: "Formato de respuesta", porCondicion: false })
 
   return {

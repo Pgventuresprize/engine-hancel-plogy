@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import {
+  BookmarkPlusIcon,
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -46,6 +47,8 @@ import {
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RecetaDelPrompt } from "@/components/agentes/simulador-prompt"
+import { Textarea } from "@/components/ui/textarea"
+import { guardarPiezaComoEjemploMarca } from "@/app/configuracion/marca/ejemplos-actions"
 import { conPocoMaterial, nombreMaterial } from "@/engine/content/material"
 import type { Hallazgo, Revision } from "@/engine/content/revisor"
 import { NOMBRE_OBJETIVO, type Clasificacion } from "@/engine/marca/clasificacion"
@@ -573,6 +576,71 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
 
         {error ? <span className="text-destructive text-xs">{error}</span> : null}
         {aviso ? <span className="text-xs text-amber-700 dark:text-amber-400">{aviso}</span> : null}
+      </div>
+
+      {(pieza.network === "instagram" || pieza.network === "linkedin") && !rechazada ? (
+        <GuardarComoEjemplo pieceId={pieza.id} />
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * Una pieza que salio bien pasa a ser ejemplo de la marca. Se pide el porque:
+ * es lo que el agente tiene que aprender de ella, y sin el la copia.
+ */
+function GuardarComoEjemplo({ pieceId }: { pieceId: string }) {
+  const [abierto, setAbierto] = React.useState(false)
+  const [porQue, setPorQue] = React.useState("")
+  const [estado, setEstado] = React.useState<{ ok: boolean; texto: string } | null>(null)
+  const [pending, startTransition] = React.useTransition()
+
+  if (!abierto) {
+    return (
+      <div>
+        <Button size="sm" variant="ghost" onClick={() => setAbierto(true)}>
+          <BookmarkPlusIcon />
+          Guardar como ejemplo
+        </Button>
+        {estado?.ok ? <span className="text-xs text-emerald-700 dark:text-emerald-400">{estado.texto}</span> : null}
+      </div>
+    )
+  }
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border p-3">
+      <label htmlFor={`porque-${pieceId}`} className="text-xs font-medium">
+        Por qué es buena
+      </label>
+      <Textarea
+        id={`porque-${pieceId}`}
+        rows={3}
+        maxLength={600}
+        value={porQue}
+        placeholder="Lo que el agente tiene que aprender de ella: la lámina de criterio, cómo cita las fuentes, el tono del cierre…"
+        onChange={(e) => setPorQue(e.target.value)}
+        className="text-xs"
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          disabled={pending || !porQue.trim()}
+          onClick={() =>
+            startTransition(async () => {
+              const r = await guardarPiezaComoEjemploMarca(pieceId, porQue)
+              if (r.ok) {
+                setEstado({ ok: true, texto: "Guardada en Marca › Ejemplos." })
+                setAbierto(false)
+                setPorQue("")
+              } else setEstado({ ok: false, texto: r.error })
+            })
+          }
+        >
+          {pending ? "Guardando…" : "Guardar ejemplo"}
+        </Button>
+        <Button size="sm" variant="ghost" disabled={pending} onClick={() => setAbierto(false)}>
+          Cancelar
+        </Button>
+        {estado && !estado.ok ? <span className="text-destructive text-xs">{estado.texto}</span> : null}
       </div>
     </div>
   )

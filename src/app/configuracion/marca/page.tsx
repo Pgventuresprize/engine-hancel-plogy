@@ -4,6 +4,7 @@ import { EditorLista } from "@/components/marca/editor-lista"
 import { PestanaIdentidad } from "@/components/marca/identidad"
 import { MarcaTabs } from "@/components/marca/marca-tabs"
 import { PESTANAS, type Pestana } from "@/components/marca/pestanas"
+import { PestanaEjemplos } from "@/components/marca/ejemplos"
 import { PestanaSkills } from "@/components/marca/skills"
 import { PestanaVisual } from "@/components/marca/visual"
 import { PestanaVoz } from "@/components/marca/voz"
@@ -25,7 +26,8 @@ export const metadata = { title: "Marca · Engine Hancel" }
 export default async function MarcaPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const [{ tab }, datos] = await Promise.all([searchParams, datosDeMarca()])
   const inicial: Pestana = PESTANAS.some((p) => p.valor === tab) ? (tab as Pestana) : "identidad"
-  const { perfil, editorial, variables, estilo, paleta, skills, completitud } = datos
+  const { perfil, editorial, variables, estilo, paleta, skills, ejemplos, completitud } = datos
+  const pilares = editorial.pilares.map((p) => ({ id: p.id, name: p.name }))
 
   return (
     <DashboardShell title="Marca">
@@ -68,7 +70,8 @@ export default async function MarcaPage({ searchParams }: { searchParams: Promis
             ),
             cta: <EditorCtas ctas={editorial.ctas} />,
             visual: <PestanaVisual estilo={estilo} paleta={paleta} pexelsConfigurado={pexelsConfigurado()} />,
-            skills: <PestanaSkills skills={skills} pilares={editorial.pilares.map((p) => ({ id: p.id, name: p.name }))} />,
+            skills: <PestanaSkills skills={skills} pilares={pilares} />,
+            ejemplos: <PestanaEjemplos ejemplos={ejemplos} pilares={pilares} />,
           }}
         />
       </div>

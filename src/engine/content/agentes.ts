@@ -3,6 +3,7 @@ import { llamarClaude, parsearJSONDeClaude, type Sistema, type UsoClaude } from 
 import { bloqueClasificacion, bloqueParaClasificar, resolverClasificacion } from "../marca/clasificacion"
 import { SIEMPRE, type Situacion } from "../marca/cuando"
 import { identidadEditorial } from "../marca/editorial"
+import { ejemplosDe } from "../marca/ejemplos"
 import { ctasUsables, TIPOS_CTA, type TipoCta } from "../marca/editorial-modelo"
 import { perfilDe } from "../marca/perfil"
 import type { PerfilMarca } from "../marca/perfil-modelo"
@@ -68,11 +69,19 @@ function conClasificacion(input: LinkedinJobInput): string {
  * el material que vio el agente, que es contra lo que se comprueban las cifras.
  */
 export async function contextoDeRevision(accountId: string, input: LinkedinJobInput): Promise<ContextoRevision> {
-  const [perfil, editorial] = await Promise.all([perfilDe(accountId), identidadEditorial(accountId)])
+  const [perfil, editorial, ejemplos] = await Promise.all([
+    perfilDe(accountId),
+    identidadEditorial(accountId),
+    // Sin ejemplos no hay de donde copiar: si no se pueden leer, se revisa igual.
+    ejemplosDe(accountId).catch(() => []),
+  ])
+  const ctas = ctasUsables(editorial.ctas)
   return {
     reglas: reglasDe(perfil),
-    marcaTieneCta: ctasUsables(editorial.ctas).length > 0,
+    marcaTieneCta: ctas.length > 0,
     material: materialDe(input.raw_news),
+    ejemplos: ejemplos.filter((e) => e.activo).map((e) => ({ nombre: e.nombre, texto: e.texto })),
+    textoCtas: ctas.map((c) => `${c.name}. ${c.description ?? ""}`).join("\n"),
   }
 }
 

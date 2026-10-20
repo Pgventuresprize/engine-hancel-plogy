@@ -1,4 +1,5 @@
 import { armarPrompt, bloqueMarca, type AgenteConMarca, type DatosDeMarca } from "./bloque"
+import type { Ejemplo } from "./ejemplos-modelo"
 import { bloqueSkills, type Skill } from "./skills-modelo"
 
 /**
@@ -9,6 +10,8 @@ import { bloqueSkills, type Skill } from "./skills-modelo"
 
 export type DatosParaPrompt = DatosDeMarca & {
   skills: Skill[]
+  /** Piezas de la marca que salieron bien. Las elige el armador por piezas. */
+  ejemplos?: Ejemplo[]
   /**
    * La plantilla del carrusel dibuja listas numeradas (la de Plogy). Solo
    * entonces el formato de respuesta le ofrece al agente laminas de pasos: en
