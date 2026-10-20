@@ -421,6 +421,25 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
         <p className="leading-relaxed whitespace-pre-wrap">{texto || "(sin texto)"}</p>
       )}
 
+      {/* Lo que el agente planeo antes de escribir cada lamina. No se publica:
+          sirve para ver de donde sale cada afirmacion. */}
+      {esCarrusel && pieza.payload.plan?.length ? (
+        <details className="rounded-lg border p-3 text-xs">
+          <summary className="cursor-pointer font-medium">Plan de láminas</summary>
+          <ol className="mt-2 flex flex-col gap-1.5">
+            {pieza.payload.plan.map((p) => (
+              <li key={p.n} className="leading-relaxed">
+                <span className="font-medium">
+                  {p.n} · {p.funcion || "sin función"}
+                </span>
+                {p.aporta ? <span className="text-muted-foreground"> · aporta: {p.aporta}</span> : null}
+                {p.fuente ? <span className="text-muted-foreground"> · fuente: {p.fuente}</span> : null}
+              </li>
+            ))}
+          </ol>
+        </details>
+      ) : null}
+
       <div className="flex flex-wrap items-center gap-2 border-t pt-3">
         {!publicada && !rechazada && pieza.status !== "approved" ? (
           <Button

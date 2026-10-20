@@ -6,6 +6,7 @@ import { perfilDe } from "../marca/perfil"
 import type { PerfilMarca } from "../marca/perfil-modelo"
 import { corregirTextos } from "../studio/ortografia"
 import {
+  alcanceDelAngulo,
   armarRevision,
   arreglarCarrusel,
   arreglarPost,
@@ -92,20 +93,50 @@ ${pedidoDeCorreccion(hallazgos)}`
 }
 
 /**
- * Corrige una pieza con lo que encontro el revisor: una vuelta mas al agente
- * con el pedido exacto. Se queda la version que menos frena; si la vuelta falla
- * o sale peor, la pieza se queda como estaba, con la correccion anotada para
- * que se vea que se intento.
+ * Cuantas vueltas de correccion da una pieza como mucho. Dos: la calidad manda
+ * sobre el costo, y la segunda recoge lo que la primera arreglo a medias.
+ */
+const MAX_VUELTAS = 2
+
+type Revisado<V> = { version: V; hallazgos: Hallazgo[]; arreglos: Arreglo[]; correcciones: Correccion[] }
+type Escritor<V> = (pedido: Hallazgo[], version: V) => Promise<{ version: V; hallazgos: Hallazgo[]; arreglos: Arreglo[]; uso: UsoClaude } | null>
+
+/**
+ * Corrige una pieza con lo que encontro el revisor, frenos y avisos: vuelve al
+ * agente con el pedido exacto hasta que no quede nada o hasta MAX_VUELTAS. Para
+ * en cuanto una vuelta no mejora. Cada vuelta queda anotada.
+ */
+async function corregirEnVueltas<V>(
+  anterior: Revisado<V>,
+  origen: Correccion["origen"],
+  escribir: Escritor<V>
+): Promise<Revisado<V> & { uso: UsoClaude | null }> {
+  let actual = anterior
+  let uso: UsoClaude | null = null
+  for (let i = 0; i < MAX_VUELTAS && actual.hallazgos.length > 0; i++) {
+    const r = await vueltaDeCorreccion({ anterior: actual, origen, escribir })
+    if (r.uso) uso = uso ? sumarUso(uso, r.uso) : r.uso
+    const mejoro = r.version !== actual.version
+    actual = { version: r.version, hallazgos: r.hallazgos, arreglos: r.arreglos, correcciones: r.correcciones }
+    if (!mejoro) break
+  }
+  return { ...actual, uso }
+}
+
+/**
+ * Una vuelta al agente con el pedido exacto. Se queda la version que menos
+ * frena; si la vuelta falla o sale peor, la pieza se queda como estaba, con la
+ * correccion anotada para que se vea que se intento.
  */
 async function vueltaDeCorreccion<V>(opciones: {
-  anterior: { version: V; hallazgos: Hallazgo[]; arreglos: Arreglo[]; correcciones: Correccion[] }
+  anterior: Revisado<V>
   origen: Correccion["origen"]
-  escribir: (pedido: Hallazgo[]) => Promise<{ version: V; hallazgos: Hallazgo[]; arreglos: Arreglo[]; uso: UsoClaude } | null>
+  escribir: Escritor<V>
 }): Promise<{ version: V; hallazgos: Hallazgo[]; arreglos: Arreglo[]; correcciones: Correccion[]; uso: UsoClaude | null }> {
   const { anterior } = opciones
-  let nueva: Awaited<ReturnType<typeof opciones.escribir>> = null
+  let nueva: Awaited<ReturnType<Escritor<V>>> = null
   try {
-    nueva = await opciones.escribir(anterior.hallazgos)
+    nueva = await opciones.escribir(anterior.hallazgos, anterior.version)
   } catch (e) {
     console.error("[revisor] La vuelta de correccion fallo:", e instanceof Error ? e.message : e)
   }
@@ -146,6 +177,7 @@ Por la noticia que se te da, decide:
 REGLAS
 - Escribe en el idioma indicado en las variables.
 - No inventes datos que no esten en el input. Si falta contexto, trabaja con lo que hay.
+- NO INVENTES ALCANCE. Nada de "miles de", "cientos de", "la mayoria de", "nadie", "todos" ni "cualquier empresa" si el contenido no lo dice. Lo que el hecho revela se dice del hecho, no de un universo que nadie conto. Si la tesis generaliza mas alla de lo que trae la noticia, es una hipotesis y se dice como hipotesis ("es probable que", "puede que"), nunca como dato.
 - La noticia ya paso el filtro de relevancia: siempre produce el mejor angulo posible, no descartes.
 - TRABAJAS SOBRE EL HECHO, NO SOBRE SU FIABILIDAD. El contenido que recibes es lo que paso. Nunca es tu tema si el titular es "comprobable", si la fuente es fiable o si el dato esta "confirmado": eso ya lo decidio quien te paso esta noticia. Da el hecho por bueno y cuenta lo que revela. Prohibido cualquier angulo o tesis del tipo "un titular dijo que X pero no se puede comprobar", "la noticia afirma sin pruebas", "habria que verificar": eso no es un angulo, es desconfianza, y aqui el hecho ya esta dado.`
 
@@ -178,12 +210,33 @@ ${bloqueParaClasificar(editorial)}`
 
   const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: 1000 })
   if (!r.ok) throw new Error(r.error)
-  const bruto = parsearJSONDeClaude(r.texto)
+  let bruto = parsearJSONDeClaude(r.texto)
+  let uso = r.uso
+
+  // El alcance sin respaldo ("miles de integraciones", "nadie lo sabe") no se
+  // queda en el angulo: el escritor lo hereda como dato. La instruccion del
+  // oficio sola no bastaba, asi que si aparece, vuelve una vez con el pedido.
+  const material = materialDe(n)
+  const alcance = alcanceDelAngulo(bruto, material)
+  if (alcance.length > 0) {
+    const otra = await llamarClaude({ accountId, model, system, prompt: promptDeCorreccion(prompt, bruto, alcance), maxTokens: 1000 })
+    if (otra.ok) {
+      uso = sumarUso(uso, otra.uso)
+      try {
+        const nuevo = parsearJSONDeClaude(otra.texto) as Record<string, unknown>
+        if (typeof nuevo?.angle === "string" && alcanceDelAngulo(nuevo, material).length < alcance.length) bruto = nuevo
+      } catch {
+        // Si la vuelta no se puede leer, se queda el primero: un angulo con un
+        // "miles de" es mejor que ningun angulo.
+      }
+    }
+  }
+
   const respuesta =
     bruto && typeof bruto === "object" && !Array.isArray(bruto)
       ? { ...(bruto as Record<string, unknown>), clasificacion: resolverClasificacion(bruto, editorial) }
       : bruto
-  return { respuesta, uso: r.uso }
+  return { respuesta, uso }
 }
 
 // ------------------------------------------------------------------ linkedin
@@ -219,6 +272,7 @@ CÓMO NO SONAR A IA
 
 RIGOR
 - Nunca inventes cifras, quotes ni hechos. Usa solo lo del input. Marca lo que sea inferencia ("probablemente", "esto sugiere").
+- Nada de "miles de", "cientos de", "la mayoría de", "nadie" o "todos" si el input no lo dice. El ángulo es una lectura, no un dato: no conviertas sus generalizaciones en hechos.
 - Si das un total y su desglose, que cuadren.
 
 LONGITUD según la variable: corto 80-120 palabras, medio 120-220, largo 220-320.
@@ -315,7 +369,7 @@ export async function generarLinkedin(
   const prompt = promptLinkedin(input)
   const ctx = await contextoDeRevision(accountId, input)
   const primera = await escribirLinkedin(accountId, model, system, prompt, ctx, input.variables.longitud)
-  if (frenosDe(primera.hallazgos).length === 0) {
+  if (primera.hallazgos.length === 0) {
     return { respuesta: respuestaLinkedin(primera.version, armarRevision(primera.hallazgos, primera.arreglos)), uso: primera.uso }
   }
   const final = await corregirPost(accountId, input, model, system, { ...primera, correcciones: [] }, "automatica", ctx)
@@ -334,19 +388,16 @@ export async function corregirPost(
 ): Promise<{ respuesta: ReturnType<typeof respuestaLinkedin>; uso: UsoClaude | null }> {
   const contexto = ctx ?? (await contextoDeRevision(accountId, input))
   const prompt = promptLinkedin(input)
-  const r = await vueltaDeCorreccion({
-    anterior,
-    origen,
-    escribir: (pedido) =>
-      escribirLinkedin(
-        accountId,
-        model,
-        system,
-        promptDeCorreccion(prompt, { parrafos: anterior.version.post.split("\n\n") }, pedido),
-        contexto,
-        input.variables.longitud
-      ),
-  })
+  const r = await corregirEnVueltas(anterior, origen, (pedido, version) =>
+    escribirLinkedin(
+      accountId,
+      model,
+      system,
+      promptDeCorreccion(prompt, { parrafos: version.post.split("\n\n") }, pedido),
+      contexto,
+      input.variables.longitud
+    )
+  )
   return { respuesta: respuestaLinkedin(r.version, armarRevision(r.hallazgos, r.arreglos, r.correcciones)), uso: r.uso }
 }
 
@@ -427,6 +478,9 @@ Después de la última va una lámina más, el cierre, y la escribes tú aparte,
 CONTENIDO
 Escribe en el idioma indicado en las variables. Texto cortísimo por lámina: título de hasta 65 caracteres y cuerpo de hasta 2 frases. Toma postura, no resumas neutral. Cambia adjetivos por datos concretos cuando estén en el input. Explica nombres poco conocidos la primera vez. No inventes datos: cada cifra que escribas tiene que estar en el contenido. Sin hipérboles.
 
+EL ÁNGULO ES UNA LECTURA, NO UN DATO
+El ángulo y la tesis te dicen qué contar, no qué es verdad. No conviertas sus generalizaciones en hechos: lo que afirmes como hecho tiene que estar en el contenido. Nada de "miles de", "cientos de", "la mayoría de", "nadie" o "todos" si el contenido no lo dice; si la idea lo necesita, dilo como lo que es: "puede pasar", "es probable", "si tu integración la montó un tercero".
+
 TIPO DE LÁMINA: "photo_hook" la 1 (solo hook); "text" las demás (título y cuerpo).
 
 LAS FOTOS: TÚ DECIDES QUÉ SE BUSCA
@@ -454,6 +508,9 @@ Antes de responder relee y confirma cinco cosas: que no hay guiones largos, que 
 
 const rango = (min: number, max: number) => (min === max ? `${min}` : `${min} a ${max}`)
 
+/** Con el plan de cada lamina, el guion pide mas salida: en la prueba fueron 1.650 tokens. */
+const MAX_TOKENS_INSTAGRAM = 5000
+
 /**
  * El formato del carrusel con los numeros de la marca: cuantas laminas, cuantos
  * hashtags y si van emojis. Son los mismos con los que el revisor comprueba la
@@ -466,9 +523,10 @@ export function contratoInstagram(
   const sinHashtags = perfil.hashtags_max === 0
   const hashtags = sinHashtags ? "" : `"<${rango(perfil.hashtags_min, perfil.hashtags_max)} en minúscula sin espacios>"`
   return `RESPONDE SOLO con este JSON, sin texto alrededor:
-{"slide_count":<${laminas}>,"caption":"<2 a 4 frases con la tesis y el cta, oraciones completas>","hashtags":[${hashtags}],"fotos":["<5 a 8 búsquedas en inglés>"],"elemento":"<una búsqueda en español de la cosa concreta>","slides":[{"n":1,"type":"photo_hook","hook":"<máx 95 caracteres>"},{"n":2,"type":"text","title":"<máx 65 caracteres>","body":"<máx 2 frases>"}],"cierre":{"title":"<máx 40 caracteres: la acción del CTA>","body":"<máx 140 caracteres: la razón para hacerlo>"}}
+{"slide_count":<${laminas}>,"caption":"<2 a 4 frases con la tesis y el cta, oraciones completas>","hashtags":[${hashtags}],"fotos":["<5 a 8 búsquedas en inglés>"],"elemento":"<una búsqueda en español de la cosa concreta>","slides":[{"n":1,"type":"photo_hook","funcion":"<función narrativa>","aporta":"<qué hace necesaria la siguiente>","fuente":"<de qué parte del contenido sale, o criterio de la marca>","hook":"<máx 95 caracteres>"},{"n":2,"type":"text","funcion":"<...>","aporta":"<...>","fuente":"<...>","title":"<máx 65 caracteres>","body":"<máx 2 frases>"}],"cierre":{"title":"<máx 40 caracteres: la acción del CTA>","body":"<máx 140 caracteres: la razón para hacerlo>"}}
 
 El array slides va en orden y tiene ${perfil.laminas_min === perfil.laminas_max ? "exactamente" : "de"} ${laminas} elementos, tantos como sostenga el contenido: el primero photo_hook, los demás text.
+PLANEA CADA LÁMINA ANTES DE ESCRIBIRLA. Cada elemento de slides lleva primero tres campos: "funcion" (tensión, hecho, mecanismo, criterio, síntesis...), "aporta" (qué deja abierto o qué hace necesaria la siguiente) y "fuente" (de qué parte del contenido sale lo que afirma, o "criterio de la marca" si es opinión de la marca). Escríbelos primero y después el texto, de modo que el texto cumpla esa función y no afirme nada que su fuente no diga. Estos tres campos no se publican.
 ${sinHashtags ? "La marca no usa hashtags: \"hashtags\" va vacío." : `Hashtags: ${rango(perfil.hashtags_min, perfil.hashtags_max)}, específicos y buscables.`}
 ${perfil.emojis_instagram ? "Emojis: solo si ayudan a leer, nunca de adorno." : "Emojis: ninguno, en ningún campo."}
 El caption termina pidiendo la misma acción que el cierre, con sus mismas palabras clave.
@@ -529,12 +587,12 @@ export async function generarInstagram(
   system: string
 ): Promise<{ respuesta: unknown; uso: UsoClaude }> {
   const prompt = promptInstagram(input)
-  const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: 3600 })
+  const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: MAX_TOKENS_INSTAGRAM })
   if (!r.ok) throw new Error(r.error)
 
   const ctx = await contextoDeRevision(accountId, input)
   const primera = guionRevisado(parsearJSONDeClaude(r.texto), input, ctx)
-  if (frenosDe(primera.hallazgos).length === 0) {
+  if (primera.hallazgos.length === 0) {
     return { respuesta: conRevision(primera.version, armarRevision(primera.hallazgos, primera.arreglos)), uso: r.uso }
   }
   const final = await corregirCarrusel(accountId, input, model, system, { ...primera, correcciones: [] }, "automatica", ctx)
@@ -553,21 +611,17 @@ export async function corregirCarrusel(
 ): Promise<{ respuesta: unknown; uso: UsoClaude | null }> {
   const contexto = ctx ?? (await contextoDeRevision(accountId, input))
   const prompt = promptInstagram(input)
-  const r = await vueltaDeCorreccion({
-    anterior,
-    origen,
-    escribir: async (pedido) => {
-      const respuesta = await llamarClaude({
-        accountId,
-        model,
-        system,
-        prompt: promptDeCorreccion(prompt, guionParaCorregir(anterior.version), pedido),
-        maxTokens: 3600,
-      })
-      if (!respuesta.ok) throw new Error(respuesta.error)
-      const nueva = guionRevisado(parsearJSONDeClaude(respuesta.texto), input, contexto)
-      return dibujable(nueva.version) ? { ...nueva, uso: respuesta.uso } : null
-    },
+  const r = await corregirEnVueltas(anterior, origen, async (pedido, version) => {
+    const respuesta = await llamarClaude({
+      accountId,
+      model,
+      system,
+      prompt: promptDeCorreccion(prompt, guionParaCorregir(version), pedido),
+      maxTokens: MAX_TOKENS_INSTAGRAM,
+    })
+    if (!respuesta.ok) throw new Error(respuesta.error)
+    const nueva = guionRevisado(parsearJSONDeClaude(respuesta.texto), input, contexto)
+    return dibujable(nueva.version) ? { ...nueva, uso: respuesta.uso } : null
   })
   return { respuesta: conRevision(r.version, armarRevision(r.hallazgos, r.arreglos, r.correcciones)), uso: r.uso }
 }

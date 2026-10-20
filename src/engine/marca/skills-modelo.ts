@@ -84,7 +84,10 @@ export function bloqueSkills(skills: Skill[], agente: AgenteConMarca): string {
   const suyas = skillsDeAgente(skills, agente)
   if (suyas.length === 0) return ""
   return [
-    "# SKILLS DE LA MARCA\nCómo hace esta marca cosas concretas. Síguelas como parte de tu oficio; el formato de respuesta de abajo no cambia.",
+    // La segunda frase es para las skills que vienen de un kit de trabajo con
+    // archivos: piden entregar briefs, tablas o carpetas, y aqui solo se
+    // entrega el JSON. Sin ella, el agente intenta cumplir las dos cosas.
+    "# SKILLS DE LA MARCA\nCómo hace esta marca cosas concretas. Síguelas como parte de tu oficio; el formato de respuesta de abajo no cambia. Donde una skill pida entregar archivos, briefs o tablas, o leer otro archivo, entrega solo lo que pide el formato de respuesta y trabaja con lo que tienes aquí.",
     ...suyas.map((s) => `## ${s.nombre}\n${s.texto.trim()}`),
   ].join("\n\n")
 }

@@ -5,6 +5,7 @@ import { comoHora } from "@/engine/agents/turno"
 import { redesActivas as redesActivas_ } from "@/engine/agents/redes"
 import { ajustesDe, type Agente } from "@/engine/agents/settings"
 import { parseRevision, type Revision } from "@/engine/content/revisor"
+import type { PlanLamina } from "@/engine/render/carousel"
 import { parseClasificacion } from "@/engine/marca/clasificacion"
 import { supabaseAdmin } from "@/engine/supabase-admin"
 import { idDeCuentaActual } from "@/lib/accounts"
@@ -44,7 +45,7 @@ export type PiezaDelTablero = {
   id: string
   network: string
   status: string
-  payload: PiecePayload & { images?: string[]; caption?: string; image?: string | null }
+  payload: PiecePayload & { images?: string[]; caption?: string; image?: string | null; plan?: PlanLamina[] }
   published_at: string | null
   linkedin_urn: string | null
   publish_error: string | null

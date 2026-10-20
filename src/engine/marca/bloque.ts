@@ -53,8 +53,13 @@ export type DatosDeMarca = { perfil: PerfilMarca; editorial: IdentidadEditorial 
 const MAX_FILAS = 12
 const MAX_DESCRIPCION = 300
 
-/** Por encima de esto el prompt final se avisa en pantalla: cada llamada lo paga entero. */
-export const TOPE_PROMPT = 40_000
+/**
+ * Por encima de esto el prompt final se avisa en pantalla: cada llamada lo paga
+ * entero. Era 40.000; con las skills completas del kit y el sistema narrativo,
+ * el de Instagram de Plogy ronda los 60.000, y la prueba de la pieza 004 mostro
+ * que ese texto completo es lo que sube la calidad.
+ */
+export const TOPE_PROMPT = 100_000
 
 const corta = (t: string | null | undefined) => {
   const limpio = (t ?? "").trim().replace(/\s+/g, " ")

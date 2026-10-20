@@ -46,6 +46,8 @@ export type CarouselPayload = {
    * elementos: una llamada mas a Satori y ni una a Pexels.
    */
   portadaFacebook?: string
+  /** Lo que el agente planeo de cada lamina: funcion, que aporta y su fuente. */
+  plan?: PlanLamina[]
 }
 
 /** Lo que el agente deja en `jobs_instagram.respuesta`. */
@@ -199,6 +201,21 @@ export function arreglarOrtografia(texto: string): string {
  */
 export type CierreDelGuion = { titulo: string; texto: string; tipo: string | null }
 
+/**
+ * Lo que el agente planeo de cada lamina antes de escribirla. No se dibuja ni
+ * se publica: se enseña en la ficha para ver de donde sale cada afirmacion.
+ */
+export type PlanLamina = { n: number; funcion: string; aporta: string; fuente: string }
+
+function planDelGuion(valor: unknown): PlanLamina[] {
+  if (!Array.isArray(valor)) return []
+  const campo = (v: unknown) => (typeof v === "string" ? v.trim().slice(0, 300) : "")
+  return valor
+    .filter((s): s is Record<string, unknown> => Boolean(s) && typeof s === "object" && !Array.isArray(s))
+    .map((s, i) => ({ n: i + 1, funcion: campo(s.funcion), aporta: campo(s.aporta), fuente: campo(s.fuente) }))
+    .filter((p) => p.funcion || p.aporta || p.fuente)
+}
+
 export function parseInstagramResponse(respuesta: unknown): {
   caption: string
   hashtags: string[]
@@ -209,6 +226,8 @@ export function parseInstagramResponse(respuesta: unknown): {
   elemento: string
   /** Null = no lo escribio (un guion de antes, o una marca sin CTA): va el de la marca. */
   cierre: CierreDelGuion | null
+  /** Vacio en un guion de antes de que se planeara cada lamina. */
+  plan: PlanLamina[]
 } {
   const raiz = (respuesta ?? {}) as Record<string, unknown>
 
@@ -254,7 +273,7 @@ export function parseInstagramResponse(respuesta: unknown): {
       ? raiz.elemento.trim()
       : ""
 
-  return { caption, hashtags, slides, fotos, elemento, cierre: cierreDelGuion(raiz.cierre) }
+  return { caption, hashtags, slides, fotos, elemento, cierre: cierreDelGuion(raiz.cierre), plan: planDelGuion(raiz.slides) }
 }
 
 /**
@@ -322,13 +341,13 @@ export async function generarCarrusel(
   /** Dibuja ademas la portada suelta que usa Facebook. */
   conPortadaFacebook = false
 ): Promise<CarouselPayload> {
-  const { caption, hashtags, slides, fotos, elemento, cierre } = parseInstagramResponse(respuesta)
+  const { caption, hashtags, slides, fotos, elemento, cierre, plan } = parseInstagramResponse(respuesta)
   // De aqui en adelante el estilo ya lleva el cierre de esta pieza.
   estilo = estiloConCierre(estilo, cierre)
 
   // Plogy tiene su propia estructura de laminas, no la clasica recoloreada.
   if (estilo.plantilla === "plogy") {
-    return generarCarruselPlogy(pieceKey, { caption, hashtags, slides, fotos, elemento, cierre }, news, estilo, nichos, conPortadaFacebook)
+    return generarCarruselPlogy(pieceKey, { caption, hashtags, slides, fotos, elemento, cierre, plan }, news, estilo, nichos, conPortadaFacebook)
   }
 
   // El cierre va siempre, porque pedir algo al final es lo unico que convierte
@@ -477,6 +496,7 @@ export async function generarCarrusel(
     portadaSinFoto: sinFotoPortada,
     terminosFoto: terminos.slice(0, 6),
     creditos,
+    ...(plan.length ? { plan } : {}),
   }
 }
 
@@ -669,5 +689,6 @@ async function generarCarruselPlogy(
     portadaSinFoto: fotoPortada === null,
     terminosFoto: terminos.slice(0, 6),
     creditos,
+    ...(guion.plan.length ? { plan: guion.plan } : {}),
   }
 }

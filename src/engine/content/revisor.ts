@@ -6,10 +6,13 @@ import type { PerfilMarca } from "../marca/perfil-modelo"
  * Mira cada pieza en cuanto el agente la escribe y dice tres cosas:
  *
  * - Lo que FRENA: un fallo que no puede salir publicado (un guion largo, una
- *   frase prohibida de la marca, una cifra que no esta en la noticia). La pieza
- *   vuelve al agente con el pedido exacto de lo que tiene que corregir y, si aun
- *   asi no se arregla, no se publica sola: espera a que alguien la apruebe.
+ *   frase prohibida de la marca, una cifra o un alcance que no estan en la
+ *   noticia). Si no se arregla, la pieza no se publica sola: espera a que
+ *   alguien la apruebe.
  * - Los AVISOS: lo que conviene mirar pero no tumba la pieza.
+ *
+ * Frenos y avisos vuelven al agente con el pedido exacto de lo que tiene que
+ * corregir: la calidad manda sobre el costo de una llamada mas.
  * - Los ARREGLOS: lo mecanico, que se corrige solo sin tocar el sentido y queda
  *   anotado.
  *
@@ -36,6 +39,7 @@ export type Regla =
   | "sin_cierre"
   | "longitud_post"
   | "guion_en_nombre"
+  | "alcance"
 
 export type Nivel = "frena" | "aviso"
 
@@ -297,19 +301,77 @@ function nombresConGuion(material: string): string[] {
   return [...vistos]
 }
 
-/** Devuelve el texto con el guion de los nombres repuesto, y lo que cambio. */
+/**
+ * Devuelve el texto con el guion de los nombres repuesto, y lo que cambio. El
+ * guion se pierde de dos formas: cambiado por un espacio ("GPT 6") o quitado
+ * sin mas ("GPT4o", "gpt6luna"), que es lo que hace un agente que entiende la
+ * regla de "sin guiones" de mas.
+ */
 function reponerGuiones(texto: string, nombres: string[]): { texto: string; cambios: string[] } {
   let salida = texto
   const cambios: string[] = []
   for (const nombre of nombres) {
-    const sinGuion = nombre.replace(/-/g, " ")
-    const patron = new RegExp(`(?<![A-Za-z0-9-])${escapar(sinGuion)}(?![A-Za-z0-9])`, "g")
-    if (patron.test(salida)) {
-      salida = salida.replace(patron, nombre)
-      cambios.push(`${sinGuion} → ${nombre}`)
+    for (const perdido of new Set([nombre.replace(/-/g, " "), nombre.replace(/-/g, "")])) {
+      if (perdido.length < 3) continue
+      const patron = new RegExp(`(?<![A-Za-z0-9-])${escapar(perdido)}(?![A-Za-z0-9])`, "g")
+      if (patron.test(salida)) {
+        salida = salida.replace(patron, nombre)
+        cambios.push(`${perdido} → ${nombre}`)
+      }
     }
   }
   return { texto: salida, cambios }
+}
+
+/**
+ * Las expresiones de alcance: cuantos o que tan extendido es algo. Suenan a
+ * dato, y en la prueba de la pieza 004 fueron el fallo que mas resto: "miles de
+ * bots", "los modelos que mas pymes integraron", "nadie sabe". Valen si el
+ * material las trae, en español o en ingles, que es como llegan muchas fuentes.
+ */
+const ALCANCE: { es: RegExp; en: RegExp; tipo: "cantidad" | "absoluto" }[] = [
+  { es: /(?<!\d\s?)\bmiles de\b/, en: /\bthousands\b|\bmiles de\b/, tipo: "cantidad" },
+  { es: /(?<!\d\s?)\bcientos de\b/, en: /\bhundreds\b|\bcientos de\b/, tipo: "cantidad" },
+  { es: /(?<!\d\s?)\bdecenas de\b/, en: /\bdozens\b|\btens of\b|\bdecenas de\b/, tipo: "cantidad" },
+  { es: /(?<![\d.,]\s?)\bmillones de\b/, en: /\bmillions of\b|(?<![\d.,]\s?)\bmillones de\b/, tipo: "cantidad" },
+  { es: /\bla (mayoria|mayor parte) de\b/, en: /\bmost\b|\bmajority\b|\bla (mayoria|mayor parte)\b/, tipo: "cantidad" },
+  { es: /\bnadie\b/, en: /\bnobody\b|\bno one\b|\bnadie\b/, tipo: "absoluto" },
+  { es: /\btodo el mundo\b/, en: /\beveryone\b|\beverybody\b|\btodo el mundo\b/, tipo: "absoluto" },
+  { es: /\b(ninguna empresa|ningun negocio|ninguna marca)\b/, en: /\bno (company|business|one)\b|\bninguna empresa\b|\bningun negocio\b/, tipo: "absoluto" },
+  { es: /\btod[oa]s l[oa]s (empresas|negocios|pymes|marcas|companias)\b/, en: /\b(all|every) (companies|company|businesses|business)\b|\btod[oa]s l[oa]s (empresas|negocios)\b/, tipo: "absoluto" },
+]
+
+/** El alcance sin respaldo en el angulo y la tesis: lo que el escritor heredaria como dato. */
+export function alcanceDelAngulo(respuesta: unknown, material: string): Hallazgo[] {
+  if (!esObjeto(respuesta)) return []
+  const campos: Campo[] = []
+  if (typeof respuesta.angle === "string") campos.push({ donde: "ángulo", texto: respuesta.angle })
+  if (typeof respuesta.thesis === "string") campos.push({ donde: "tesis", texto: respuesta.thesis })
+  return reglaDeAlcance(campos, material)
+}
+
+function reglaDeAlcance(campos: Campo[], material: string): Hallazgo[] {
+  const fuente = normalizar(material)
+  const hallazgos: Hallazgo[] = []
+  for (const { donde, texto } of campos) {
+    if (donde.startsWith("cierre")) continue
+    const t = normalizar(texto)
+    for (const a of ALCANCE) {
+      const m = a.es.exec(t)
+      if (!m || a.en.test(fuente)) continue
+      hallazgos.push({
+        regla: "alcance",
+        nivel: "frena",
+        donde,
+        detalle: `Dice «${m[0]}» y el material no dice ${a.tipo === "cantidad" ? "cuántos son" : "que sea así para todos"}: ${cita(fragmento(texto, m.index, 60))}`,
+        pide:
+          a.tipo === "cantidad"
+            ? "Quita la cantidad o dila como posibilidad («puede afectar a…»). Solo afirma cuántos si el material lo dice."
+            : "Cambia el absoluto por lo que sí se sabe («puede que no te llegue el aviso»). Solo afirma «nadie» o «todos» si el material lo dice.",
+      })
+    }
+  }
+  return hallazgos
 }
 
 const EMOJI = /(?![©®™])\p{Extended_Pictographic}/u
@@ -395,7 +457,7 @@ function reglasDeTexto(campos: Campo[], ctx: ContextoRevision, emojisPermitidos:
     }
   }
 
-  return hallazgos
+  return [...hallazgos, ...reglaDeAlcance(campos, ctx.material)]
 }
 
 // ------------------------------------------------------------------ carrusel

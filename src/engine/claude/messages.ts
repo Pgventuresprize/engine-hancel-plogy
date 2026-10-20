@@ -111,10 +111,17 @@ export async function llamarClaude(opciones: LlamadaClaude): Promise<ResultadoCl
         { type: "text", text: opciones.system },
       ]
 
+  // Opus 5.5 no admite apagar el razonamiento de ninguna de las dos formas: con
+  // "between_tools" responde 400. Se le deja pensar a su manera, y como lo que
+  // piensa sale del mismo presupuesto que la respuesta, se le da el doble de
+  // margen para que el JSON no llegue cortado (en un carrusel uso 3.200 tokens
+  // de salida donde Sonnet usa 900).
+  const piensaSiempre = opciones.model.includes("opus-5-5")
+
   try {
     const body: Record<string, unknown> = {
       model: opciones.model,
-      max_tokens: opciones.maxTokens,
+      max_tokens: piensaSiempre ? Math.max(opciones.maxTokens * 2, 8000) : opciones.maxTokens,
       // Sin razonamiento extendido. No es un ahorro cualquiera: el presupuesto
       // de salida lo comparten el pensamiento y la respuesta, asi que un modelo
       // que se pone a pensar largo agota el limite y devuelve el JSON cortado, o
@@ -125,8 +132,11 @@ export async function llamarClaude(opciones: LlamadaClaude): Promise<ResultadoCl
       // deliberacion larga.
       //
       // La familia 5.5 no acepta "disabled": ahi apagarlo se dice
-      // "between_tools" (no piensa antes de responder).
-      thinking: opciones.model.includes("-5-5") ? { type: "between_tools" } : { type: "disabled" },
+      // "between_tools" (no piensa antes de responder). Opus 5.5 tampoco acepta
+      // eso y va sin el campo (ver arriba).
+      ...(piensaSiempre
+        ? {}
+        : { thinking: opciones.model.includes("-5-5") ? { type: "between_tools" } : { type: "disabled" } }),
       system,
       messages: [
         {

@@ -176,9 +176,10 @@ export function PestanaVoz({ perfil, tono, longitud }: { perfil: PerfilMarca; to
         <div className="grid gap-1">
           <p className="text-sm font-medium">Reglas que se comprueban</p>
           <p className="text-muted-foreground text-xs">
-            El revisor automático las mira en cada pieza, sin IA. Lo que frena (un guion largo, una frase
-            prohibida, una cifra que no está en la noticia, un emoji donde no van) vuelve al agente para que lo
-            corrija y no se publica solo hasta que lo apruebes. Las frases prohibidas de arriba también cuentan.
+            El revisor automático las mira en cada pieza, sin IA, y lo que encuentra vuelve al agente para que lo
+            corrija. Lo que frena (un guion largo, una frase prohibida, una cifra o un «miles de» que no están en
+            la noticia, un emoji donde no van) no se publica solo hasta que lo apruebes. Las frases prohibidas de
+            arriba también cuentan.
           </p>
         </div>
 
