@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, PlusIcon, Trash2Icon } from "lucide-react"
+import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, PaperclipIcon, PlusIcon, Trash2Icon } from "lucide-react"
 
 import { borrarSkillMarca, guardarSkillMarca, moverSkillMarca } from "@/app/configuracion/marca/skills-actions"
 import { Badge } from "@/components/ui/badge"
@@ -16,6 +16,15 @@ import { NOMBRE_AGENTE, TOPES_SKILL, type CamposSkill, type Skill } from "@/engi
 import { CampoTexto, useFormulario } from "./campos"
 
 const VACIA: CamposSkill = { nombre: "", descripcion: "", texto: "", original: "", agentes: [], activo: true }
+
+/** El `name:` y el `description:` de la cabecera de un SKILL.md, si la tiene. */
+function cabeceraDe(texto: string): { name?: string; description?: string } {
+  const bloque = /^---\n([\s\S]*?)\n---/.exec(texto)?.[1]
+  if (!bloque) return {}
+  const campo = (clave: string) =>
+    new RegExp(`^${clave}:\\s*(.+)$`, "m").exec(bloque)?.[1]?.trim().replace(/^["']|["']$/g, "") || undefined
+  return { name: campo("name"), description: campo("description") }
+}
 
 /**
  * Las skills de la marca: como hace esta marca cosas concretas, y a que
@@ -187,6 +196,49 @@ function EditorSkill({
 
   const originalLargo = v.original.length > TOPES_SKILL.texto
 
+  const archivoRef = React.useRef<HTMLInputElement>(null)
+  const [avisoArchivo, setAvisoArchivo] = React.useState<{ ok: boolean; texto: string } | null>(null)
+
+  /**
+   * Lee los archivos en el navegador y deja su texto en el original: no se
+   * suben a ningun sitio. Uno solo, con el original vacio, entra tal cual;
+   * varios, o encima de lo que ya hay, se añaden con su nombre de cabecera.
+   */
+  const adjuntar = async (lista: FileList | null) => {
+    const archivos = [...(lista ?? [])]
+    if (archivos.length === 0) return
+    const otros = archivos.filter((a) => !/\.(md|markdown|txt)$/i.test(a.name))
+    if (otros.length > 0) {
+      setAvisoArchivo({
+        ok: false,
+        texto: `Solo archivos de texto (.md o .txt). No se cargó: ${otros.map((a) => a.name).join(", ")}.`,
+      })
+      return
+    }
+
+    const leidos = await Promise.all(
+      archivos.map(async (a) => ({ nombre: a.name, texto: (await a.text()).replace(/\r\n/g, "\n").trim() }))
+    )
+    const nuevo =
+      leidos.length === 1 && !v.original.trim()
+        ? leidos[0].texto
+        : [v.original.trim(), ...leidos.map((l) => `===== ${l.nombre} =====\n${l.texto}`)].filter(Boolean).join("\n\n")
+    if (nuevo.length > TOPES_SKILL.original) {
+      setAvisoArchivo({ ok: false, texto: `No cabe: el original quedaría en ${nuevo.length} caracteres y el tope es ${TOPES_SKILL.original}.` })
+      return
+    }
+    f.set("original", nuevo)
+
+    // La cabecera de un SKILL.md trae nombre y descripcion: si la skill aun no
+    // los tiene, se toman de ahi. Nunca se pisa lo que ya escribiste.
+    const cabecera = cabeceraDe(leidos[0].texto)
+    if (!v.nombre.trim() && cabecera.name) f.set("nombre", cabecera.name.slice(0, TOPES_SKILL.nombre))
+    if (!v.descripcion.trim() && cabecera.description) {
+      f.set("descripcion", cabecera.description.slice(0, TOPES_SKILL.descripcion))
+    }
+    setAvisoArchivo({ ok: true, texto: `Cargado: ${leidos.map((l) => l.nombre).join(", ")}. Falta guardar la skill.` })
+  }
+
   return (
     <div className="flex flex-col gap-4 border-t pt-4">
       <CampoTexto
@@ -268,11 +320,36 @@ function EditorSkill({
             rows={16}
             maxLength={TOPES_SKILL.original}
             value={v.original}
-            placeholder="El documento tal cual (opcional)."
+            placeholder="El documento tal cual (opcional). Pégalo, adjúntalo con el clip o arrastra aquí el archivo."
             onChange={(e) => f.set("original", e.target.value)}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              if (e.dataTransfer.files.length === 0) return
+              e.preventDefault()
+              void adjuntar(e.dataTransfer.files)
+            }}
             className="font-mono text-xs leading-relaxed"
           />
+          <input
+            ref={archivoRef}
+            type="file"
+            accept=".md,.markdown,.txt,text/markdown,text/plain"
+            multiple
+            hidden
+            onChange={(e) => {
+              void adjuntar(e.target.files)
+              // Para poder volver a elegir el mismo archivo.
+              e.target.value = ""
+            }}
+          />
+          {avisoArchivo ? (
+            <p className={`text-xs ${avisoArchivo.ok ? "text-muted-foreground" : "text-destructive"}`}>{avisoArchivo.texto}</p>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => archivoRef.current?.click()}>
+              <PaperclipIcon />
+              Adjuntar archivo
+            </Button>
             <Button
               size="sm"
               variant="outline"
