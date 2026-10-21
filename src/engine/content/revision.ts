@@ -11,6 +11,7 @@ import {
   revisarPostGuardado,
   situacionDe,
 } from "./agentes"
+import { conCriterio } from "./criterio"
 import { armarRevision, deClaude, parseRevision, type Arreglo, type EstadoClaude, type Hallazgo, type Revision } from "./revisor"
 import type { LinkedinJobInput } from "./types"
 
@@ -78,7 +79,10 @@ async function piezaYTrabajo(accountId: string, pieceId: string): Promise<{ piez
   if (!jobId) throw new Error("Esta pieza no conserva el guion del que salió.")
   const { data: job } = await supabase.from(tabla).select("id, input, respuesta").eq("id", jobId).single()
   if (!job) throw new Error("No se encontró el guion original.")
-  return { pieza, trabajo: job as Trabajo, tabla }
+  // El criterio con el que se escribio, si el angulo lo tiene: el revisor lo
+  // compara y la correccion no lo pierde. Aqui no se decide uno nuevo.
+  const { input } = await conCriterio(accountId, (job as Trabajo).input, false)
+  return { pieza, trabajo: { ...(job as Trabajo), input }, tabla }
 }
 
 /**

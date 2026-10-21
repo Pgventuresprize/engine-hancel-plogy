@@ -1,6 +1,7 @@
 import { ajustesDe } from "../agents/settings"
 import { llamarClaude, parsearJSONDeClaude, type UsoClaude } from "../claude/messages"
 import { bloqueClasificacion } from "../marca/clasificacion"
+import { bloqueCriterioRevisor } from "./criterio"
 import {
   camposCarrusel,
   camposPost,
@@ -130,7 +131,7 @@ EL ÁNGULO QUE SE LE PIDIÓ
 - angulo: ${input.angle.angle}
 - tesis: ${input.angle.thesis ?? "(sin tesis)"}
 - formato: ${input.angle.playbook_format ?? "(sin formato)"}
-${clasificacion ? `\n${clasificacion}\n` : ""}
+${clasificacion ? `\n${clasificacion}\n` : ""}${bloqueCriterioRevisor(input.angle.criterio)}
 ${textoDeLaPieza(red, version)}`
 }
 

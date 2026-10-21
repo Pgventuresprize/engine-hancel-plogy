@@ -16,6 +16,7 @@ export const AGENTES = [
   "angulo",
   "instagram",
   "linkedin",
+  "criterio",
   "revisor",
   "publicacion",
   "redaccion",
@@ -137,16 +138,21 @@ export async function ajustesDe(
   agent: Agente,
   canal = ""
 ): Promise<AjustesAgente> {
-  const { data, error } = await supabaseAdmin()
-    .from("agent_settings")
-    .select("*")
-    .eq("account_id", accountId)
-    .eq("agent", agent)
-    .eq("canal", canal)
-    .maybeSingle()
-
-  if (error) throw new Error(`No se pudieron leer los ajustes de ${agent}: ${error.message}`)
-  return data ? normalizar(data as Record<string, unknown>) : porDefecto(agent, canal)
+  // Un reintento: un "Gateway Timeout" suelto de la base tumbaba una vuelta de
+  // correccion entera (prueba de LinkedIn, 2026-10-21).
+  let mensaje = ""
+  for (let intento = 0; intento < 2; intento++) {
+    const { data, error } = await supabaseAdmin()
+      .from("agent_settings")
+      .select("*")
+      .eq("account_id", accountId)
+      .eq("agent", agent)
+      .eq("canal", canal)
+      .maybeSingle()
+    if (!error) return data ? normalizar(data as Record<string, unknown>) : porDefecto(agent, canal)
+    mensaje = error.message
+  }
+  throw new Error(`No se pudieron leer los ajustes de ${agent}: ${mensaje}`)
 }
 
 /**

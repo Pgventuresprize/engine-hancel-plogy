@@ -40,8 +40,14 @@ Al retomar uno, se detalla como bloque antes de construir.
 
 ### Opus para LinkedIn
 - **Qué es:** el mismo cambio de modelo que se hizo en Instagram.
-- **Por qué esperó:** la prueba fue solo de carruseles.
-- **Cuándo:** con una prueba igual sobre un post de LinkedIn de referencia.
+- **Probado (2026-10-21), dos veces:**
+  - Sin agente de criterio, Sonnet 5 ganó a ciegas en las tres noticias (75
+    puntos contra 66): Opus escribía más corto y fiel, pero ponía menos de Plogy.
+  - Con el agente de criterio, que le da ese criterio ya decidido, Opus ganó a
+    ciegas en las tres (99 contra 89) y le ganó también al post del kit en la
+    004. En 9 posts: 0 con criterio copiado y 6 sin ningún freno (Sonnet: 3 y
+    0), de 318 a 385 palabras (Sonnet: de 415 a 662).
+- **Cuándo volver a probar:** si sale un modelo nuevo o cambian las skills de LinkedIn.
 
 ### Estadística de avisos por bloque del prompt
 - **Qué es:** contar qué avisos del revisor salen en las piezas que llevaban cada

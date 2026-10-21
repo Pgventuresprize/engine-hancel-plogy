@@ -402,7 +402,16 @@ export function alcanceDelAngulo(respuesta: unknown, material: string): Hallazgo
  * Lo dicho como posibilidad no es un dato: "puede que nadie lo recuerde" es
  * justo como el oficio pide decirlo. Se mira lo que va justo antes.
  */
-const POSIBILIDAD = /\b(puede que|pueda que|es probable que|probablemente|posiblemente|quiza|quizas|tal vez|podria|podrian|seguramente|es posible que|si)\b[^.!?;:]{0,40}$/
+const POSIBILIDAD = /\b(puede que|pueda que|es probable que|probablemente|posiblemente|quiza|quizas|tal vez|podria|podrian|seguramente|es posible que|si|suele|suelen|el riesgo es|riesgo de que)\b[^.!?;:]{0,40}$/
+
+/**
+ * Un "nadie" o un "todos" dentro de la lectura rotulada de la marca es su
+ * opinion, no un dato que el material tenga que traer ("Nuestra lectura: eso
+ * suele significar que nadie quedo a cargo"). Solo vale para los absolutos: una
+ * cantidad ("miles de") sigue siendo un dato aunque vaya rotulada. Si la
+ * opinion se presenta como hecho, la frena el revisor con Claude.
+ */
+const OPINION_ROTULADA = /\b(nuestra lectura|nuestra hipotesis|nuestra opinion|para nosotros|creemos|criterio de plogy)\b/
 
 /** Palabras que no dicen de que se habla: no sirven para saber si el respaldo es el mismo. */
 const VACIAS = new Set([
@@ -451,12 +460,16 @@ function reglaDeAlcance(campos: Campo[], material: string): Hallazgo[] {
   const hallazgos: Hallazgo[] = []
   for (const { donde, texto } of campos) {
     if (donde.startsWith("cierre")) continue
-    for (const frase of frasesDe(texto)) {
+    const frases = frasesDe(texto)
+    for (const [i, frase] of frases.entries()) {
       const t = normalizar(frase)
+      // El rotulo suele ir antes de dos puntos, que parten la frase: "Nuestra lectura: ...".
+      const rotulo = i > 0 && frases[i - 1].trimEnd().endsWith(":") ? normalizar(frases[i - 1]) : ""
       for (const a of ALCANCE) {
         const m = a.es.exec(t)
         if (!m) continue
         if (POSIBILIDAD.test(t.slice(0, m.index))) continue
+        if (a.tipo === "absoluto" && OPINION_ROTULADA.test(`${rotulo} ${t.slice(0, m.index)}`)) continue
         if (respaldada(a, loQueSigue(t, m.index + m[0].length, 5), delMaterial)) continue
         hallazgos.push({
           regla: "alcance",
@@ -886,13 +899,19 @@ export function revisarPost(post: string, ctx: ContextoRevision, longitud?: stri
   if (rango) {
     const palabras = post.split(/\s+/).filter(Boolean).length
     // Un diez por ciento de holgura: el oficio da un rango, no una cifra exacta.
+    // Pasarse en mas de un cuarto frena: el aviso solo no lo recortaba (posts de
+    // 390 palabras con "medio"), y cada frase de mas es una afirmacion mas que
+    // puede perder un matiz del material.
     if (palabras < rango[0] * 0.9 || palabras > rango[1] * 1.1) {
+      const largo = palabras > rango[1]
       hallazgos.push({
         regla: "longitud_post",
-        nivel: "aviso",
+        nivel: palabras > rango[1] * 1.25 ? "frena" : "aviso",
         donde: "post",
         detalle: `Tiene ${palabras} palabras y la longitud «${longitud}» pide de ${rango[0]} a ${rango[1]}.`,
-        pide: palabras > rango[1] ? `Recórtalo a ${rango[1]} palabras como mucho.` : `Llévalo a ${rango[0]} palabras al menos, sin relleno.`,
+        pide: largo
+          ? `Recórtalo a ${rango[1]} palabras como mucho. Quita lo que no sostiene la tesis ni el criterio de la marca: contexto de más, cifras secundarias, atribuciones repetidas. El criterio y el cierre se quedan.`
+          : `Llévalo a ${rango[0]} palabras al menos, sin relleno.`,
       })
     }
   }

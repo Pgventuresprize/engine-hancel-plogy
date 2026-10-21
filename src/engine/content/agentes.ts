@@ -27,6 +27,7 @@ import {
   type Hallazgo,
 } from "./revisor"
 import { revisarConClaude, type Red } from "./revisor-claude"
+import { bloqueCriterioEscritor, conCriterio } from "./criterio"
 import { conPocoMaterial, estadoDelMaterial } from "./material"
 import type { AngleJobInput, LinkedinJobInput, Variables } from "./types"
 
@@ -61,7 +62,7 @@ function bloqueVariables(v: Variables): string {
  */
 function conClasificacion(input: LinkedinJobInput): string {
   const bloque = bloqueClasificacion(input.angle.clasificacion)
-  return bloque ? `\n${bloque}\n` : ""
+  return `${bloque ? `\n${bloque}\n` : ""}${bloqueCriterioEscritor(input.angle.criterio)}`
 }
 
 // ------------------------------------------------------------------ revision
@@ -408,11 +409,13 @@ export async function generarLinkedin(
   model: string,
   system: Sistema
 ): Promise<{ respuesta: unknown; uso: UsoClaude }> {
+  const decidido = await conCriterio(accountId, input)
+  input = decidido.input
   const prompt = promptLinkedin(input)
   const ctx = await contextoDeRevision(accountId, input)
   const escrita = await escribirLinkedin(accountId, model, system, prompt, ctx, input.variables.longitud)
   const rc = await conRevisorClaude(accountId, "linkedin", input, escrita)
-  const primera = { ...escrita, hallazgos: rc.hallazgos, claude: rc.claude, uso: masUso(escrita.uso, rc.uso) }
+  const primera = { ...escrita, hallazgos: rc.hallazgos, claude: rc.claude, uso: masUso(masUso(escrita.uso, rc.uso), decidido.uso) }
   if (primera.hallazgos.length === 0) {
     return {
       respuesta: respuestaLinkedin(primera.version, armarRevision(primera.hallazgos, primera.arreglos, [], primera.claude)),
@@ -716,6 +719,8 @@ export async function generarInstagram(
   model: string,
   system: Sistema
 ): Promise<{ respuesta: unknown; uso: UsoClaude }> {
+  const decidido = await conCriterio(accountId, input)
+  input = decidido.input
   const prompt = promptInstagram(input)
   const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: MAX_TOKENS_INSTAGRAM })
   if (!r.ok) throw new Error(r.error)
@@ -724,7 +729,7 @@ export async function generarInstagram(
   const escrita = guionRevisado(parsearJSONDeClaude(r.texto), input, ctx)
   const rc = await conRevisorClaude(accountId, "instagram", input, escrita)
   const primera = { ...escrita, hallazgos: rc.hallazgos, claude: rc.claude }
-  const uso = masUso(r.uso, rc.uso)
+  const uso = masUso(masUso(r.uso, rc.uso), decidido.uso)
   if (primera.hallazgos.length === 0) {
     return { respuesta: conRevision(primera.version, armarRevision(primera.hallazgos, primera.arreglos, [], primera.claude)), uso }
   }

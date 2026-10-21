@@ -97,8 +97,8 @@ export async function guardarModo(
  */
 async function arrancar(agent: Agente): Promise<void> {
   try {
-    // El revisor no tiene cola propia: corre dentro de Instagram y LinkedIn.
-    if (agent === "extraccion" || agent === "revisor") return
+    // El criterio y el revisor no tienen cola propia: corren dentro de Instagram y LinkedIn.
+    if (agent === "extraccion" || agent === "criterio" || agent === "revisor") return
     if (agent === "redaccion") {
       const { cuentaActual } = await import("@/lib/accounts")
       const { despertarRedaccion } = await import("@/lib/redaccion-despertar")
@@ -229,6 +229,10 @@ export async function ejecutarAgente(
 
     if (agent === "revisor") {
       return { ok: false, error: "El revisor no corre solo: revisa cada pieza que escriben Instagram y LinkedIn." }
+    }
+
+    if (agent === "criterio") {
+      return { ok: false, error: "El criterio no corre solo: lo decide para cada ángulo el primer agente que lo escribe." }
     }
 
     if (agent === "redaccion") {

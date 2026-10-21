@@ -22,6 +22,7 @@ export const AGENTES_CON_MARCA = [
   "angulo",
   "instagram",
   "linkedin",
+  "criterio",
   "revisor",
   "redaccion",
   "ideas",
@@ -39,6 +40,8 @@ export const QUE_LEE: Record<AgenteConMarca, Seccion[]> = {
   angulo: ["identidad", "audiencias", "temas", "vetos"],
   instagram: ESCRIBEN_PARA_PUBLICAR,
   linkedin: ESCRIBEN_PARA_PUBLICAR,
+  // Decide lo que la marca haria: tiene que saber quien es, para quien escribe y que ofrece.
+  criterio: ESCRIBEN_PARA_PUBLICAR,
   // Juzga lo que escriben los de arriba: tiene que saber lo mismo que ellos.
   revisor: ESCRIBEN_PARA_PUBLICAR,
   redaccion: ["identidad", "audiencias", "reglas", "vetos"],

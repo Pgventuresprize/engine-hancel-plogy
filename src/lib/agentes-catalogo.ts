@@ -16,6 +16,7 @@ export type ClaveAgente =
   | "instagram"
   | "facebook"
   | "linkedin"
+  | "criterio"
   | "revisor"
   | "publicacion"
   | "redaccion"
@@ -111,6 +112,16 @@ export const AGENTES: FichaAgente[] = [
     modos: ["manual", "programado", "automatico"],
     conexiones: [CLAUDE, CANAL("LinkedIn")],
     etapa: "Post",
+  },
+  {
+    clave: "criterio",
+    nombre: "Criterio",
+    resumen:
+      "Antes de escribir, anota todo lo que la noticia ya recomienda y decide lo que la marca haría o miraría primero, que no esté ahí. El post y el carrusel del mismo ángulo usan ese criterio, y se ve en la ficha.",
+    usaIA: true,
+    modos: [],
+    conexiones: [CLAUDE],
+    etapa: null,
   },
   {
     clave: "revisor",

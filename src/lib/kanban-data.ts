@@ -5,6 +5,7 @@ import { parseReceta, type Receta } from "@/engine/agents/armador"
 import { comoHora } from "@/engine/agents/turno"
 import { redesActivas as redesActivas_ } from "@/engine/agents/redes"
 import { ajustesDe, type Agente } from "@/engine/agents/settings"
+import { parseCriterio } from "@/engine/content/criterio"
 import { parseRevision, type Revision } from "@/engine/content/revisor"
 import type { PlanLamina } from "@/engine/render/carousel"
 import { parseClasificacion } from "@/engine/marca/clasificacion"
@@ -84,7 +85,7 @@ export type Ficha = {
   contenido: string | null
   estadoContenido: string | null
 
-  angulo: Pick<ContentAngle, "id" | "angle" | "thesis" | "playbook_format" | "clasificacion" | "status"> | null
+  angulo: Pick<ContentAngle, "id" | "angle" | "thesis" | "playbook_format" | "clasificacion" | "criterio" | "status"> | null
   piezas: PiezaDelTablero[]
 
   /** La primera imagen ya generada, para verla en la tarjeta sin abrirla. */
@@ -274,6 +275,7 @@ export async function getTablero(): Promise<Tablero> {
           thesis: a.thesis,
           playbook_format: a.playbook_format,
           clasificacion: parseClasificacion(a.clasificacion),
+          criterio: parseCriterio(a.criterio),
           status: a.status,
         }
       : null

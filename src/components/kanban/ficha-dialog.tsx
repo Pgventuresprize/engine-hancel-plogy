@@ -51,6 +51,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { guardarPiezaComoEjemploMarca } from "@/app/configuracion/marca/ejemplos-actions"
 import { conPocoMaterial, nombreMaterial } from "@/engine/content/material"
 import type { Hallazgo, Revision } from "@/engine/content/revisor"
+import type { CriterioDecidido } from "@/engine/content/types"
 import { NOMBRE_OBJETIVO, type Clasificacion } from "@/engine/marca/clasificacion"
 import type { Ficha, PiezaDelTablero } from "@/lib/kanban-data"
 import { formatDateTime } from "@/lib/format"
@@ -329,6 +330,49 @@ function EtiquetasClasificacion({ c }: { c: Clasificacion | null }) {
   )
 }
 
+/**
+ * El criterio de la marca que decidio el agente de criterio antes de escribir,
+ * y lo que la noticia ya decia, que no podia presentarse como criterio.
+ */
+function CriterioDelAngulo({ c, escrito }: { c: CriterioDecidido | null; escrito: boolean }) {
+  if (!c) {
+    return (
+      <p className="text-muted-foreground text-xs">
+        {escrito
+          ? "Las piezas de este ángulo se escribieron sin un criterio decidido antes: revisa a mano que el criterio no salga de la fuente."
+          : "El criterio de la marca se decide al escribir la primera pieza de este ángulo."}
+      </p>
+    )
+  }
+  return (
+    <Campo etiqueta="Criterio de la marca">
+      {c.acciones.length > 0 ? (
+        <ul className="list-disc space-y-1 pl-4">
+          {c.acciones.map((accion) => (
+            <li key={accion}>{accion}</li>
+          ))}
+        </ul>
+      ) : (
+        <p>La noticia no daba para un criterio propio de la marca.</p>
+      )}
+      {c.ya_dice_el_material.length > 0 ? (
+        <details className="mt-1.5">
+          <summary className="text-muted-foreground cursor-pointer text-xs">
+            Lo que ya decía la noticia ({c.ya_dice_el_material.length}): no cuenta como criterio
+          </summary>
+          <ul className="text-muted-foreground mt-1 list-disc space-y-0.5 pl-4 text-xs">
+            {c.ya_dice_el_material.map((x, i) => (
+              <li key={i}>
+                <span className="font-medium">{x.quien}:</span> {x.dice}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </Campo>
+  )
+}
+
 function PanelAngulo({ ficha, redesHechas }: { ficha: Ficha; redesHechas: Set<string> }) {
   const { pending, error, correr } = useAccion()
   const a = ficha.angulo
@@ -340,6 +384,7 @@ function PanelAngulo({ ficha, redesHechas }: { ficha: Ficha; redesHechas: Set<st
       <EtiquetasClasificacion c={a.clasificacion} />
       <Campo etiqueta="Angulo">{a.angle}</Campo>
       {a.thesis ? <Campo etiqueta="Tesis">{a.thesis}</Campo> : null}
+      <CriterioDelAngulo c={a.criterio ?? null} escrito={redesHechas.size > 0} />
 
       <div className="flex flex-wrap items-center gap-2 border-t pt-3">
         {REDES.map((red) =>

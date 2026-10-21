@@ -143,23 +143,30 @@ export async function procesarBuzones(
   // todavia no esta clasificado y recibe lo de siempre; LinkedIn e Instagram
   // reciben ademas lo que toca a su pilar, su CTA y sus senales. La receta de
   // como se armo se guarda con el trabajo.
-  const resultados = [
-    await procesarBuzon("jobs_angle", "angulo", async (input, cuenta) => {
-      const armado = await promptPara(cuenta, "angulo", null)
-      const r = await generarAngulo(cuenta, input as AngleJobInput, await modeloDe(cuenta, "angulo"), armado)
-      return { ...r, receta: armado.receta }
-    }, disparo, maxPorBuzon),
-    await procesarBuzon("jobs_linkedin", "linkedin", async (input, cuenta) => {
-      const armado = await promptPara(cuenta, "linkedin", situacionDe(input as LinkedinJobInput), (input as LinkedinJobInput).raw_news.id)
-      const r = await generarLinkedin(cuenta, input as LinkedinJobInput, await modeloDe(cuenta, "linkedin"), armado)
-      return { ...r, receta: armado.receta }
-    }, disparo, maxPorBuzon),
-    await procesarBuzon("jobs_instagram", "instagram", async (input, cuenta) => {
-      const armado = await promptPara(cuenta, "instagram", situacionDe(input as LinkedinJobInput), (input as LinkedinJobInput).raw_news.id)
-      const r = await generarInstagram(cuenta, input as LinkedinJobInput, await modeloDe(cuenta, "instagram"), armado)
-      return { ...r, receta: armado.receta }
-    }, disparo, maxPorBuzon),
-  ]
+  const angulos = await procesarBuzon("jobs_angle", "angulo", async (input, cuenta) => {
+    const armado = await promptPara(cuenta, "angulo", null)
+    const r = await generarAngulo(cuenta, input as AngleJobInput, await modeloDe(cuenta, "angulo"), armado)
+    return { ...r, receta: armado.receta }
+  }, disparo, maxPorBuzon)
+  const posts = await procesarBuzon("jobs_linkedin", "linkedin", async (input, cuenta) => {
+    const armado = await promptPara(cuenta, "linkedin", situacionDe(input as LinkedinJobInput), (input as LinkedinJobInput).raw_news.id)
+    const r = await generarLinkedin(cuenta, input as LinkedinJobInput, await modeloDe(cuenta, "linkedin"), armado)
+    return { ...r, receta: armado.receta }
+  }, disparo, maxPorBuzon)
+  // En una pasada acotada, una sola pieza: con el criterio y el revisor con
+  // Claude, un post son unos 170 s y un carrusel hasta 220 s, y juntos pasan de
+  // los 300 s del tick. La pasada cortada dejaba el carrusel colgado media hora
+  // y tiraba lo gastado. Al terminar el post salta el aviso y la siguiente
+  // pasada recoge el carrusel enseguida.
+  const unaPieza = maxPorBuzon <= 1 && posts.procesadas + posts.fallidas > 0
+  const carruseles = unaPieza
+    ? { procesadas: 0, fallidas: 0, errores: [] as string[] }
+    : await procesarBuzon("jobs_instagram", "instagram", async (input, cuenta) => {
+        const armado = await promptPara(cuenta, "instagram", situacionDe(input as LinkedinJobInput), (input as LinkedinJobInput).raw_news.id)
+        const r = await generarInstagram(cuenta, input as LinkedinJobInput, await modeloDe(cuenta, "instagram"), armado)
+        return { ...r, receta: armado.receta }
+      }, disparo, maxPorBuzon)
+  const resultados = [angulos, posts, carruseles]
 
   return {
     procesadas: resultados.reduce((n, r) => n + r.procesadas, 0),

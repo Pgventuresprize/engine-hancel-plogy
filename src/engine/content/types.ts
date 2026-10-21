@@ -102,6 +102,8 @@ export type ContentAngle = {
   playbook_format: string | null
   /** Pilar, audiencia, vertical, objetivo y CTA. Null en los angulos anteriores. */
   clasificacion: Clasificacion | null
+  /** Lo decide el agente de criterio la primera vez que se escribe una pieza del angulo. */
+  criterio?: CriterioDecidido | null
   status: AngleStatus
   position: number
   created_at: string
@@ -209,9 +211,28 @@ export type LinkedinJobInput = {
     playbook_format: string | null
     /** Ausente en los trabajos encolados antes de que existiera. */
     clasificacion?: Clasificacion | null
+    /**
+     * No viaja en la cola: se lee del angulo (o se decide) al escribir, para
+     * que LinkedIn e Instagram usen el mismo aunque se encolaran antes.
+     */
+    criterio?: CriterioDecidido | null
   }
   raw_news: AngleJobInput["raw_news"]
   variables: Variables
+}
+
+/**
+ * El criterio de la marca ante una noticia, decidido antes de escribir por el
+ * agente de criterio (content/criterio.ts). Va en `content_angles.criterio`.
+ */
+export type CriterioDecidido = {
+  /** Lo que la marca haria o miraria primero. Vacio si la noticia no da para criterio propio. */
+  acciones: string[]
+  /** Lo que el material ya recomienda o concluye, con quien lo dice: no es criterio de la marca. */
+  ya_dice_el_material: { quien: string; dice: string }[]
+  por_que_es_propio: string
+  modelo: string
+  fecha: string
 }
 
 /** Un angulo dentro de `jobs_angle.respuesta`. Cuantos vengan lo decide el agente. */

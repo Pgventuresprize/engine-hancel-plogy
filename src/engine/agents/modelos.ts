@@ -1,6 +1,7 @@
 import { modelosClaude } from "../claude/modelos"
 import { MODELOS_DISPONIBLES } from "@/lib/modelos-ia"
 import { MODELO_REDACCION } from "../redaccion/agente"
+import { MODELO_CRITERIO } from "../content/criterio"
 import { MODELO_REVISOR } from "../content/revisor-claude"
 import { ajustesDe } from "./settings"
 import type { AgenteConPrompt } from "./prompts"
@@ -25,5 +26,7 @@ export async function modeloDe(accountId: string, agent: AgenteConPrompt): Promi
   if (agent === "redaccion") return MODELO_REDACCION
   // El revisor tampoco: nace con Opus, que es quien mejor lee.
   if (agent === "revisor") return MODELO_REVISOR
+  // Ni el criterio, que es lo mas importante de la pieza.
+  if (agent === "criterio") return MODELO_CRITERIO
   return (await modelosClaude(accountId))[agent]
 }
