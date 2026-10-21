@@ -550,7 +550,8 @@ const EMOJI = /(?![©®™])\p{Extended_Pictographic}/u
 
 /** La segunda mitad que empieza dudando ("es probable que...") no es la formula. */
 const DUDA = String.raw`(?! (probable|posible|decir|dif[ií]cil|pronto|temprano)\b)`
-const FORMULA_NO_ES = new RegExp(String.raw`\b(ya )?no (es|son|fue|era)\b[^.;:!?]{1,90}?,\s*(sino\s+)?(es|son|fue|era)\b${DUDA}`, "i")
+/** Tambien sin el segundo verbo: "no es el modelo, sino el bot", la forma que mas salia en los posts. */
+const FORMULA_NO_ES = new RegExp(String.raw`\b(ya )?no (es|son|fue|era)\b[^.;:!?]{1,90}?(,\s*(sino\s+)?(es|son|fue|era)\b|,?\s+sino\b)${DUDA}`, "i")
 /** La misma formula partida en dos frases: "No es miedo. Es criterio." */
 const FORMULA_NO_ES_EN_DOS = new RegExp(String.raw`\b(ya )?no (es|son|fue|era)\b[^.;:!?\n]{1,60}[.!]\s+(es|son|fue|era)\b${DUDA}`, "i")
 
@@ -561,6 +562,20 @@ const hallazgoDeFormula = (donde: string, texto: string, indice: number): Hallaz
   detalle: `Usa la fórmula «No es X, es Y»: ${cita(fragmento(texto, indice, 70))}`,
   pide: "Dilo en afirmativo: lo que es, sin contraponerlo a lo que no es.",
 })
+
+/**
+ * Una vez es un aviso; dos o mas en la misma pieza ya es la muletilla, y frena.
+ * Con el aviso solo salia en casi todos los posts de la prueba de 2026-10-21.
+ */
+function formulaRepetida(hallazgos: Hallazgo[]): Hallazgo[] {
+  const formulas = hallazgos.filter((h) => h.regla === "no_es_x_es_y")
+  if (formulas.length < 2) return hallazgos
+  return hallazgos.map((h) =>
+    h.regla === "no_es_x_es_y"
+      ? { ...h, nivel: "frena", pide: `La pieza usa la fórmula ${formulas.length} veces. ${h.pide} Deja como mucho una en toda la pieza.` }
+      : h
+  )
+}
 
 /**
  * La formula partida entre dos textos seguidos: el titulo de una lamina y su
@@ -876,7 +891,7 @@ export function revisarCarrusel(respuesta: unknown, ctx: ContextoRevision): Hall
     })
   }
 
-  return hallazgos
+  return formulaRepetida(hallazgos)
 }
 
 // --------------------------------------------------------------------- post
@@ -915,7 +930,7 @@ export function revisarPost(post: string, ctx: ContextoRevision, longitud?: stri
       })
     }
   }
-  return hallazgos
+  return formulaRepetida(hallazgos)
 }
 
 // ------------------------------------------------------------------ revision
