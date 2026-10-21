@@ -189,7 +189,7 @@ export function FichaDialog({
 // ------------------------------------------------------------------- noticia
 
 function PanelNoticia({ ficha }: { ficha: Ficha }) {
-  const { pending, error, correr } = useAccion()
+  const { pending, error, aviso, correr } = useAccion()
   // Generar solo tiene sentido mientras no haya nada generado: con el angulo ya
   // hecho, lo que se quiere es regenerar la pieza, que es otra cosa.
   const yaArranco = ficha.angulo !== null || ficha.piezas.length > 0
@@ -228,7 +228,15 @@ function PanelNoticia({ ficha }: { ficha: Ficha }) {
             onClick={() => correr(() => encolarContenido(ficha.newsId))}
           >
             <SparklesIcon />
-            {pending ? "Generando…" : pocoMaterial ? "Generar igual" : "Generar contenido"}
+            {pending
+              ? ficha.analizada
+                ? "Generando…"
+                : "Analizando y generando…"
+              : pocoMaterial
+                ? "Generar igual"
+                : ficha.analizada
+                  ? "Generar contenido"
+                  : "Analizar y generar"}
           </Button>
         ) : (
           <span className="text-muted-foreground text-xs">
@@ -236,6 +244,7 @@ function PanelNoticia({ ficha }: { ficha: Ficha }) {
           </span>
         )}
         {error ? <span className="text-destructive text-xs">{error}</span> : null}
+        {aviso ? <span className="text-xs text-amber-700 dark:text-amber-400">{aviso}</span> : null}
       </div>
     </div>
   )

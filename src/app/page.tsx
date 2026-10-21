@@ -18,7 +18,9 @@ export const dynamic = "force-dynamic"
  * —unos segundos— y las acciones largas (redibujar un carrusel, analizar una
  * noticia, publicar) se cortan a media faena sin decir nada.
  */
-export const maxDuration = 60
+// Generar a mano una noticia sin analizar la analiza primero: lee el articulo y
+// sus fuentes, y despues escribe el angulo. Un minuto no alcanza.
+export const maxDuration = 300
 
 
 export const metadata = {

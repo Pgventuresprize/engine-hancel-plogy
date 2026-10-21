@@ -11,6 +11,7 @@ import { configuracionDeGeneracion } from "@/lib/content-data"
 import { idDeCuentaActual } from "@/lib/accounts"
 import { tokenClaude } from "@/engine/claude/messages"
 import { analizarPendientes } from "@/engine/content/analisis"
+import { conPocoMaterial, nombreMaterial } from "@/engine/content/material"
 import { elegirPorHecho } from "@/engine/content/repetidas"
 import { modelosClaude } from "@/engine/claude/modelos"
 import { runContentTick } from "@/engine/content/tick"
@@ -192,11 +193,56 @@ async function hechoYaCubierto(news: RawNews): Promise<string | null> {
  * Disponible siempre, en cualquier modo y sin importar el umbral: es una accion
  * del usuario, no de la seleccion automatica.
  */
+/**
+ * La noticia, analizada, antes de escribir sobre ella.
+ *
+ * Generar a mano saltaba el analisis: el angulo y el carrusel salian del
+ * titular y el snippet (en la prueba, 151 caracteres para cinco laminas), sin
+ * aviso de poco material y sin pasar por el veto, la fecha ni la politica. Ahora
+ * una noticia sin analizar se analiza aqui mismo, y lo que el analisis decide se
+ * respeta:
+ *   - vetada, vieja o de politica: no se genera, y se dice por que;
+ *   - con poco material: se detiene y la ficha enseña el aviso y "Generar
+ *     igual", como en cualquier noticia analizada. El segundo clic ya la
+ *     encuentra analizada y sigue: es una decision de la persona, no del motor.
+ */
+async function noticiaLista(news: RawNews): Promise<{ news: RawNews } | { alto: ActionResult }> {
+  let n = news
+  let recien = false
+  if (n.status === "pending_analysis") {
+    const { errores } = await analizarPendientes(n.account_id, 1, [n.id])
+    n = await loadNews(n.id)
+    recien = true
+    if (n.status === "pending_analysis") {
+      return { alto: { ok: false, error: `No se pudo analizar la noticia: ${errores[0] ?? "el análisis no devolvió nada"}.` } }
+    }
+  }
+  const notas = n.analysis_notes ?? ""
+  if (n.status === "vetada") return { alto: { ok: false, error: `No se genera: ${notas || "la noticia está vetada"}` } }
+  if (n.status === "discarded_date") return { alto: { ok: false, error: `No se genera: es vieja. ${notas}`.trim() } }
+  if (/^politica:/i.test(notas)) return { alto: { ok: false, error: "No se genera: es de política, y esta cuenta no la cubre." } }
+  if (recien && conPocoMaterial(n.content_fetch_status)) {
+    return {
+      alto: {
+        ok: true,
+        warning: `Se analizó y quedó con ${(nombreMaterial(n.content_fetch_status) ?? "poco material").toLowerCase()}: el agente escribiría con muy poco. Mira el análisis en la ficha y usa «Generar igual» si quieres seguir.`,
+      },
+    }
+  }
+  return { news: n }
+}
+
 export async function encolarContenido(rawNewsId: string): Promise<ActionResult> {
   if (!rawNewsId) return { ok: false, error: "Falta el id de la noticia." }
 
   try {
-    const [news, config] = await Promise.all([loadNews(rawNewsId), configuracionDeGeneracion()])
+    const [cargada, config] = await Promise.all([loadNews(rawNewsId), configuracionDeGeneracion()])
+    const lista = await noticiaLista(cargada)
+    if ("alto" in lista) {
+      refresh()
+      return lista.alto
+    }
+    const { news } = lista
 
     const repetido = await hechoYaCubierto(news)
     if (repetido) return { ok: false, error: repetido }
@@ -224,7 +270,13 @@ export async function encolarContenidoConOverride(form: FormData): Promise<Actio
   if (invalido) return { ok: false, error: invalido }
 
   try {
-    const [news, config] = await Promise.all([loadNews(rawNewsId), configuracionDeGeneracion()])
+    const [cargada, config] = await Promise.all([loadNews(rawNewsId), configuracionDeGeneracion()])
+    const lista = await noticiaLista(cargada)
+    if ("alto" in lista) {
+      refresh()
+      return lista.alto
+    }
+    const { news } = lista
 
     const repetido = await hechoYaCubierto(news)
     if (repetido) return { ok: false, error: repetido }

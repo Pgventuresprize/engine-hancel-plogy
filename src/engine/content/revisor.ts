@@ -233,6 +233,22 @@ function cifrasDelTexto(texto: string): { token: string; indice: number }[] {
   return salida
 }
 
+/**
+ * Las cifras de `origen` que no aparecen en `consolidado`, en cualquiera de sus
+ * formas. Para el analisis: lo que la consolidacion deja fuera, el escritor no
+ * lo tiene. Los años (2026) no cuentan: casi siempre son la fecha.
+ */
+export function cifrasPerdidas(origen: string, consolidado: string): string[] {
+  const quedan = cifrasDelMaterial(consolidado)
+  const perdidas = new Set<string>()
+  for (const { token, indice } of cifrasDelTexto(origen)) {
+    if (/^(19|20)\d\d$/.test(token)) continue
+    if (formas(token).some((f) => quedan.has(f))) continue
+    perdidas.add(/^\s*%/.test(origen.slice(indice + token.length)) ? `${token} %` : token)
+  }
+  return [...perdidas]
+}
+
 // --------------------------------------------------------------- los textos
 
 type Campo = { donde: string; texto: string }

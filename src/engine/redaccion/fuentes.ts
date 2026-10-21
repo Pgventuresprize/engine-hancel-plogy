@@ -146,6 +146,15 @@ export type Pagina = {
  * (PDF, bloqueo, caida) devuelve null y la fuente se queda con su extracto.
  */
 export async function leerPagina(url: string): Promise<Pagina | null> {
+  return (await leerPaginaConMotivo(url)).pagina
+}
+
+/**
+ * Lo mismo, con el motivo cuando no se pudo leer. "No se pudo leer la pagina"
+ * escondia que el medio bloquea los lectores (HTTP 429 o 403), y eso cambia lo
+ * que hay que hacer: no es una noticia pobre, es una puerta cerrada.
+ */
+export async function leerPaginaConMotivo(url: string): Promise<{ pagina: Pagina | null; motivo: string | null }> {
   try {
     const res = await fetch(url, {
       headers: {
@@ -156,8 +165,11 @@ export async function leerPagina(url: string): Promise<Pagina | null> {
       redirect: "follow",
       signal: AbortSignal.timeout(15_000),
     })
-    if (!res.ok) return null
-    if (!(res.headers.get("content-type") ?? "").includes("html")) return null
+    if (!res.ok) {
+      const bloqueo = res.status === 429 || res.status === 403 || res.status === 401
+      return { pagina: null, motivo: `la página respondió HTTP ${res.status}${bloqueo ? " (bloquea la lectura automática)" : ""}` }
+    }
+    if (!(res.headers.get("content-type") ?? "").includes("html")) return { pagina: null, motivo: "no es una página HTML" }
     const html = (await res.text()).slice(0, 2_000_000)
 
     const imagen = meta(html, "og:image", "og:image:url", "twitter:image", "twitter:image:src")
@@ -227,9 +239,14 @@ export async function leerPagina(url: string): Promise<Pagina | null> {
         imagenAbs = null
       }
     }
-    return { texto: texto.length >= 200 ? texto : null, descripcion, imagen: imagenAbs, medio, titulo, fecha, autor }
-  } catch {
-    return null
+    const legible = texto.length >= 200 ? texto : null
+    return {
+      pagina: { texto: legible, descripcion, imagen: imagenAbs, medio, titulo, fecha, autor },
+      motivo: legible ? null : "la página no trae texto legible",
+    }
+  } catch (e) {
+    const tiempo = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")
+    return { pagina: null, motivo: tiempo ? "la página no respondió en 15 s" : "no se pudo conectar con la página" }
   }
 }
 
