@@ -41,6 +41,15 @@ export type Regla =
   | "guion_en_nombre"
   | "alcance"
   | "copia_de_ejemplo"
+  // Las del revisor con Claude (revisor-claude.ts): lo que pide leer y entender.
+  | "sin_respaldo"
+  | "matiz_perdido"
+  | "opinion_como_hecho"
+  | "criterio_copiado"
+  | "criterio_ajeno"
+  | "dos_ideas"
+  | "falta_contexto"
+  | "cta_desconectado"
 
 export type Nivel = "frena" | "aviso"
 
@@ -53,7 +62,15 @@ export type Hallazgo = {
   detalle: string
   /** Lo que hay que hacer para que deje de pasar. */
   pide: string
+  /** Quien lo encontro. Sin el campo, el revisor de codigo. */
+  por?: "claude"
 }
+
+/**
+ * Como le fue al revisor con Claude en esta version. Sin el campo, la pieza es
+ * de antes de que existiera o la cuenta lo tiene apagado.
+ */
+export type EstadoClaude = { estado: "revisada" | "fallo"; modelo: string; error?: string }
 
 export type Arreglo = { regla: Regla; donde: string; detalle: string }
 
@@ -74,6 +91,7 @@ export type Revision = {
   hallazgos: Hallazgo[]
   arreglos: Arreglo[]
   correcciones: Correccion[]
+  claude?: EstadoClaude
 }
 
 /** Lo de la marca que el revisor necesita. */
@@ -251,7 +269,7 @@ export function cifrasPerdidas(origen: string, consolidado: string): string[] {
 
 // --------------------------------------------------------------- los textos
 
-type Campo = { donde: string; texto: string }
+export type Campo = { donde: string; texto: string }
 
 const NOMBRE_CAMPO: Record<string, string> = {
   hook: "hook",
@@ -300,13 +318,21 @@ function mapearTextosCarrusel(bruto: Bruto, fn: (donde: string, texto: string) =
   }
 }
 
-function camposCarrusel(bruto: Bruto): Campo[] {
+/** Los textos del carrusel que se publican, cada uno con donde esta. */
+export function camposCarrusel(bruto: unknown): Campo[] {
+  if (!esObjeto(bruto)) return []
   const campos: Campo[] = []
   mapearTextosCarrusel(bruto, (donde, texto) => {
     if (texto.trim()) campos.push({ donde, texto })
     return texto
   })
   return campos
+}
+
+/** Los parrafos del post, cada uno con donde esta. */
+export function camposPost(post: string): Campo[] {
+  const parrafos = post.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean)
+  return parrafos.map((texto, i) => ({ donde: i === 0 ? "post (hook)" : `post (párrafo ${i + 1})`, texto }))
 }
 
 // ------------------------------------------------- reglas comunes a las redes
@@ -849,8 +875,7 @@ export function arreglarPost(post: string, ctx: ContextoRevision): { post: strin
 }
 
 export function revisarPost(post: string, ctx: ContextoRevision, longitud?: string): Hallazgo[] {
-  const parrafos = post.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean)
-  const campos = parrafos.map((texto, i) => ({ donde: i === 0 ? "post (hook)" : `post (párrafo ${i + 1})`, texto }))
+  const campos = camposPost(post)
   const hallazgos = reglasDeTexto(campos, ctx, ctx.reglas.emojis_linkedin)
   for (let i = 0; i + 1 < campos.length; i++) {
     const partida = formulaEntre(`post (párrafos ${i + 1} y ${i + 2})`, campos[i].texto, campos[i + 1].texto)
@@ -876,14 +901,41 @@ export function revisarPost(post: string, ctx: ContextoRevision, longitud?: stri
 
 // ------------------------------------------------------------------ revision
 
-export function armarRevision(hallazgos: Hallazgo[], arreglos: Arreglo[], correcciones: Correccion[] = []): Revision {
+export function armarRevision(
+  hallazgos: Hallazgo[],
+  arreglos: Arreglo[],
+  correcciones: Correccion[] = [],
+  claude?: EstadoClaude
+): Revision {
   return {
     version: 1,
     revisada: new Date().toISOString(),
-    frena: hallazgos.some((h) => h.nivel === "frena"),
+    frena: frenaLaRevision(hallazgos, claude),
     hallazgos,
     arreglos,
     correcciones,
+    ...(claude ? { claude } : {}),
+  }
+}
+
+/**
+ * Frena lo que tiene un freno y lo que el revisor con Claude no pudo leer: sin
+ * esa lectura no se sabe si el criterio o las cifras aguantan, y la pieza no
+ * sale sola hasta que alguien la revise o la apruebe.
+ */
+function frenaLaRevision(hallazgos: Hallazgo[], claude?: EstadoClaude): boolean {
+  return hallazgos.some((h) => h.nivel === "frena") || claude?.estado === "fallo"
+}
+
+/** Lo que encontro el revisor con Claude en una revision guardada. */
+export const deClaude = (hallazgos: Hallazgo[]) => hallazgos.filter((h) => h.por === "claude")
+
+function parseEstadoClaude(v: unknown): EstadoClaude | undefined {
+  if (!esObjeto(v) || (v.estado !== "revisada" && v.estado !== "fallo")) return undefined
+  return {
+    estado: v.estado,
+    modelo: typeof v.modelo === "string" ? v.modelo : "",
+    ...(typeof v.error === "string" ? { error: v.error } : {}),
   }
 }
 
@@ -893,13 +945,15 @@ export function parseRevision(valor: unknown): Revision | null {
   if (!esObjeto(valor) || valor.version !== 1) return null
   const lista = <T>(v: unknown) => (Array.isArray(v) ? (v.filter(esObjeto) as T[]) : [])
   const hallazgos = lista<Hallazgo>(valor.hallazgos)
+  const claude = parseEstadoClaude(valor.claude)
   return {
     version: 1,
     revisada: typeof valor.revisada === "string" ? valor.revisada : "",
-    frena: hallazgos.some((h) => h.nivel === "frena"),
+    frena: frenaLaRevision(hallazgos, claude),
     hallazgos,
     arreglos: lista<Arreglo>(valor.arreglos),
     correcciones: lista<Correccion>(valor.correcciones),
+    ...(claude ? { claude } : {}),
   }
 }
 

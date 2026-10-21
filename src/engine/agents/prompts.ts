@@ -12,6 +12,7 @@ import {
 import type { Situacion } from "../marca/cuando"
 import type { RedEjemplo } from "../marca/ejemplos-modelo"
 import { datosParaPrompt, type DatosParaPrompt } from "../marca/prompt"
+import { REVISOR_CONTRATO, REVISOR_OFICIO } from "../content/revisor-claude"
 import { REDACCION_CONTRATO, REDACCION_OFICIO } from "../redaccion/agente"
 import { armarPorPiezas, textoDelPrompt, type Exigencia, type PiezaDeOficio, type PromptPorPiezas } from "./armador"
 import { ajustesDe, type Agente } from "./settings"
@@ -37,7 +38,7 @@ import { ajustesDe, type Agente } from "./settings"
  */
 
 /** Los agentes que hablan con Claude. Extraccion y publicacion no tienen prompt. */
-export const AGENTES_CON_PROMPT = ["analisis", "angulo", "instagram", "linkedin", "redaccion"] as const
+export const AGENTES_CON_PROMPT = ["analisis", "angulo", "instagram", "linkedin", "revisor", "redaccion"] as const
 export type AgenteConPrompt = (typeof AGENTES_CON_PROMPT)[number]
 
 /**
@@ -51,6 +52,7 @@ export const PROMPT_DE_FABRICA: Record<AgenteConPrompt, string> = {
   angulo: ANGULO_OFICIO,
   instagram: INSTAGRAM_OFICIO,
   linkedin: LINKEDIN_OFICIO,
+  revisor: REVISOR_OFICIO,
   redaccion: REDACCION_OFICIO,
 }
 
@@ -65,6 +67,7 @@ export const CONTRATO: Record<AgenteConPrompt, string | ((datos: DatosParaPrompt
   angulo: ANGULO_CONTRATO,
   instagram: ({ perfil, listas }) => contratoInstagram(perfil, listas === true),
   linkedin: ({ perfil }) => contratoLinkedin(perfil),
+  revisor: REVISOR_CONTRATO,
   redaccion: REDACCION_CONTRATO,
 }
 
@@ -73,6 +76,7 @@ export const PIEZAS_DE_OFICIO: Record<AgenteConPrompt, PiezaDeOficio[]> = {
   angulo: [],
   instagram: PIEZAS_INSTAGRAM,
   linkedin: [],
+  revisor: [],
   redaccion: [],
 }
 

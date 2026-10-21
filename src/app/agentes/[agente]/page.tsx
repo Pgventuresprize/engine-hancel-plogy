@@ -162,7 +162,8 @@ export default async function AgentePage({
           <ModeloEditor clave={ficha.clave} modelo={modelo} soloLectura={espejo} />
         ) : null}
 
-        {porCanal.map(({ canal, ajustes }) => (
+        {/* Sin modos no corre por su cuenta (el revisor): no hay cron que enseñar. */}
+        {ficha.modos.length === 0 ? null : porCanal.map(({ canal, ajustes }) => (
           <CronEditor
             key={canal || "unico"}
             clave={ficha.clave}

@@ -496,7 +496,7 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
             size="sm"
             variant="ghost"
             disabled={pending}
-            title="Vuelve a pasar el revisor con las reglas de tu marca de ahora. No usa IA."
+            title="Vuelve a pasar los dos revisores con las reglas de tu marca de ahora. El de Claude lee la pieza otra vez: gasta una llamada."
             onClick={() => correr(() => revisarPiezaDeNuevo(pieza.id))}
           >
             <ShieldCheckIcon />
@@ -655,9 +655,24 @@ function GuardarComoEjemplo({ pieceId }: { pieceId: string }) {
   )
 }
 
+/** Si el revisor con Claude leyo esta version, con que modelo, o por que no pudo. */
+function LineaClaude({ revision }: { revision: Revision }) {
+  const c = revision.claude
+  if (!c) return null
+  if (c.estado === "fallo") {
+    return (
+      <p className="text-red-700 dark:text-red-400">
+        El revisor con Claude no pudo leer esta versión{c.error ? ` (${c.error})` : ""}. No sale sola: pulsa «Revisar» o apruébala tú.
+      </p>
+    )
+  }
+  return <p className="text-muted-foreground">La leyó también el revisor con Claude ({c.modelo}).</p>
+}
+
 /**
- * Lo que encontro el revisor automatico, con donde esta, que pasa y que hacer.
- * Es el mismo texto que se le manda al agente al corregir.
+ * Lo que encontraron los revisores, el de codigo y el de Claude, con donde
+ * esta, que pasa y que hacer. Es el mismo texto que se le manda al agente al
+ * corregir.
  */
 function PanelRevision({ revision, aprobada }: { revision: Revision | null; aprobada: boolean }) {
   if (!revision) {
@@ -672,12 +687,17 @@ function PanelRevision({ revision, aprobada }: { revision: Revision | null; apro
   const avisos = revision.hallazgos.filter((h) => h.nivel === "aviso")
   const ultima = revision.correcciones.at(-1)
 
-  if (revision.hallazgos.length === 0 && revision.arreglos.length === 0 && !ultima) {
-    return <p className="text-xs text-emerald-700 dark:text-emerald-400">El revisor automático no encontró nada.</p>
+  if (revision.hallazgos.length === 0 && revision.arreglos.length === 0 && !ultima && revision.claude?.estado !== "fallo") {
+    return (
+      <p className="text-xs text-emerald-700 dark:text-emerald-400">
+        {revision.claude ? "Ni el revisor automático ni el de Claude encontraron nada." : "El revisor automático no encontró nada."}
+      </p>
+    )
   }
 
   return (
     <div className="flex flex-col gap-2.5 rounded-lg border p-3 text-xs">
+      <LineaClaude revision={revision} />
       {frenos.length > 0 ? (
         <ListaHallazgos
           titulo={aprobada ? "Frenaba la publicación (la aprobaste igual)" : "Frena la publicación"}
@@ -722,6 +742,11 @@ function ListaHallazgos({ titulo, clase, hallazgos }: { titulo: string; clase: s
       <ul className="flex flex-col gap-1.5">
         {hallazgos.map((h, i) => (
           <li key={i} className="leading-relaxed">
+            {h.por === "claude" ? (
+              <Badge variant="outline" className="mr-1 px-1.5 py-0 align-middle text-[10px] font-normal">
+                Revisor (Claude)
+              </Badge>
+            ) : null}
             <span className="font-medium">{h.donde}:</span> {h.detalle}{" "}
             <span className="text-muted-foreground">Qué hacer: {h.pide}</span>
           </li>

@@ -23,8 +23,10 @@ import {
   type Arreglo,
   type ContextoRevision,
   type Correccion,
+  type EstadoClaude,
   type Hallazgo,
 } from "./revisor"
+import { revisarConClaude, type Red } from "./revisor-claude"
 import { conPocoMaterial, estadoDelMaterial } from "./material"
 import type { AngleJobInput, LinkedinJobInput, Variables } from "./types"
 
@@ -113,8 +115,31 @@ ${pedidoDeCorreccion(hallazgos)}`
  */
 const MAX_VUELTAS = 2
 
-type Revisado<V> = { version: V; hallazgos: Hallazgo[]; arreglos: Arreglo[]; correcciones: Correccion[] }
-type Escritor<V> = (pedido: Hallazgo[], version: V) => Promise<{ version: V; hallazgos: Hallazgo[]; arreglos: Arreglo[]; uso: UsoClaude } | null>
+type Revisado<V> = { version: V; hallazgos: Hallazgo[]; arreglos: Arreglo[]; correcciones: Correccion[]; claude?: EstadoClaude }
+type Escritor<V> = (
+  pedido: Hallazgo[],
+  version: V
+) => Promise<{ version: V; hallazgos: Hallazgo[]; arreglos: Arreglo[]; uso: UsoClaude; claude?: EstadoClaude } | null>
+
+/**
+ * Lo que encuentra el revisor de codigo mas lo que encuentra el de Claude en
+ * la misma version. Sin revisor con Claude (apagado), solo lo del codigo.
+ */
+export async function conRevisorClaude(
+  accountId: string,
+  red: Red,
+  input: LinkedinJobInput,
+  revisada: { version: unknown; hallazgos: Hallazgo[] }
+): Promise<{ hallazgos: Hallazgo[]; claude?: EstadoClaude; uso: UsoClaude | null }> {
+  const r = await revisarConClaude({ accountId, red, version: revisada.version, input })
+  if (!r) return { hallazgos: revisada.hallazgos, uso: null }
+  return { hallazgos: [...revisada.hallazgos, ...r.hallazgos], claude: r.estado, uso: r.uso }
+}
+
+/** Una version que el revisor con Claude no pudo leer no se sabe si mejoro: al corregir, no se queda. */
+const sinRevisar = (claude?: EstadoClaude) => claude?.estado === "fallo"
+
+const masUso = (a: UsoClaude, b: UsoClaude | null) => (b ? sumarUso(a, b) : a)
 
 /**
  * Corrige una pieza con lo que encontro el revisor, frenos y avisos: vuelve al
@@ -132,7 +157,7 @@ async function corregirEnVueltas<V>(
     const r = await vueltaDeCorreccion({ anterior: actual, origen, escribir })
     if (r.uso) uso = uso ? sumarUso(uso, r.uso) : r.uso
     const mejoro = r.version !== actual.version
-    actual = { version: r.version, hallazgos: r.hallazgos, arreglos: r.arreglos, correcciones: r.correcciones }
+    actual = { version: r.version, hallazgos: r.hallazgos, arreglos: r.arreglos, correcciones: r.correcciones, claude: r.claude }
     if (!mejoro) break
   }
   return { ...actual, uso }
@@ -147,7 +172,7 @@ async function vueltaDeCorreccion<V>(opciones: {
   anterior: Revisado<V>
   origen: Correccion["origen"]
   escribir: Escritor<V>
-}): Promise<{ version: V; hallazgos: Hallazgo[]; arreglos: Arreglo[]; correcciones: Correccion[]; uso: UsoClaude | null }> {
+}): Promise<Revisado<V> & { uso: UsoClaude | null }> {
   const { anterior } = opciones
   let nueva: Awaited<ReturnType<Escritor<V>>> = null
   try {
@@ -168,6 +193,7 @@ async function vueltaDeCorreccion<V>(opciones: {
     hallazgos: final.hallazgos,
     arreglos: final.arreglos,
     correcciones: [...anterior.correcciones, correccion],
+    claude: final.claude,
     uso: nueva?.uso ?? null,
   }
 }
@@ -384,12 +410,17 @@ export async function generarLinkedin(
 ): Promise<{ respuesta: unknown; uso: UsoClaude }> {
   const prompt = promptLinkedin(input)
   const ctx = await contextoDeRevision(accountId, input)
-  const primera = await escribirLinkedin(accountId, model, system, prompt, ctx, input.variables.longitud)
+  const escrita = await escribirLinkedin(accountId, model, system, prompt, ctx, input.variables.longitud)
+  const rc = await conRevisorClaude(accountId, "linkedin", input, escrita)
+  const primera = { ...escrita, hallazgos: rc.hallazgos, claude: rc.claude, uso: masUso(escrita.uso, rc.uso) }
   if (primera.hallazgos.length === 0) {
-    return { respuesta: respuestaLinkedin(primera.version, armarRevision(primera.hallazgos, primera.arreglos)), uso: primera.uso }
+    return {
+      respuesta: respuestaLinkedin(primera.version, armarRevision(primera.hallazgos, primera.arreglos, [], primera.claude)),
+      uso: primera.uso,
+    }
   }
   const final = await corregirPost(accountId, input, model, system, { ...primera, correcciones: [] }, "automatica", ctx)
-  return { respuesta: final.respuesta, uso: final.uso ? sumarUso(primera.uso, final.uso) : primera.uso }
+  return { respuesta: final.respuesta, uso: masUso(primera.uso, final.uso) }
 }
 
 /** Una vuelta de correccion sobre un post ya escrito. La usa tambien el boton de la ficha. */
@@ -398,14 +429,14 @@ export async function corregirPost(
   input: LinkedinJobInput,
   model: string,
   system: Sistema,
-  anterior: { version: PostEscrito; hallazgos: Hallazgo[]; arreglos: Arreglo[]; correcciones: Correccion[] },
+  anterior: Revisado<PostEscrito>,
   origen: Correccion["origen"],
   ctx?: ContextoRevision
 ): Promise<{ respuesta: ReturnType<typeof respuestaLinkedin>; uso: UsoClaude | null }> {
   const contexto = ctx ?? (await contextoDeRevision(accountId, input))
   const prompt = promptLinkedin(input)
-  const r = await corregirEnVueltas(anterior, origen, (pedido, version) =>
-    escribirLinkedin(
+  const r = await corregirEnVueltas(anterior, origen, async (pedido, version) => {
+    const nueva = await escribirLinkedin(
       accountId,
       model,
       system,
@@ -413,8 +444,14 @@ export async function corregirPost(
       contexto,
       input.variables.longitud
     )
-  )
-  return { respuesta: respuestaLinkedin(r.version, armarRevision(r.hallazgos, r.arreglos, r.correcciones)), uso: r.uso }
+    const rc = await conRevisorClaude(accountId, "linkedin", input, nueva)
+    if (sinRevisar(rc.claude)) return null
+    return { ...nueva, hallazgos: rc.hallazgos, claude: rc.claude, uso: masUso(nueva.uso, rc.uso) }
+  })
+  return {
+    respuesta: respuestaLinkedin(r.version, armarRevision(r.hallazgos, r.arreglos, r.correcciones, r.claude)),
+    uso: r.uso,
+  }
 }
 
 /** Un post guardado, revisado otra vez con la marca y el material de ahora. */
@@ -684,12 +721,15 @@ export async function generarInstagram(
   if (!r.ok) throw new Error(r.error)
 
   const ctx = await contextoDeRevision(accountId, input)
-  const primera = guionRevisado(parsearJSONDeClaude(r.texto), input, ctx)
+  const escrita = guionRevisado(parsearJSONDeClaude(r.texto), input, ctx)
+  const rc = await conRevisorClaude(accountId, "instagram", input, escrita)
+  const primera = { ...escrita, hallazgos: rc.hallazgos, claude: rc.claude }
+  const uso = masUso(r.uso, rc.uso)
   if (primera.hallazgos.length === 0) {
-    return { respuesta: conRevision(primera.version, armarRevision(primera.hallazgos, primera.arreglos)), uso: r.uso }
+    return { respuesta: conRevision(primera.version, armarRevision(primera.hallazgos, primera.arreglos, [], primera.claude)), uso }
   }
   const final = await corregirCarrusel(accountId, input, model, system, { ...primera, correcciones: [] }, "automatica", ctx)
-  return { respuesta: final.respuesta, uso: final.uso ? sumarUso(r.uso, final.uso) : r.uso }
+  return { respuesta: final.respuesta, uso: masUso(uso, final.uso) }
 }
 
 /** Una vuelta de correccion sobre un guion ya escrito. La usa tambien el boton de la ficha. */
@@ -698,7 +738,7 @@ export async function corregirCarrusel(
   input: LinkedinJobInput,
   model: string,
   system: Sistema,
-  anterior: { version: unknown; hallazgos: Hallazgo[]; arreglos: Arreglo[]; correcciones: Correccion[] },
+  anterior: Revisado<unknown>,
   origen: Correccion["origen"],
   ctx?: ContextoRevision
 ): Promise<{ respuesta: unknown; uso: UsoClaude | null }> {
@@ -714,9 +754,12 @@ export async function corregirCarrusel(
     })
     if (!respuesta.ok) throw new Error(respuesta.error)
     const nueva = guionRevisado(parsearJSONDeClaude(respuesta.texto), input, contexto)
-    return dibujable(nueva.version) ? { ...nueva, uso: respuesta.uso } : null
+    if (!dibujable(nueva.version)) return null
+    const rc = await conRevisorClaude(accountId, "instagram", input, nueva)
+    if (sinRevisar(rc.claude)) return null
+    return { ...nueva, hallazgos: rc.hallazgos, claude: rc.claude, uso: masUso(respuesta.uso, rc.uso) }
   })
-  return { respuesta: conRevision(r.version, armarRevision(r.hallazgos, r.arreglos, r.correcciones)), uso: r.uso }
+  return { respuesta: conRevision(r.version, armarRevision(r.hallazgos, r.arreglos, r.correcciones, r.claude)), uso: r.uso }
 }
 
 /** Un guion guardado, revisado otra vez con la marca y el material de ahora. */

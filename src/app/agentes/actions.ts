@@ -97,7 +97,8 @@ export async function guardarModo(
  */
 async function arrancar(agent: Agente): Promise<void> {
   try {
-    if (agent === "extraccion") return
+    // El revisor no tiene cola propia: corre dentro de Instagram y LinkedIn.
+    if (agent === "extraccion" || agent === "revisor") return
     if (agent === "redaccion") {
       const { cuentaActual } = await import("@/lib/accounts")
       const { despertarRedaccion } = await import("@/lib/redaccion-despertar")
@@ -224,6 +225,10 @@ export async function ejecutarAgente(
       const r = await runIngestion({ accountId })
       refresh(clave)
       return { ok: true, resumen: `${r.inserted} noticias nuevas.` }
+    }
+
+    if (agent === "revisor") {
+      return { ok: false, error: "El revisor no corre solo: revisa cada pieza que escriben Instagram y LinkedIn." }
     }
 
     if (agent === "redaccion") {

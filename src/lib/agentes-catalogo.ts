@@ -16,6 +16,7 @@ export type ClaveAgente =
   | "instagram"
   | "facebook"
   | "linkedin"
+  | "revisor"
   | "publicacion"
   | "redaccion"
 
@@ -34,7 +35,8 @@ export type FichaAgente = {
   usaIA: boolean
   /**
    * Sin paso anterior no hay insumo que esperar, asi que "automatico" no
-   * significaria nada: la extraccion solo puede ir a mano o por reloj.
+   * significaria nada: la extraccion solo puede ir a mano o por reloj. Vacio:
+   * no corre por su cuenta, sino dentro de otro agente (el revisor).
    */
   modos: ("manual" | "programado" | "automatico")[]
   /** Tiene un horario por canal en vez de uno solo. */
@@ -109,6 +111,16 @@ export const AGENTES: FichaAgente[] = [
     modos: ["manual", "programado", "automatico"],
     conexiones: [CLAUDE, CANAL("LinkedIn")],
     etapa: "Post",
+  },
+  {
+    clave: "revisor",
+    nombre: "Revisor",
+    resumen:
+      "Lee cada carrusel y cada post junto a su noticia y dice qué falla: datos sin respaldo, matices perdidos, opiniones que suenan a dato y un criterio de marca copiado de la fuente o que serviría para cualquiera. Lo que frena vuelve solo al agente para corregir.",
+    usaIA: true,
+    modos: [],
+    conexiones: [CLAUDE],
+    etapa: null,
   },
   {
     clave: "publicacion",

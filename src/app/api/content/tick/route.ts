@@ -5,15 +5,19 @@ import { authorizeEngineRequest } from "@/lib/api-auth"
 
 export const dynamic = "force-dynamic"
 
-/** Solo base de datos y dos webhooks; no es una ingesta. */
-export const maxDuration = 60
+/**
+ * Una generacion con Opus son casi un minuto, y el revisor con Claude lee la
+ * noticia entera otra vez despues de cada version: con sesenta segundos la
+ * pasada se cortaba a media pieza.
+ */
+export const maxDuration = 300
 
 /**
  * Cuantos trabajos hace cada pasada.
  *
- * Uno. Medido con la cola llena: con dos la pasada tarda 54 segundos y el
- * limite es 60, demasiado cerca para una red que a veces va lenta. Con uno son
- * unos 27 y sobra margen.
+ * Uno. Medido con la cola llena y Sonnet: con dos la pasada tardaba 54
+ * segundos cuando el limite era 60, demasiado cerca para una red que a veces
+ * va lenta. Con Opus y el revisor con Claude, una sola pieza ya pasa del minuto.
  *
  * Ir despacio no es el problema; quedarse a medias si: una pasada cortada deja
  * trabajo reclamado y pasos enteros sin ejecutar. El ritmo se compensa con la

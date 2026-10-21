@@ -3,6 +3,7 @@ import { promptPara } from "../agents/prompts"
 import { armarPublicacionFacebook } from "../render/facebook"
 import { supabaseAdmin } from "../supabase-admin"
 import {
+  conRevisorClaude,
   contextoDeRevision,
   corregirCarrusel,
   corregirPost,
@@ -10,7 +11,7 @@ import {
   revisarPostGuardado,
   situacionDe,
 } from "./agentes"
-import { armarRevision, parseRevision, type Arreglo, type Revision } from "./revisor"
+import { armarRevision, deClaude, parseRevision, type Arreglo, type EstadoClaude, type Hallazgo, type Revision } from "./revisor"
 import type { LinkedinJobInput } from "./types"
 
 /**
@@ -141,9 +142,27 @@ function postDeLaPieza(pieza: Pieza, trabajo: Trabajo): Record<string, unknown> 
 }
 
 /**
- * Vuelve a pasar el revisor con la marca de ahora, sin IA. Lo mecanico que
- * encuentre se arregla en el texto; en un carrusel, las imagenes lo recogen al
- * regenerarlas, y por eso se devuelve si hace falta.
+ * Lo que el revisor con Claude ya encontro en la version guardada, para
+ * corregirla sin volver a leerla. Si no la leyo (una pieza de antes, o fallo),
+ * la lee ahora: corregir sin esa lectura dejaria fuera justo lo que importa.
+ */
+async function hallazgosDeClaude(
+  accountId: string,
+  red: "instagram" | "linkedin",
+  input: LinkedinJobInput,
+  version: unknown,
+  previa: Revision | null
+): Promise<{ hallazgos: Hallazgo[]; claude?: EstadoClaude }> {
+  if (previa?.claude?.estado === "revisada") return { hallazgos: deClaude(previa.hallazgos), claude: previa.claude }
+  const rc = await conRevisorClaude(accountId, red, input, { version, hallazgos: [] })
+  return { hallazgos: rc.hallazgos, claude: rc.claude }
+}
+
+/**
+ * Vuelve a pasar los dos revisores con la marca de ahora: el de codigo y el de
+ * Claude, que lee la pieza otra vez. Lo mecanico que encuentre se arregla en el
+ * texto; en un carrusel, las imagenes lo recogen al regenerarlas, y por eso se
+ * devuelve si hace falta.
  */
 /** `redibujar` es el carrusel cuyas imagenes ya no dicen lo que dice el guion, si lo hay. */
 type Resultado = { revision: Revision; redibujar: string | null }
@@ -155,9 +174,11 @@ export async function revisarPieza(accountId: string, pieceId: string): Promise<
   const yaEstaban = new Set((previa?.arreglos ?? []).map(claveArreglo))
 
   if (esCarrusel(pieza.network)) {
-    const r = revisarCarruselGuardado(trabajo.respuesta, trabajo.input, ctx)
+    const codigo = revisarCarruselGuardado(trabajo.respuesta, trabajo.input, ctx)
+    const rc = await conRevisorClaude(accountId, "instagram", trabajo.input, codigo)
+    const r = { ...codigo, hallazgos: rc.hallazgos }
     const nuevos = r.arreglos.filter((a) => !yaEstaban.has(claveArreglo(a)))
-    const revision = armarRevision(r.hallazgos, r.arreglos, r.correcciones)
+    const revision = armarRevision(r.hallazgos, r.arreglos, r.correcciones, rc.claude)
     const carrusel = await guardarCarrusel(
       accountId,
       trabajo,
@@ -170,9 +191,10 @@ export async function revisarPieza(accountId: string, pieceId: string): Promise<
   }
 
   const respuesta = postDeLaPieza(pieza, trabajo)
-  const r = revisarPostGuardado(respuesta, ctx, trabajo.input.variables.longitud)
-  const revision = armarRevision(r.hallazgos, r.arreglos, r.correcciones)
-  await guardarPost(trabajo, pieza, { ...respuesta, post: r.version.post, revision }, revision)
+  const codigo = revisarPostGuardado(respuesta, ctx, trabajo.input.variables.longitud)
+  const rc = await conRevisorClaude(accountId, "linkedin", trabajo.input, codigo)
+  const revision = armarRevision(rc.hallazgos, codigo.arreglos, codigo.correcciones, rc.claude)
+  await guardarPost(trabajo, pieza, { ...respuesta, post: codigo.version.post, revision }, revision)
   return { revision, redibujar: null }
 }
 
@@ -186,8 +208,12 @@ export async function corregirPieza(accountId: string, pieceId: string): Promise
   if (pieza.published_at) throw new Error("La pieza ya está publicada: lo publicado no se corrige.")
   const ctx = await contextoDeRevision(accountId, trabajo.input)
 
+  const previa = parseRevision((trabajo.respuesta as Record<string, unknown> | null)?.revision)
+
   if (esCarrusel(pieza.network)) {
-    const actual = revisarCarruselGuardado(trabajo.respuesta, trabajo.input, ctx)
+    const codigo = revisarCarruselGuardado(trabajo.respuesta, trabajo.input, ctx)
+    const rc = await hallazgosDeClaude(accountId, "instagram", trabajo.input, codigo.version, previa)
+    const actual = { ...codigo, hallazgos: [...codigo.hallazgos, ...rc.hallazgos], claude: rc.claude }
     if (actual.hallazgos.length === 0) throw new Error("El revisor no encuentra nada que corregir.")
     const [model, system] = await Promise.all([modeloDe(accountId, "instagram"), promptPara(accountId, "instagram", situacionDe(trabajo.input), trabajo.input.raw_news.id)])
     const r = await corregirCarrusel(accountId, trabajo.input, model, system, actual, "manual", ctx)
@@ -195,7 +221,9 @@ export async function corregirPieza(accountId: string, pieceId: string): Promise
     return { revision, redibujar: await guardarCarrusel(accountId, trabajo, r.respuesta, revision) }
   }
 
-  const actual = revisarPostGuardado(postDeLaPieza(pieza, trabajo), ctx, trabajo.input.variables.longitud)
+  const codigo = revisarPostGuardado(postDeLaPieza(pieza, trabajo), ctx, trabajo.input.variables.longitud)
+  const rc = await hallazgosDeClaude(accountId, "linkedin", trabajo.input, codigo.version, previa)
+  const actual = { ...codigo, hallazgos: [...codigo.hallazgos, ...rc.hallazgos], claude: rc.claude }
   if (actual.hallazgos.length === 0) throw new Error("El revisor no encuentra nada que corregir.")
   const [model, system] = await Promise.all([modeloDe(accountId, "linkedin"), promptPara(accountId, "linkedin", situacionDe(trabajo.input), trabajo.input.raw_news.id)])
   const r = await corregirPost(accountId, trabajo.input, model, system, actual, "manual", ctx)

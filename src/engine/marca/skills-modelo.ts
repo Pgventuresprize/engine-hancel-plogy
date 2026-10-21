@@ -22,6 +22,7 @@ export const NOMBRE_AGENTE: Record<AgenteConMarca, string> = {
   angulo: "Ángulo",
   instagram: "Instagram / Facebook",
   linkedin: "LinkedIn",
+  revisor: "Revisor",
   redaccion: "Redacción",
   ideas: "Ideas del Estudio",
   contenido: "Contenido del Estudio",

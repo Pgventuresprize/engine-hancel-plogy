@@ -499,7 +499,7 @@ create table if not exists public.agent_settings (
   constraint agent_settings_mode_check
     check (mode in ('manual', 'programado', 'automatico')),
   constraint agent_settings_agent_check
-    check (agent in ('extraccion', 'analisis', 'angulo', 'instagram', 'linkedin', 'publicacion', 'redaccion'))
+    check (agent in ('extraccion', 'analisis', 'angulo', 'instagram', 'linkedin', 'revisor', 'publicacion', 'redaccion'))
 );
 
 -- Lleva los prompts de cada cuenta: cerrada como el resto, solo service role.
@@ -1447,7 +1447,7 @@ create table if not exists public.brand_skills (
   constraint brand_skills_texto_len       check (char_length(texto) <= 8000),
   constraint brand_skills_original_len    check (char_length(original) <= 200000),
   constraint brand_skills_agentes_check   check (
-    agentes <@ array['analisis', 'angulo', 'instagram', 'linkedin', 'redaccion', 'ideas', 'contenido', 'guion']::text[]
+    agentes <@ array['analisis', 'angulo', 'instagram', 'linkedin', 'revisor', 'redaccion', 'ideas', 'contenido', 'guion']::text[]
   )
 );
 create index if not exists brand_skills_account_idx on public.brand_skills (account_id, position);

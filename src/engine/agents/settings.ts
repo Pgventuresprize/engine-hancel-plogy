@@ -16,6 +16,7 @@ export const AGENTES = [
   "angulo",
   "instagram",
   "linkedin",
+  "revisor",
   "publicacion",
   "redaccion",
 ] as const

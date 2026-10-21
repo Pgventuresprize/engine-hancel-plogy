@@ -595,8 +595,9 @@ export async function regenerateCarousel(pieceId: string): Promise<ActionResult>
 }
 
 /**
- * Vuelve a pasar el revisor con la marca de ahora. Sin IA: sirve despues de
- * cambiar una regla, o con una pieza de antes del revisor.
+ * Vuelve a pasar los dos revisores con la marca de ahora: sirve despues de
+ * cambiar una regla, o con una pieza de antes del revisor. El de Claude lee la
+ * pieza otra vez y gasta una llamada.
  */
 export async function revisarPiezaDeNuevo(pieceId: string): Promise<ActionResult> {
   if (!pieceId) return { ok: false, error: "Falta el id de la pieza." }
