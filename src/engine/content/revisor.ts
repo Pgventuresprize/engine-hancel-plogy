@@ -461,14 +461,27 @@ function gramas(texto: string): Set<string> {
 }
 
 /**
+ * Un trozo hecho sobre todo de nombres y cifras que trae el material no es
+ * copia: es nombrar lo mismo que el ejemplo ("GPT-4o mini, GPT-4.1 y GPT-4.1
+ * mini"). Cuenta como nombre o cifra la palabra con un digito o con mayuscula
+ * en la pieza, y solo si el material la trae; con mas de la mitad, no frena.
+ */
+function sonNombresDelMaterial(originales: string[], vocabulario: Set<string>): boolean {
+  const datos = originales.filter((w) => /[\p{Lu}\p{N}]/u.test(w) && vocabulario.has(normalizar(w)))
+  return datos.length * 2 > originales.length
+}
+
+/**
  * Una pieza que repite siete palabras seguidas de un ejemplo lo esta copiando.
  * Frena: el ejemplo enseña el tono, no se publica dos veces. No cuenta lo que
- * tambien dice el material (una cita de la fuente) ni lo que dicen los CTA de
- * la marca, y el cierre no se mira: es la misma invitacion de siempre.
+ * tambien dice el material (una cita de la fuente), lo que dicen los CTA de la
+ * marca ni una lista de nombres y cifras del material, y el cierre no se mira:
+ * es la misma invitacion de siempre.
  */
 function reglaDeCopia(campos: Campo[], ctx: ContextoRevision): Hallazgo[] {
   if (!ctx.ejemplos?.length) return []
   const permitidos = new Set([...gramas(ctx.material), ...gramas(ctx.textoCtas ?? "")])
+  const vocabulario = new Set(palabrasDe(normalizar(ctx.material)))
   const ejemplos = ctx.ejemplos.map((e) => ({ nombre: e.nombre, gramas: gramas(e.texto) }))
   const hallazgos: Hallazgo[] = []
   for (const { donde, texto } of campos) {
@@ -478,6 +491,7 @@ function reglaDeCopia(campos: Campo[], ctx: ContextoRevision): Hallazgo[] {
     for (let i = 0; i + PALABRAS_COPIA <= p.length; i++) {
       const g = p.slice(i, i + PALABRAS_COPIA).join(" ")
       if (permitidos.has(g)) continue
+      if (sonNombresDelMaterial(originales.slice(i, i + PALABRAS_COPIA), vocabulario)) continue
       const de = ejemplos.find((e) => e.gramas.has(g))
       if (!de) continue
       hallazgos.push({
@@ -495,9 +509,33 @@ function reglaDeCopia(campos: Campo[], ctx: ContextoRevision): Hallazgo[] {
 
 const EMOJI = /(?![©®™])\p{Extended_Pictographic}/u
 
-const FORMULA_NO_ES = /\b(ya )?no (es|son|fue|era)\b[^.;:!?]{1,90}?,\s*(sino\s+)?(es|son|fue|era)\b/i
+/** La segunda mitad que empieza dudando ("es probable que...") no es la formula. */
+const DUDA = String.raw`(?! (probable|posible|decir|dif[ií]cil|pronto|temprano)\b)`
+const FORMULA_NO_ES = new RegExp(String.raw`\b(ya )?no (es|son|fue|era)\b[^.;:!?]{1,90}?,\s*(sino\s+)?(es|son|fue|era)\b${DUDA}`, "i")
 /** La misma formula partida en dos frases: "No es miedo. Es criterio." */
-const FORMULA_NO_ES_EN_DOS = /\b(ya )?no (es|son|fue|era)\b[^.;:!?\n]{1,60}\.\s+(es|son|fue|era)\b/i
+const FORMULA_NO_ES_EN_DOS = new RegExp(String.raw`\b(ya )?no (es|son|fue|era)\b[^.;:!?\n]{1,60}[.!]\s+(es|son|fue|era)\b${DUDA}`, "i")
+
+const hallazgoDeFormula = (donde: string, texto: string, indice: number): Hallazgo => ({
+  regla: "no_es_x_es_y",
+  nivel: "aviso",
+  donde,
+  detalle: `Usa la fórmula «No es X, es Y»: ${cita(fragmento(texto, indice, 70))}`,
+  pide: "Dilo en afirmativo: lo que es, sin contraponerlo a lo que no es.",
+})
+
+/**
+ * La formula partida entre dos textos seguidos: el titulo de una lamina y su
+ * cuerpo, o dos parrafos del post. Solo si ninguno de los dos la tiene ya solo.
+ */
+function formulaEntre(donde: string, primero: string, segundo: string): Hallazgo | null {
+  if (!primero.trim() || !segundo.trim()) return null
+  if ([primero, segundo].some((t) => FORMULA_NO_ES.test(t) || FORMULA_NO_ES_EN_DOS.test(t))) return null
+  const junto = `${primero.trim().replace(/[.!?]*$/, ".")} ${segundo.trim()}`
+  const m = FORMULA_NO_ES_EN_DOS.exec(junto)
+  // Tiene que cruzar del primero al segundo: si cae entera en uno, ya se miro.
+  if (!m || m.index + m[0].length <= primero.trim().length) return null
+  return hallazgoDeFormula(donde, junto, m.index)
+}
 
 /**
  * Lo que el revisor castiga en un texto cualquiera, en una linea cada cosa.
@@ -562,18 +600,11 @@ function reglasDeTexto(campos: Campo[], ctx: ContextoRevision, emojisPermitidos:
       }
     }
 
-    // "No es X, es Y", y sus variantes con "sino" o "ya no es". El oficio la
-    // prohibe y es la muletilla que mas se colaba: tres de cinco carruseles.
-    const formula = FORMULA_NO_ES.exec(texto)
-    if (formula) {
-      hallazgos.push({
-        regla: "no_es_x_es_y",
-        nivel: "aviso",
-        donde,
-        detalle: `Usa la fórmula «No es X, es Y»: ${cita(fragmento(texto, formula.index, 70))}`,
-        pide: "Dilo en afirmativo: lo que es, sin contraponerlo a lo que no es.",
-      })
-    }
+    // "No es X, es Y", y sus variantes con "sino", "ya no es" o partida en dos
+    // frases. El oficio la prohibe y es la muletilla que mas se colaba: tres de
+    // cinco carruseles.
+    const formula = FORMULA_NO_ES.exec(texto) ?? FORMULA_NO_ES_EN_DOS.exec(texto)
+    if (formula) hallazgos.push(hallazgoDeFormula(donde, texto, formula.index))
 
     if (!emojisPermitidos) {
       const emoji = EMOJI.exec(texto)
@@ -706,6 +737,11 @@ export function revisarCarrusel(respuesta: unknown, ctx: ContextoRevision): Hall
 
   slides.forEach((s, i) => {
     const n = i + 1
+    const arriba = typeof s.hook === "string" ? s.hook : typeof s.title === "string" ? s.title : ""
+    const abajo = typeof s.body === "string" ? s.body : typeof s.lead === "string" ? s.lead : ""
+    const partida = formulaEntre(`lámina ${n} (título y cuerpo)`, arriba, abajo)
+    if (partida) hallazgos.push(partida)
+
     if (typeof s.hook === "string" && s.hook.length > TOPES_CARRUSEL.hook) {
       hallazgos.push({
         regla: "largo",
@@ -816,6 +852,10 @@ export function revisarPost(post: string, ctx: ContextoRevision, longitud?: stri
   const parrafos = post.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean)
   const campos = parrafos.map((texto, i) => ({ donde: i === 0 ? "post (hook)" : `post (párrafo ${i + 1})`, texto }))
   const hallazgos = reglasDeTexto(campos, ctx, ctx.reglas.emojis_linkedin)
+  for (let i = 0; i + 1 < campos.length; i++) {
+    const partida = formulaEntre(`post (párrafos ${i + 1} y ${i + 2})`, campos[i].texto, campos[i + 1].texto)
+    if (partida) hallazgos.push(partida)
+  }
 
   const rango = longitud ? PALABRAS_POST[longitud] : undefined
   if (rango) {
