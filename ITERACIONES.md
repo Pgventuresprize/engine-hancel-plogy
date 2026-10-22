@@ -84,6 +84,26 @@ Al retomar uno, se detalla como bloque antes de construir.
 - **Cuándo:** si una prueba muestra que un agente especializado escribe mejor una
   parte concreta sin romper la coherencia.
 
+### Generación de shitposts y memes
+- **Qué es:** un formato nuevo, aparte del post y el carrusel: piezas cortas de
+  humor (meme de una imagen con texto, shitpost) a partir de una noticia o un
+  tema. Un agente propio escribe el chiste con el criterio de la marca y la
+  imagen sale de la biblioteca, de una plantilla o generada.
+- **Por qué esperó:** se pidió anotarlo (2026-10-22). Hoy el motor solo hace
+  post de LinkedIn y carrusel de Instagram.
+- **Cautelas:**
+  - el chiste nace de la marca, no de copiar el meme de moda de otro;
+  - las plantillas de memes conocidos y las caras reales tienen derechos;
+  - Hancel es genérico: cada marca decide en su kit si el formato le va y con
+    qué tono, nada fijo de Plogy en el motor;
+  - el revisor actual mide piezas informativas; el humor necesita otra vara
+    (que se entienda sin explicar, que no falte a nadie, que no invente datos).
+- **Pendiente de decidir:** qué redes (Instagram, X, TikTok), si la imagen sale de
+  plantillas o se genera, y si entra por el tablero de noticias o desde un tema.
+- **Se cruza con:** "Agentes que buscan temas virales en la competencia", que
+  daría formatos y ganchos de humor que funcionan.
+- **Cuándo:** sin fecha; al retomarlo, se detalla como bloque.
+
 ## Revisor y corrección
 
 ### "Corregir" en segundo plano
