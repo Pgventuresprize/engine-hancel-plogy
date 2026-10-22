@@ -16,7 +16,7 @@ import {
   recortar,
   reetiquetarImagen,
   registrarSubidas,
-} from "@/app/configuracion/marca/imagenes-actions"
+} from "@/app/marca/imagenes-actions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {

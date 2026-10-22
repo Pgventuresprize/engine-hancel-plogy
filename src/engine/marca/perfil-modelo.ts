@@ -4,7 +4,7 @@
  * Es lo que hace que una cuenta suene a si misma y no a la fabrica. Los prompts
  * de los agentes traen el oficio —estructura, rigor, formato— y esto les dice
  * para quien escriben. Vive en `brand_profile`, una fila por cuenta, y lo llena
- * la propia marca desde Configuracion > Marca.
+ * la propia marca desde Marca.
  *
  * La fila no existe hasta el primer guardado: una cuenta nueva no hereda nada
  * de nadie y, mientras tanto, `perfilDe` devuelve el perfil vacio, con el que

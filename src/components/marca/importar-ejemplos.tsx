@@ -3,7 +3,7 @@
 import * as React from "react"
 import { FileUpIcon, Loader2Icon } from "lucide-react"
 
-import { extraerEjemplosDeArchivo, guardarEjemplosImportados } from "@/app/configuracion/marca/ejemplos-actions"
+import { extraerEjemplosDeArchivo, guardarEjemplosImportados } from "@/app/marca/ejemplos-actions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"

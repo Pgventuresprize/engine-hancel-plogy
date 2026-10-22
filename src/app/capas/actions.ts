@@ -23,7 +23,7 @@ function fail(error: unknown, fallback: string): ActionResult {
 function refresh() {
   revalidatePath("/capas")
   // Pilares, audiencias, verticales y CTA se editan tambien desde Marca.
-  revalidatePath("/configuracion/marca")
+  revalidatePath("/marca")
 }
 
 const TABLAS = [

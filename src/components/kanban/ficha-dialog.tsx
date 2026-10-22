@@ -48,7 +48,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RecetaDelPrompt } from "@/components/agentes/simulador-prompt"
 import { Textarea } from "@/components/ui/textarea"
-import { guardarPiezaComoEjemploMarca } from "@/app/configuracion/marca/ejemplos-actions"
+import { guardarPiezaComoEjemploMarca } from "@/app/marca/ejemplos-actions"
 import { conPocoMaterial, nombreMaterial } from "@/engine/content/material"
 import type { Hallazgo, Revision } from "@/engine/content/revisor"
 import type { CriterioDecidido } from "@/engine/content/types"

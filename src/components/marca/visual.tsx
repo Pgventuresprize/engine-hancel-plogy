@@ -3,7 +3,7 @@
 import * as React from "react"
 import { PlusIcon, XIcon } from "lucide-react"
 
-import { guardarVisual, type CamposVisual } from "@/app/configuracion/marca/actions"
+import { guardarVisual, type CamposVisual } from "@/app/marca/actions"
 import { LogoMarca } from "@/components/configuracion/logo-marca"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"

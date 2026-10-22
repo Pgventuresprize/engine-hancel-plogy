@@ -28,7 +28,7 @@ export function PromptFinal({ prompt }: { prompt: string }) {
       <div className="mt-3 flex flex-col gap-3">
         <p className="text-muted-foreground text-xs leading-relaxed">
           Lo que recibe el agente como instrucciones: el oficio, el bloque de{" "}
-          <Link href="/configuracion/marca" className="text-foreground underline underline-offset-2">
+          <Link href="/marca" className="text-foreground underline underline-offset-2">
             tu marca
           </Link>{" "}
           y el formato de respuesta, que no se edita. En cada llamada recibe además el material de la pieza.

@@ -17,7 +17,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { BotIcon, ChefHatIcon, ClapperboardIcon, GalleryHorizontalEndIcon, KanbanIcon, LayersIcon, LightbulbIcon, SendIcon, SettingsIcon } from "lucide-react"
+import { BotIcon, ChefHatIcon, ClapperboardIcon, FingerprintIcon, GalleryHorizontalEndIcon, KanbanIcon, LayersIcon, LightbulbIcon, SendIcon, SettingsIcon } from "lucide-react"
 
 import { AGENTES } from "@/lib/agentes-catalogo"
 
@@ -44,6 +44,15 @@ export function AppSidebar({
       url: "/",
       icon: <KanbanIcon />,
       isActive: pathname === "/",
+      items: [],
+    },
+    {
+      // Seccion propia y no un ajuste: es lo que leen todos los agentes antes
+      // de escribir y dibujar (identidad, voz, kit, imagenes, ejemplos).
+      title: "Marca",
+      url: "/marca",
+      icon: <FingerprintIcon />,
+      isActive: pathname.startsWith("/marca"),
       items: [],
     },
     {
@@ -122,11 +131,6 @@ export function AppSidebar({
           title: "Conexiones",
           url: "/configuracion/conexiones",
           isActive: pathname === "/configuracion/conexiones",
-        },
-        {
-          title: "Marca",
-          url: "/configuracion/marca",
-          isActive: pathname === "/configuracion/marca",
         },
         {
           title: "Empresa",

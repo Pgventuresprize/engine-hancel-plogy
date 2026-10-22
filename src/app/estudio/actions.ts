@@ -51,7 +51,7 @@ function refresh() {
   revalidatePath("/")
   revalidatePath("/configuracion/general")
   revalidatePath("/configuracion/conexiones")
-  revalidatePath("/configuracion/marca")
+  revalidatePath("/marca")
 }
 
 /**
@@ -724,7 +724,7 @@ export async function runTickNow(): Promise<ActionResult> {
 }
 
 // --------------------------------------------------------------- logo de marca
-// El resto del aspecto se guarda en app/configuracion/marca/actions.ts.
+// El resto del aspecto se guarda en app/marca/actions.ts.
 
 /** Lo que admite el logo: mapas de bits, que es lo unico que Satori dibuja. */
 const TIPOS_DE_LOGO = ["image/png", "image/jpeg", "image/webp"]

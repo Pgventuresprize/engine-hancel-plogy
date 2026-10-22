@@ -132,7 +132,7 @@ export default async function AgentePage({
                 ))
               )}
               <Link
-                href="/configuracion/marca?tab=skills"
+                href="/marca?tab=skills"
                 className="text-muted-foreground hover:text-foreground ml-auto text-xs underline-offset-2 hover:underline"
               >
                 Editar en Marca

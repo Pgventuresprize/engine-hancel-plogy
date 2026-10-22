@@ -24,7 +24,7 @@ import { ajustesDe, type Agente } from "./settings"
  * Se arma por capas, en este orden: el oficio (como se hace el trabajo), la
  * marca (quien escribe y para quien, ver marca/bloque.ts) y el contrato (el
  * JSON exacto que el motor sabe leer). Lo que una cuenta puede editar es el
- * oficio; la marca se edita en Configuracion > Marca y el contrato no se toca,
+ * oficio; la marca se edita en Marca y el contrato no se toca,
  * porque si cambia, la pieza no se puede guardar.
  *
  * El oficio del codigo es el valor por defecto y sigue versionado en git, que
@@ -134,7 +134,7 @@ export function armarPromptDe(
 /**
  * El prompt de una pieza: lo de siempre (oficio, marca, skills de siempre) mas
  * lo que entra por su situacion, y la receta de como se armo. Se lee la marca
- * en cada llamada: lo que cambia en Configuracion > Marca vale desde la
+ * en cada llamada: lo que cambia en Marca vale desde la
  * siguiente pieza.
  */
 export async function promptPara(

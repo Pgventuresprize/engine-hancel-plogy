@@ -3,7 +3,7 @@
 import * as React from "react"
 import { ChevronDownIcon, FileUpIcon, PlusIcon, Trash2Icon } from "lucide-react"
 
-import { borrarEjemploMarca, guardarEjemploMarca } from "@/app/configuracion/marca/ejemplos-actions"
+import { borrarEjemploMarca, guardarEjemploMarca } from "@/app/marca/ejemplos-actions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"

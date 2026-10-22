@@ -12,6 +12,11 @@ const nextConfig: NextConfig = {
     "/api/render/navegador": ["./node_modules/@sparticuz/chromium/bin/**", "./src/engine/render/prototipo/**"],
   },
   serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
+  // Marca salio de Configuracion a su propia seccion: los enlaces viejos
+  // (marcadores, avisos ya enviados) siguen llegando, con su ?tab=.
+  async redirects() {
+    return [{ source: "/configuracion/marca", destination: "/marca", permanent: false }]
+  },
 };
 
 export default nextConfig;

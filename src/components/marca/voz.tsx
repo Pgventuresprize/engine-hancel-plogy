@@ -1,6 +1,6 @@
 "use client"
 
-import { guardarVoz, type CamposVoz } from "@/app/configuracion/marca/actions"
+import { guardarVoz, type CamposVoz } from "@/app/marca/actions"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { LONGITUDES, TONOS } from "@/engine/content/variables"

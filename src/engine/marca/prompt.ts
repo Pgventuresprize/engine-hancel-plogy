@@ -42,7 +42,7 @@ async function plantillaConListas(accountId: string): Promise<boolean> {
  * el editado), el bloque de su marca, sus skills y el contrato.
  *
  * Se lee la marca en cada llamada y no se guarda en ningun sitio: lo que la
- * marca cambia en Configuracion > Marca vale desde la siguiente pieza.
+ * marca cambia en Marca vale desde la siguiente pieza.
  */
 export async function promptConMarca(
   accountId: string,

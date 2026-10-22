@@ -1,6 +1,6 @@
 "use client"
 
-import { guardarIdentidad } from "@/app/configuracion/marca/actions"
+import { guardarIdentidad } from "@/app/marca/actions"
 import { Label } from "@/components/ui/label"
 import { PAISES, TOPES_PERFIL, type PerfilMarca } from "@/engine/marca/perfil-modelo"
 

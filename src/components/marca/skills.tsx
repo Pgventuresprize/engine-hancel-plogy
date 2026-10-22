@@ -3,7 +3,7 @@
 import * as React from "react"
 import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, PaperclipIcon, PlusIcon, Trash2Icon } from "lucide-react"
 
-import { borrarSkillMarca, guardarSkillMarca, moverSkillMarca } from "@/app/configuracion/marca/skills-actions"
+import { borrarSkillMarca, guardarSkillMarca, moverSkillMarca } from "@/app/marca/skills-actions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"

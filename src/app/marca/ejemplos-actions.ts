@@ -16,7 +16,7 @@ const mensaje = (error: unknown, porDefecto: string) =>
   (error instanceof Error ? error.message : String(error)) || porDefecto
 
 function refresh() {
-  revalidatePath("/configuracion/marca")
+  revalidatePath("/marca")
   // El simulador de la ficha de cada agente enseña que ejemplos entran.
   revalidatePath("/agentes/[agente]", "page")
 }

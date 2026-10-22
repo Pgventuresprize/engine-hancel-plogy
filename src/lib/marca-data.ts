@@ -9,7 +9,7 @@ import { estiloDesdeConfig, type Estilo } from "@/engine/render/theme"
 import type { Variables } from "@/engine/content/types"
 import { idDeCuentaActual } from "@/lib/accounts"
 
-/** Todo lo que pinta Configuracion > Marca, de la cuenta abierta. */
+/** Todo lo que pinta Marca, de la cuenta abierta. */
 export type DatosMarca = {
   perfil: PerfilMarca
   editorial: IdentidadEditorial

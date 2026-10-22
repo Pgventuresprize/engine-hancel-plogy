@@ -9,7 +9,7 @@ import { supabaseAdmin } from "@/engine/supabase-admin"
 import { idDeCuentaActual } from "@/lib/accounts"
 
 /**
- * Lo que se guarda desde Configuracion > Marca. Cada pestana tiene su accion y
+ * Lo que se guarda desde Marca. Cada pestana tiene su accion y
  * escribe solo lo suyo: ninguna reenvia lo de otra.
  */
 
@@ -21,7 +21,7 @@ function fail(error: unknown, fallback: string): ActionResult {
 }
 
 function refresh() {
-  revalidatePath("/configuracion/marca")
+  revalidatePath("/marca")
 }
 
 /** Funde un cambio en un jsonb de generation_config sin pisar el resto. */
