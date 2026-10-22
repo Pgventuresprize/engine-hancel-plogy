@@ -98,10 +98,10 @@ export type OpcionesDibujo = { ancho: number; alto: number }
  * - `data-encoger="132:96"`: si el hueco no cabe, se baja la letra de 132 a 96 px
  *   de 4 en 4 hasta que quepa.
  * - `data-min="34"`: la letra mas pequena permitida en ese hueco.
- * - En la lamina (`.lamina`): `data-seguro="x1,y1,x2,y2"`, el area segura.
+ * - En la lamina (`data-lamina`): `data-seguro="x1,y1,x2,y2"`, el area segura.
  */
 const MEDIR = `(() => {
-  const lamina = document.querySelector('.lamina')
+  const lamina = document.querySelector('[data-lamina]') || document.querySelector('.lamina') || document.body
   const [sx1, sy1, sx2, sy2] = (lamina.dataset.seguro || '0,0,' + innerWidth + ',' + innerHeight).split(',').map(Number)
   const huecos = [...document.querySelectorAll('[data-hueco]')]
   const zonas = [...document.querySelectorAll('[data-zona]')]
