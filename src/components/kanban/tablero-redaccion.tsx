@@ -5,6 +5,7 @@ import * as React from "react"
 import { guardarEnvioWebAuto, moverEnRedaccion } from "@/app/estudio/redaccion-actions"
 import { IndicadorModo } from "@/components/kanban/tablero"
 import { RedaccionDialog } from "@/components/kanban/redaccion-dialog"
+import { useAltoHastaAbajo } from "@/components/kanban/use-alto-hasta-abajo"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import type { EtapaRedaccion, FichaRedaccion, TableroRedaccion as Datos } from "@/lib/redaccion-data"
@@ -67,6 +68,7 @@ export function TableroRedaccion({ datos }: { datos: Datos }) {
   const [arrastrando, setArrastrando] = React.useState<FichaRedaccion | null>(null)
   const [moviendo, setMoviendo] = React.useState<string | null>(null)
   const [aviso, setAviso] = React.useState<{ tipo: "error" | "ok"; texto: string } | null>(null)
+  const [refTablero, altoTablero] = useAltoHastaAbajo<HTMLDivElement>()
 
   const ficha = React.useMemo(() => {
     if (!abiertaId) return null
@@ -108,7 +110,11 @@ export function TableroRedaccion({ datos }: { datos: Datos }) {
         </p>
       ) : null}
 
-      <div className="flex max-h-[calc(100vh-11rem)] items-start gap-5 overflow-auto pb-2">
+      <div
+        ref={refTablero}
+        style={altoTablero ? { maxHeight: altoTablero } : undefined}
+        className="flex max-h-[calc(100vh-11rem)] items-start gap-5 overflow-auto pb-2"
+      >
         {GRUPOS.map((g) => ({
           ...g,
           // Como una red: la columna existe cuando el portal esta conectado.

@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { FichaDialog } from "@/components/kanban/ficha-dialog"
+import { useAltoHastaAbajo } from "@/components/kanban/use-alto-hasta-abajo"
 import { conPocoMaterial, nombreMaterial } from "@/engine/content/material"
 import type { Etapa, Ficha, ModoDeEtapa, Tablero as TableroDatos } from "@/lib/kanban-data"
 import { PlayIcon } from "lucide-react"
@@ -173,6 +174,7 @@ export function Tablero({ datos }: { datos: TableroDatos }) {
   const [arrastrando, setArrastrando] = React.useState<Ficha | null>(null)
   const [moviendo, setMoviendo] = React.useState<string | null>(null)
   const [aviso, setAviso] = React.useState<{ tipo: "error" | "ok"; texto: string } | null>(null)
+  const [refTablero, altoTablero] = useAltoHastaAbajo<HTMLDivElement>()
 
   // Con la que se abrio, de respaldo: al cambiar de etapa una ficha puede
   // quedarse fuera de las visibles de su columna, y es mejor seguir viendo lo
@@ -249,10 +251,15 @@ export function Tablero({ datos }: { datos: TableroDatos }) {
 
       {/* Scroll horizontal: las columnas no caben en un portatil, y partirlas
           en dos filas rompe la lectura de izquierda a derecha del proceso. */}
-      {/* El alto va acotado a la ventana: con el scroll horizontal debajo de la
-          columna mas larga, la barra quedaba fuera de pantalla y no se veia. Asi
-          queda siempre abajo, y las columnas largas scrollean por dentro. */}
-      <div className="flex max-h-[calc(100vh-11rem)] items-start gap-5 overflow-auto pb-2">
+      {/* El alto va acotado a lo que queda de ventana: con el scroll horizontal
+          debajo de la columna mas larga, la barra quedaba fuera de pantalla y no
+          se veia. Asi queda siempre abajo, y las columnas largas scrollean por
+          dentro. La clase es solo el respaldo hasta que se mide. */}
+      <div
+        ref={refTablero}
+        style={altoTablero ? { maxHeight: altoTablero } : undefined}
+        className="flex max-h-[calc(100vh-11rem)] items-start gap-5 overflow-auto pb-2"
+      >
         {gruposCon(datos.redes).map((grupo) => {
           const total = grupo.etapas.reduce((n, e) => n + datos.conteos[e.id], 0)
           return (
