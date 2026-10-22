@@ -71,7 +71,7 @@ LA PRUEBA: si lo noticioso es una decision que ya cambia algo para el sector, es
 FILTRO DURO: si NO es un hecho verificable (opinion, prediccion sin gatillo, listicle generico), relevance_score = 1-2 sin importar lo demas.`
 
 export const ANALISIS_CONTRATO = `RESPONDE SOLO con este JSON, sin texto alrededor, sin saltos de linea y sin comillas dobles dentro de ninguna cadena (usa comillas simples y separa ideas con espacios dentro de full_content):
-{"vetada":<true|false>,"motivo_veto":"<una frase, solo si vetada es true>","fecha_hecho":"<YYYY-MM-DD o null si no se puede saber>","vieja":<true|false>,"politica":<true|false>,"full_content":"<el texto consolidado, en un solo bloque sin saltos de linea>","relevance_score":<entero 1-10>,"keywords_matched":["<4 a 6 keywords en minuscula>"],"analysis_notes":"<2-3 frases: primero el score global y por que; luego el angulo editorial mas prometedor si lo hay>"}`
+{"vetada":<true|false>,"motivo_veto":"<una frase, solo si vetada es true>","fecha_hecho":"<YYYY-MM-DD o null si no se puede saber>","vieja":<true|false>,"vieja_por":"<fecha si es vieja por la fecha del hecho, ya_paso si lo anunciado ya paso, o null si no es vieja>","score_si_fresca":<entero 1-10: la nota que le darias si no fuera vieja; igual a relevance_score si no lo es>,"politica":<true|false>,"full_content":"<el texto consolidado, en un solo bloque sin saltos de linea>","relevance_score":<entero 1-10>,"keywords_matched":["<4 a 6 keywords en minuscula>"],"analysis_notes":"<2-3 frases: primero el score global y por que; luego el angulo editorial mas prometedor si lo hay>"}`
 
 type ResultadoAnalisis = {
   /**
@@ -86,6 +86,10 @@ type ResultadoAnalisis = {
   /** Cuando paso el hecho, segun el agente. */
   fechaHecho: string | null
   vieja: boolean
+  /** Por que la marco vieja: la fecha la vuelve a contar el codigo; "ya_paso" no. */
+  viejaPor: "fecha" | "ya_paso" | null
+  /** La nota sin el castigo por vieja, para cuando el codigo la desmarca. */
+  scoreSiFresca: number | null
   politica: boolean
   full_content: string | null
   relevance_score: number
@@ -111,11 +115,14 @@ function hastaFrase(texto: string, tope: number): string {
 function normaliza(bruto: unknown): ResultadoAnalisis {
   const o = (bruto ?? {}) as Record<string, unknown>
   const score = Number(o.relevance_score)
+  const siFresca = Number(o.score_si_fresca)
   return {
     vetada: o.vetada === true,
     motivoVeto: typeof o.motivo_veto === "string" ? o.motivo_veto.trim().slice(0, 300) : "",
     fechaHecho: typeof o.fecha_hecho === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.fecha_hecho) ? o.fecha_hecho : null,
     vieja: o.vieja === true,
+    viejaPor: o.vieja_por === "fecha" || o.vieja_por === "ya_paso" ? o.vieja_por : null,
+    scoreSiFresca: Number.isFinite(siFresca) ? Math.min(10, Math.max(1, Math.round(siFresca))) : null,
     politica: o.politica === true,
     full_content:
       typeof o.full_content === "string" && o.full_content.trim()
@@ -316,9 +323,16 @@ ${bloqueMaterial(articulo, busqueda.ok ? busqueda.texto : null, citadas)}`
     [noticia.title, articulo ?? "", busqueda.ok ? busqueda.texto : ""].join("\n"),
     res.full_content ?? ""
   )
-  // Vieja por lo que dice el agente o por la fecha del hecho que dio.
+  // Vieja por la fecha del hecho: si el agente la dio, la cuenta la hace el
+  // codigo y no el agente. En la prueba del 2026-10-22 descarto una noticia de
+  // hace 3 dias "por pasar el corte de 5" y su propia nota lo contaba bien. Lo
+  // que el codigo no puede saber (un evento ya celebrado, una fecha sin dar) se
+  // le sigue creyendo al agente.
   const diasHecho = res.fechaHecho ? diasDeAntiguedad(res.fechaHecho) : null
-  const vieja = res.vieja || (diasHecho !== null && diasHecho > DIAS_DE_FRESCURA)
+  const viejaPorFecha = diasHecho !== null ? diasHecho > DIAS_DE_FRESCURA : res.vieja && res.viejaPor !== "ya_paso"
+  const vieja = viejaPorFecha || (res.vieja && res.viejaPor === "ya_paso")
+  // Desmarcada por el codigo: la nota del agente venia castigada a 1.
+  if (res.vieja && !vieja && res.scoreSiFresca !== null) res.relevance_score = res.scoreSiFresca
   // Vieja o politica: score 1, diga lo que diga el resto del analisis.
   if (vieja || res.politica) res.relevance_score = 1
   const motivo = vieja

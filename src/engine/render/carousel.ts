@@ -228,6 +228,8 @@ export function parseInstagramResponse(respuesta: unknown): {
   cierre: CierreDelGuion | null
   /** Vacio en un guion de antes de que se planeara cada lamina. */
   plan: PlanLamina[]
+  /** Lo que va encima del titular de la portada. Vacio en un guion de antes. */
+  antetitulo: string
 } {
   const raiz = (respuesta ?? {}) as Record<string, unknown>
 
@@ -273,7 +275,19 @@ export function parseInstagramResponse(respuesta: unknown): {
       ? raiz.elemento.trim()
       : ""
 
-  return { caption, hashtags, slides, fotos, elemento, cierre: cierreDelGuion(raiz.cierre), plan: planDelGuion(raiz.slides) }
+  const antetitulo =
+    typeof raiz.antetitulo === "string" ? hastaPalabra(arreglarOrtografia(raiz.antetitulo.trim()), 40) : ""
+
+  return {
+    caption,
+    hashtags,
+    slides,
+    fotos,
+    elemento,
+    cierre: cierreDelGuion(raiz.cierre),
+    plan: planDelGuion(raiz.slides),
+    antetitulo,
+  }
 }
 
 /**
@@ -341,13 +355,13 @@ export async function generarCarrusel(
   /** Dibuja ademas la portada suelta que usa Facebook. */
   conPortadaFacebook = false
 ): Promise<CarouselPayload> {
-  const { caption, hashtags, slides, fotos, elemento, cierre, plan } = parseInstagramResponse(respuesta)
+  const { caption, hashtags, slides, fotos, elemento, cierre, plan, antetitulo } = parseInstagramResponse(respuesta)
   // De aqui en adelante el estilo ya lleva el cierre de esta pieza.
   estilo = estiloConCierre(estilo, cierre)
 
   // Plogy tiene su propia estructura de laminas, no la clasica recoloreada.
   if (estilo.plantilla === "plogy") {
-    return generarCarruselPlogy(pieceKey, { caption, hashtags, slides, fotos, elemento, cierre, plan }, news, estilo, nichos, conPortadaFacebook)
+    return generarCarruselPlogy(pieceKey, { caption, hashtags, slides, fotos, elemento, cierre, plan, antetitulo }, news, estilo, nichos, conPortadaFacebook)
   }
 
   // El cierre lo escribe siempre el agente, con el CTA de la pieza y lo que
@@ -428,9 +442,10 @@ export async function generarCarrusel(
   const fotoPortada = (await delBanco()) ?? (await descargarFoto(news?.image_url))
   const sinFotoPortada = fotoPortada === null
 
-  // El antetitulo situa el post antes de que nadie lea el titular. Sale del tema
-  // del segmento, que es lo mas concreto que la noticia trae siempre.
-  const etiqueta = (news?.tema ?? news?.niche ?? "").trim() || null
+  // El antetitulo situa el post antes de que nadie lea el titular. Lo escribe el
+  // agente: el tema del segmento es una busqueda, a menudo en ingles
+  // ("CYBERSECURITY", "FOUNDER STORY"), y solo queda para los guiones de antes.
+  const etiqueta = antetitulo || (news?.tema ?? news?.niche ?? "").trim() || null
 
   const imagenes: Buffer[] = []
 
@@ -612,7 +627,7 @@ async function generarCarruselPlogy(
 
   const [logoClaro, logoOscuro] = await Promise.all([descargarFoto(estilo.logoClaro), descargarFoto(estilo.logoOscuro)])
   const hallado = news?.account_id ? await buscarInserto(elemento, news.account_id) : null
-  const tema = [news?.niche, news?.tema].filter(Boolean).join(" + ")
+  const tema = guion.antetitulo || [news?.niche, news?.tema].filter(Boolean).join(" + ")
   const reparto = repartirPlogy(slides.map((s) => ({ items: s.type === "text" ? s.items : null })))
   // Sin cierre del agente no hay lamina de cierre (ver generarCarrusel).
   const total = slides.length + (guion.cierre ? 1 : 0)
