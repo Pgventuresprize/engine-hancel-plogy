@@ -7,9 +7,13 @@ const nextConfig: NextConfig = {
   // local, que es la peor forma de enterarse.
   outputFileTracingIncludes: {
     "/api/**": ["./src/engine/render/fonts/**"],
-    // El Chromium de @sparticuz va comprimido en bin/ y se lee por ruta, y las
-    // fuentes y logos del prototipo tambien: el trazado no los ve solo.
-    "/api/render/navegador": ["./node_modules/@sparticuz/chromium/bin/**", "./src/engine/render/prototipo/**"],
+    // El Chromium de @sparticuz va comprimido en bin/ y se lee por ruta: el
+    // trazado no lo ve solo. Marca > Kit de diseño dibuja con el, y los
+    // carruseles de una marca con kit activo tambien: los hace el tick y se
+    // redibujan desde el tablero (la pagina de inicio).
+    "/marca": ["./node_modules/@sparticuz/chromium/bin/**"],
+    "/api/content/tick": ["./node_modules/@sparticuz/chromium/bin/**"],
+    "/": ["./node_modules/@sparticuz/chromium/bin/**"],
   },
   serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
   // Marca salio de Configuracion a su propia seccion: los enlaces viejos

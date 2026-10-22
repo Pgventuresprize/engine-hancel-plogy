@@ -51,8 +51,36 @@ export type LlamadaClaude = {
   maxBusquedas?: number
   /** Urls publicas de imagenes que el modelo tiene que mirar, antes del texto. */
   imagenes?: string[]
+  /**
+   * Lo que el modelo mira antes del prompt, en orden: textos cortos (rotulos),
+   * imagenes y PDF ya cargados en memoria. Sirve para poner "Lamina 3:" delante
+   * de cada imagen o pasar un manual de marca.
+   */
+  bloques?: Bloque[]
   /** Limite de tiempo propio, para respuestas largas (un guion de video). */
   timeoutMs?: number
+  /**
+   * Cuanto piensa antes de responder. En Opus 5.5, que no deja apagar el
+   * razonamiento, es la unica forma de que un trabajo mecanico no tarde minutos.
+   * Sin el, el valor por defecto del modelo.
+   */
+  esfuerzo?: "low" | "medium" | "high" | "xhigh" | "max"
+}
+
+export type Bloque =
+  | { tipo: "texto"; texto: string }
+  | { tipo: "imagen"; mime: "image/png" | "image/jpeg" | "image/webp" | "image/gif"; datos: Buffer }
+  | { tipo: "pdf"; datos: Buffer; titulo?: string }
+
+function aContenido(b: Bloque): Record<string, unknown> {
+  if (b.tipo === "texto") return { type: "text", text: b.texto }
+  if (b.tipo === "imagen")
+    return { type: "image", source: { type: "base64", media_type: b.mime, data: b.datos.toString("base64") } }
+  return {
+    type: "document",
+    source: { type: "base64", media_type: "application/pdf", data: b.datos.toString("base64") },
+    ...(b.titulo ? { title: b.titulo } : {}),
+  }
 }
 
 /**
@@ -70,9 +98,7 @@ export type Sistema = string | { fijo: string; resto: string }
  */
 export type UsoClaude = { entrada: number; salida: number; deCache?: number }
 
-export type ResultadoClaude =
-  | { ok: true; texto: string; uso: UsoClaude }
-  | { ok: false; error: string }
+export type ResultadoClaude = { ok: true; texto: string; uso: UsoClaude } | { ok: false; error: string }
 
 /**
  * El token de Claude de una empresa. `null` si nadie lo ha pegado todavia.
@@ -160,23 +186,24 @@ export async function llamarClaude(opciones: LlamadaClaude): Promise<ResultadoCl
       ...(piensaSiempre
         ? {}
         : { thinking: opciones.model.includes("-5-5") ? { type: "between_tools" } : { type: "disabled" } }),
+      ...(opciones.esfuerzo ? { output_config: { effort: opciones.esfuerzo } } : {}),
       system,
       messages: [
         {
           role: "user",
-          content: opciones.imagenes?.length
-            ? [
-                ...opciones.imagenes.map((url) => ({ type: "image", source: { type: "url", url } })),
-                { type: "text", text: opciones.prompt },
-              ]
-            : opciones.prompt,
+          content:
+            opciones.imagenes?.length || opciones.bloques?.length
+              ? [
+                  ...(opciones.imagenes ?? []).map((url) => ({ type: "image", source: { type: "url", url } })),
+                  ...(opciones.bloques ?? []).map(aContenido),
+                  { type: "text", text: opciones.prompt },
+                ]
+              : opciones.prompt,
         },
       ],
     }
     if (opciones.buscarWeb) {
-      body.tools = [
-        { type: "web_search_20250305", name: "web_search", max_uses: opciones.maxBusquedas ?? 4 },
-      ]
+      body.tools = [{ type: "web_search_20250305", name: "web_search", max_uses: opciones.maxBusquedas ?? 4 }]
     }
 
     const response = await fetch(MESSAGES_URL, {

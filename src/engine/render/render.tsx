@@ -268,8 +268,10 @@ export function parseSlides(valor: unknown): Slide[] {
     const n = slides.length + 1
 
     const tipo = String(obj.type ?? "").trim()
+    // Con kit de diseño, el tipo de lamina del kit que eligio quien escribio.
+    const tipoLamina = texto(obj.tipo_lamina)?.toLowerCase().slice(0, 40) ?? null
     if (tipo === "photo_hook") {
-      slides.push({ n, type: "photo_hook", hook: texto(obj.hook) ?? texto(obj.title) })
+      slides.push({ n, type: "photo_hook", hook: texto(obj.hook) ?? texto(obj.title), ...(tipoLamina ? { tipoLamina } : {}) })
       continue
     }
 
@@ -280,7 +282,15 @@ export function parseSlides(valor: unknown): Slide[] {
       : []
     if (!title && !body && items.length === 0) continue
 
-    slides.push({ n, type: "text", title, body, lead: texto(obj.lead), items: items.length ? items : null })
+    slides.push({
+      n,
+      type: "text",
+      title,
+      body,
+      lead: texto(obj.lead),
+      items: items.length ? items : null,
+      ...(tipoLamina ? { tipoLamina } : {}),
+    })
   }
 
   return slides.slice(0, MAX_SLIDES)

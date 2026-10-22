@@ -25,12 +25,15 @@ export type SlideTexto = {
   lead?: string | null
   /** Puntos de una lista numerada. Solo la usa la plantilla Plogy. */
   items?: string[] | null
+  /** Con kit de diseño: el tipo de lamina del kit que pidio quien escribio (dato, lista...). */
+  tipoLamina?: string | null
 }
 
 export type SlidePortada = {
   n: number
   type: "photo_hook"
   hook?: string | null
+  tipoLamina?: string | null
 }
 
 export type Slide = SlideTexto | SlidePortada

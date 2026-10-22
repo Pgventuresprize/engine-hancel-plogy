@@ -550,6 +550,7 @@ export async function regenerateCarousel(pieceId: string): Promise<ActionResult>
     const { imagenesDePieza, registrarUsos } = await import("@/engine/marca/imagenes")
     const carrusel = await generarCarrusel(
       (job as { id: string }).id,
+      pieza.account_id,
       (job as { respuesta: unknown }).respuesta,
       news,
       estiloDesdeConfig((cfg as { carousel?: unknown } | null)?.carousel),
@@ -989,6 +990,7 @@ async function facebookDesdeCarruselExistente(angleId: string): Promise<boolean>
 
     const rehecho = await generarCarrusel(
       pieza.job_instagram_id,
+      accountId,
       (job as { respuesta: unknown }).respuesta,
       await noticiaDelAngulo(angleId),
       estiloDesdeConfig((cfg as { carousel?: unknown } | null)?.carousel),

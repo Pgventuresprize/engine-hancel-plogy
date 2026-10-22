@@ -67,7 +67,7 @@ export const PROMPT_DE_FABRICA: Record<AgenteConPrompt, string> = {
 export const CONTRATO: Record<AgenteConPrompt, string | ((datos: DatosParaPrompt) => string)> = {
   analisis: ANALISIS_CONTRATO,
   angulo: ANGULO_CONTRATO,
-  instagram: ({ perfil, listas }) => contratoInstagram(perfil, listas === true),
+  instagram: ({ perfil, listas, kit }) => contratoInstagram(perfil, listas === true, kit ?? []),
   linkedin: ({ perfil }) => contratoLinkedin(perfil),
   criterio: CRITERIO_CONTRATO,
   revisor: REVISOR_CONTRATO,

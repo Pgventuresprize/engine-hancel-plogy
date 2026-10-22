@@ -104,7 +104,12 @@ const MEDIR = `(() => {
   const lamina = document.querySelector('[data-lamina]') || document.querySelector('.lamina') || document.body
   const [sx1, sy1, sx2, sy2] = (lamina.dataset.seguro || '0,0,' + innerWidth + ',' + innerHeight).split(',').map(Number)
   const huecos = [...document.querySelectorAll('[data-hueco]')]
-  const zonas = [...document.querySelectorAll('[data-zona]')]
+  // Un fondo (la foto a sangre, un velo) no es algo con lo que el texto pueda
+  // chocar: va encima a proposito. Cuenta como fondo lo que tapa media lamina.
+  const zonas = [...document.querySelectorAll('[data-zona]')].filter((z) => {
+    const r = z.getBoundingClientRect()
+    return r.width * r.height < innerWidth * innerHeight * 0.5
+  })
   // Un hueco se mide por las lineas de su texto, no por su caja: un parrafo
   // ocupa todo el ancho aunque su texto sea corto.
   const lineas = (el) => {
@@ -175,8 +180,11 @@ const MEDIR = `(() => {
   for (const el of huecos) {
     for (const f of fallos(el)) problemas.push({ ...f, hueco: el.dataset.hueco })
     const min = Number(el.dataset.min || 0)
-    const letras = [el, ...el.querySelectorAll('*')].map((n) => parseFloat(getComputedStyle(n).fontSize))
-    const menor = Math.min(...letras)
+    // Solo cuenta la letra de lo que tiene texto propio: un hueco vacio o la
+    // caja de una lista no se leen, aunque su tamano de letra sea el de base.
+    const conTexto = (n) => [...n.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim())
+    const letras = [el, ...el.querySelectorAll('*')].filter(conTexto).map((n) => parseFloat(getComputedStyle(n).fontSize))
+    const menor = letras.length ? Math.min(...letras) : Infinity
     if (min && menor < min - 0.5) problemas.push({ tipo: 'letra_pequena', hueco: el.dataset.hueco, detalle: Math.round(menor) + ' px, el minimo es ' + min })
   }
   return { problemas, encogidos }
@@ -200,21 +208,150 @@ async function dibujarEn(
  * data: o about: se corta.
  */
 export async function dibujarLaminas(htmls: string[], opciones: OpcionesDibujo): Promise<LaminaDibujada[]> {
-  const navegador = await abrir()
-  const pagina = await navegador.newPage()
+  const pagina = await paginaSinRed()
   try {
-    await pagina.setRequestInterception(true)
-    pagina.on("request", (peticion) => {
-      const url = peticion.url()
-      if (url.startsWith("data:") || url.startsWith("about:")) void peticion.continue()
-      else void peticion.abort("blockedbyclient")
-    })
     const salida: LaminaDibujada[] = []
     for (const html of htmls) {
       const inicio = Date.now()
       salida.push({ ...(await dibujarEn(pagina, html, opciones)), ms: Date.now() - inicio })
     }
     return salida
+  } finally {
+    await pagina.close().catch(() => undefined)
+  }
+}
+
+/** Una pagina nueva que solo carga lo que trae dentro (data: y about:). */
+async function paginaSinRed(): Promise<Page> {
+  const navegador = await abrir()
+  const pagina = await navegador.newPage()
+  await pagina.setRequestInterception(true)
+  pagina.on("request", (peticion) => {
+    const url = peticion.url()
+    if (url.startsWith("data:") || url.startsWith("about:")) void peticion.continue()
+    else void peticion.abort("blockedbyclient")
+  })
+  return pagina
+}
+
+/**
+ * Lo que se lee de cada lamina dentro de la pagina: medidas, su foto mas grande
+ * y su HTML sin los data URI. Como `new Function` para que llegue al navegador
+ * tal cual, sin lo que anada el compilador.
+ */
+const DATOS_DE_LAMINA = new Function(
+  "el",
+  `const r = el.getBoundingClientRect()
+  const area = r.width * r.height
+  let foto = null, mayor = 0
+  for (const img of el.querySelectorAll('img')) {
+    const b = img.getBoundingClientRect()
+    const a = b.width * b.height
+    const src = img.currentSrc || img.src
+    if (a > mayor && a > area * 0.12 && src.startsWith('data:image/') && !src.startsWith('data:image/svg')) {
+      mayor = a
+      foto = src
+    }
+  }
+  const html = el.outerHTML
+    .replace(/(src|href)="data:[^"]{200,}"/g, '$1="(imagen)"')
+    .replace(/url\\(\\s*["']?data:[^)]{200,}\\)/g, 'url((imagen))')
+  return { ancho: Math.round(r.width), alto: Math.round(r.height), foto, html }`
+) as (el: Element) => { ancho: number; alto: number; foto: string | null; html: string }
+
+/** Una lamina encontrada en una pagina del kit. */
+export type LaminaDePagina = {
+  jpg: Buffer
+  ancho: number
+  alto: number
+  /** El HTML de la lamina, con las imagenes cambiadas por "(imagen)" para que pese poco. */
+  html: string
+  /** La imagen mas grande de la lamina (data URI), si ocupa buena parte de ella. */
+  foto: string | null
+}
+
+/**
+ * Las laminas de una pagina del kit (una pieza en HTML), cada una con su foto,
+ * su HTML y el CSS de la pagina.
+ *
+ * No hace falta saber como esta armado el kit: una lamina es cualquier elemento
+ * que mide exactamente lo que un formato de redes (1080x1350, 1080x1080...) y no
+ * esta dentro de otra. Si la pagina las muestra reducidas (zoom de vista
+ * previa), se devuelven a su tamano antes de sacarles la foto.
+ *
+ * A diferencia de las plantillas, aqui la pagina puede ejecutar su JavaScript
+ * (algunos kits arman la vista con el): es el kit de la propia marca y sigue sin
+ * red.
+ */
+export async function laminasDePagina(
+  html: string,
+  formatos: { ancho: number; alto: number }[],
+  max = 40
+): Promise<{ laminas: LaminaDePagina[]; css: string }> {
+  const pagina = await paginaSinRed()
+  try {
+    await pagina.setViewport({ width: 1400, height: 1000, deviceScaleFactor: 1 })
+    await pagina.setContent(html, { waitUntil: "load", timeout: 30_000 })
+    await pagina.evaluate("document.fonts.ready.then(() => true)")
+    const encontradas = (await pagina.evaluate(`(() => {
+      const formatos = ${JSON.stringify(formatos)}
+      const mide = (el) => {
+        const e = getComputedStyle(el)
+        if (e.display === 'none' || e.visibility === 'hidden') return false
+        const w = parseFloat(e.width), h = parseFloat(e.height)
+        return formatos.some((f) => Math.abs(w - f.ancho) <= 1 && Math.abs(h - f.alto) <= 1)
+      }
+      const todas = [...document.body.querySelectorAll('*')].filter(mide)
+      const sueltas = todas.filter((el) => !todas.some((otra) => otra !== el && otra.contains(el))).slice(0, ${max})
+      // Sin zoom ni transformaciones de vista previa, una debajo de otra.
+      const estilo = document.createElement('style')
+      estilo.textContent = '[data-kit-lamina]{zoom:1 !important;transform:none !important;display:block}'
+      document.head.appendChild(estilo)
+      document.body.style.zoom = '1'
+      sueltas.forEach((el, i) => el.setAttribute('data-kit-lamina', String(i)))
+      const css = [...document.querySelectorAll('style')].map((s) => s.textContent).join('\\n')
+        .replace(/url\\(\\s*["']?data:[^)]{200,}\\)/g, 'url((archivo))')
+      return { n: sueltas.length, css }
+    })()`)) as { n: number; css: string }
+
+    const laminas: LaminaDePagina[] = []
+    for (let i = 0; i < encontradas.n; i++) {
+      const el = await pagina.$(`[data-kit-lamina="${i}"]`)
+      if (!el) continue
+      const datos = (await el.evaluate(DATOS_DE_LAMINA)) as {
+        ancho: number
+        alto: number
+        foto: string | null
+        html: string
+      }
+      const jpg = Buffer.from(await el.screenshot({ type: "jpeg", quality: 88 }))
+      laminas.push({ jpg, ...datos })
+    }
+    return { laminas, css: encontradas.css }
+  } finally {
+    await pagina.close().catch(() => undefined)
+  }
+}
+
+/** Una pagina cualquiera (HTML completo) a imagen, del tamano dado. Para las hojas de contacto. */
+export async function capturar(
+  html: string,
+  ancho: number,
+  alto: number,
+  tipo: "jpeg" | "png" = "jpeg"
+): Promise<Buffer> {
+  const pagina = await paginaSinRed()
+  try {
+    await pagina.setViewport({ width: ancho, height: alto, deviceScaleFactor: 1 })
+    await pagina.setContent(html, { waitUntil: "load", timeout: 30_000 })
+    await pagina.evaluate("document.fonts.ready.then(() => true)")
+    return Buffer.from(
+      await pagina.screenshot({
+        type: tipo,
+        ...(tipo === "jpeg" ? { quality: 85 } : {}),
+        clip: { x: 0, y: 0, width: ancho, height: alto },
+      })
+    )
   } finally {
     await pagina.close().catch(() => undefined)
   }

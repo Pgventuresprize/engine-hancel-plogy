@@ -6,6 +6,7 @@ import { identidadEditorial } from "../marca/editorial"
 import { ejemplosDe } from "../marca/ejemplos"
 import { ctasUsables, TIPOS_CTA, type TipoCta } from "../marca/editorial-modelo"
 import { perfilDe } from "../marca/perfil"
+import type { TipoDelKit } from "../marca/kit-modelo"
 import type { PerfilMarca } from "../marca/perfil-modelo"
 import { corregirTextos } from "../studio/ortografia"
 import {
@@ -649,13 +650,55 @@ const MAX_TOKENS_INSTAGRAM = 5000
 export function contratoInstagram(
   perfil: Pick<PerfilMarca, "laminas_min" | "laminas_max" | "hashtags_min" | "hashtags_max" | "emojis_instagram">,
   /** La plantilla dibuja listas numeradas: se ofrecen las laminas de pasos. */
-  listas = false
+  listas = false,
+  /** Los tipos de lamina del kit de diseño activo de la marca, si tiene. */
+  kit: TipoDelKit[] = []
+): string {
+  const base = contratoInstagramBase(perfil, listas || kit.some((t) => t.items), kit.length > 0)
+  return kit.length ? `${base}\n\n${bloqueKit(kit)}` : base
+}
+
+/**
+ * Lo que el redactor sabe del kit: que tipos de lamina hay y cuanto texto cabe
+ * en cada uno. El tipo decide como se dibuja la lamina, no lo que dice: la
+ * funcion de cada lamina (y el criterio) siguen mandando.
+ */
+function bloqueKit(kit: TipoDelKit[]): string {
+  const medida = (t: TipoDelKit) =>
+    [
+      t.titulo ? `título hasta ${t.titulo} caracteres` : "",
+      t.cuerpo ? `cuerpo hasta ${t.cuerpo}` : "",
+      t.items ? `de ${t.items.min} a ${t.items.max} puntos en "items", cada uno hasta ${t.items.largo}` : "",
+    ]
+      .filter(Boolean)
+      .join("; ")
+  const lineas = kit
+    .map((t) => {
+      const nombre = t.tipo === "cierre" ? `cierre${t.cta.length ? ` (CTA ${t.cta.join(", ")})` : ""}` : t.tipo
+      return `- ${nombre}: ${t.cuando}${medida(t) ? ` Cabe: ${medida(t)}.` : ""}`
+    })
+    .join("\n")
+  return `EL KIT DE DISEÑO DE LA MARCA
+Cada lámina se dibuja con una plantilla del kit de la marca. En cada elemento de slides pon "tipo_lamina" con el tipo que mejor enseña lo que dice esa lámina (la 1 es siempre "portada"), y escribe dentro de sus medidas:
+${lineas}
+- El tipo sale de lo que la lámina ya es: un dato con su cifra, unos pasos, dos lados que se comparan, lo que dijo alguien, la postura de la marca. Primero decides la función y lo que afirma la lámina; después el tipo que mejor lo enseña. Nunca cambies lo que dice para que encaje en un tipo.
+- En un "dato", la cifra va escrita tal cual en el título o al principio del cuerpo. Un "dato" es para una lámina que ya gira en torno a una cifra del material: nunca busques una cifra, ni cambies la idea de una lámina por otra que traiga número, para tener un "dato". Un carrusel sin láminas de dato está bien.
+- No hace falta usar todos los tipos: usa los que pida el contenido, aunque se repita "idea".
+- La lámina de criterio no se adelgaza para caber: cada punto conserva lo concreto (qué revisar, dónde, quién decide), que es lo que lo hace de la marca. Si no cabe en los puntos, usa menos puntos y no menos detalle.
+- Las medidas son de la plantilla: un texto que se pasa no cabe y la lámina sale en la plantilla simple. Cuéntalas como cuentas los 65 caracteres del título; si no cabe, dilo más corto sin perder el dato ni el matiz.
+- El cierre va en "cierre" y se dibuja con la plantilla de su CTA: su título y su cuerpo también tienen las medidas de arriba.`
+}
+
+function contratoInstagramBase(
+  perfil: Pick<PerfilMarca, "laminas_min" | "laminas_max" | "hashtags_min" | "hashtags_max" | "emojis_instagram">,
+  listas: boolean,
+  conKit: boolean
 ): string {
   const laminas = rango(perfil.laminas_min, perfil.laminas_max)
   const sinHashtags = perfil.hashtags_max === 0
   const hashtags = sinHashtags ? "" : `"<${rango(perfil.hashtags_min, perfil.hashtags_max)} en minúscula sin espacios>"`
   return `RESPONDE SOLO con este JSON, sin texto alrededor:
-{"slide_count":<${laminas}>,"caption":"<2 a 4 frases con la tesis y el cta, oraciones completas>","hashtags":[${hashtags}],"fotos":["<5 a 8 búsquedas en inglés>"],"elemento":"<una búsqueda en español de la cosa concreta>","antetitulo":"<2 a 4 palabras en español que sitúan la pieza>","slides":[{"n":1,"type":"photo_hook","funcion":"<función narrativa>","aporta":"<qué hace necesaria la siguiente>","fuente":"<de qué parte del contenido sale, o criterio de la marca>","hook":"<máx 95 caracteres>"},{"n":2,"type":"text","funcion":"<...>","aporta":"<...>","fuente":"<...>","title":"<máx 65 caracteres>","body":"<máx 2 frases>"}],"cierre":{"title":"<máx 40 caracteres: la acción del CTA>","body":"<máx 140 caracteres: la razón para hacerlo>"}}
+{"slide_count":<${laminas}>,"caption":"<2 a 4 frases con la tesis y el cta, oraciones completas>","hashtags":[${hashtags}],"fotos":["<5 a 8 búsquedas en inglés>"],"elemento":"<una búsqueda en español de la cosa concreta>","antetitulo":"<2 a 4 palabras en español que sitúan la pieza>","slides":[{"n":1,"type":"photo_hook",${conKit ? '"tipo_lamina":"portada",' : ""}"funcion":"<función narrativa>","aporta":"<qué hace necesaria la siguiente>","fuente":"<de qué parte del contenido sale, o criterio de la marca>","hook":"<máx 95 caracteres>"},{"n":2,"type":"text",${conKit ? '"tipo_lamina":"<tipo del kit>",' : ""}"funcion":"<...>","aporta":"<...>","fuente":"<...>","title":"<máx 65 caracteres>","body":"<máx 2 frases>"}],"cierre":{"title":"<máx 40 caracteres: la acción del CTA>","body":"<máx 140 caracteres: la razón para hacerlo>"}}
 
 El array slides va en orden y tiene ${perfil.laminas_min === perfil.laminas_max ? "exactamente" : "de"} ${laminas} elementos, tantos como sostenga el contenido: el primero photo_hook, los demás text.
 PLANEA CADA LÁMINA ANTES DE ESCRIBIRLA. Cada elemento de slides lleva primero tres campos: "funcion" (tensión, hecho, mecanismo, criterio, síntesis...), "aporta" (qué deja abierto o qué hace necesaria la siguiente) y "fuente" (de qué parte del contenido sale lo que afirma, o "criterio de la marca" si es opinión de la marca). Escríbelos primero y después el texto, de modo que el texto cumpla esa función y no afirme nada que su fuente no diga. Estos tres campos no se publican.

@@ -74,7 +74,18 @@ export type Imagen = {
   calidad: number | null
   recorte: Recorte | null
   ruta_mini_recorte: string | null
+  /** Lo clara que es (0 negra, 100 blanca), de la zona que se usa. Null = sin calcular. */
+  luminosidad: number | null
   created_at: string
+}
+
+/** Por debajo es una foto oscura (va con texto claro); por encima, clara. */
+export const LUMINOSIDAD_OSCURA = 45
+export const LUMINOSIDAD_CLARA = 60
+
+export function tonoDe(luminosidad: number | null): "oscura" | "clara" | "media" | null {
+  if (luminosidad === null) return null
+  return luminosidad < LUMINOSIDAD_OSCURA ? "oscura" : luminosidad > LUMINOSIDAD_CLARA ? "clara" : "media"
 }
 
 /** Un uso de una imagen en una pieza. */
@@ -169,6 +180,7 @@ export function parseImagen(fila: Record<string, unknown>): Imagen {
     ...e,
     recorte: parseRecorte(fila.recorte),
     ruta_mini_recorte: typeof fila.ruta_mini_recorte === "string" && fila.ruta_mini_recorte ? fila.ruta_mini_recorte : null,
+    luminosidad: typeof fila.luminosidad === "number" ? fila.luminosidad : null,
     created_at: String(fila.created_at ?? ""),
   }
 }

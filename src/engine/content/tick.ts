@@ -629,6 +629,7 @@ export async function runContentTick(
 
       const carrusel = await generarCarrusel(
         job.id,
+        job.account_id,
         job.respuesta,
         news,
         estiloDesdeConfig(configCuenta.carousel),
@@ -708,6 +709,8 @@ export async function runContentTick(
         jobId: job.id,
         slides: carrusel.slideCount,
         portadaSinFoto: carrusel.portadaSinFoto,
+        ...(carrusel.kit ? { kit: carrusel.kit.id } : {}),
+        ...(carrusel.respaldo ? { respaldo: carrusel.respaldo } : {}),
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

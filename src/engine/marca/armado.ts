@@ -1,5 +1,6 @@
 import { armarPrompt, bloqueMarca, type AgenteConMarca, type DatosDeMarca } from "./bloque"
 import type { Ejemplo } from "./ejemplos-modelo"
+import type { TipoDelKit } from "./kit-modelo"
 import { bloqueSkills, type Skill } from "./skills-modelo"
 
 /**
@@ -18,6 +19,11 @@ export type DatosParaPrompt = DatosDeMarca & {
    * la clasica una lista no se veria.
    */
   listas?: boolean
+  /**
+   * Los tipos de lamina del kit de diseño activo, con lo que cabe en cada uno.
+   * Sin kit, el carrusel se escribe como siempre.
+   */
+  kit?: TipoDelKit[]
 }
 
 export function promptArmado(

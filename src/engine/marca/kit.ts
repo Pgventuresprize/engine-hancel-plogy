@@ -2,6 +2,7 @@ import { supabaseAdmin } from "../supabase-admin"
 import { faltaTabla } from "./imagenes"
 import {
   BUCKET_KITS,
+  CSS_SIN_PAGINACION,
   cssDeFuentes,
   FORMATOS,
   paginaDeLamina,
@@ -122,10 +123,21 @@ export function archivosComoDatos(kc: KitCargado): Promise<Record<string, string
 }
 
 /** La pagina HTML de una lamina, lista para render/navegador.ts. */
-export async function armarLamina(kc: KitCargado, plantilla: Plantilla, datos: DatosLamina): Promise<string> {
+export async function armarLamina(
+  kc: KitCargado,
+  plantilla: Plantilla,
+  datos: DatosLamina,
+  { sinPaginacion = false } = {}
+): Promise<string> {
   const archivos = await archivosComoDatos(kc)
   const cuerpo = rellenarPlantilla(plantilla.html, datos, archivos, kc.kit.parciales)
-  return paginaDeLamina(kc.kit.css, cssDeFuentes(kc.archivos, archivos), cuerpo, plantilla.formato)
+  return paginaDeLamina(
+    kc.kit.css,
+    cssDeFuentes(kc.archivos, archivos),
+    cuerpo,
+    plantilla.formato,
+    sinPaginacion ? CSS_SIN_PAGINACION : ""
+  )
 }
 
 export const medidasDe = (plantilla: Plantilla) => FORMATOS[plantilla.formato]
@@ -241,6 +253,7 @@ export type PlantillaNueva = {
   cta_tipos?: string[]
   referencia_archivo_id?: string | null
   orden?: number
+  prueba?: Record<string, unknown>
 }
 
 /** Guarda una plantilla en el kit, despues de revisar que sea segura y coherente. */
@@ -268,11 +281,93 @@ export async function guardarPlantilla(accountId: string, kitId: string, p: Plan
       cta_tipos: p.cta_tipos ?? [],
       referencia_archivo_id: p.referencia_archivo_id ?? null,
       orden: p.orden ?? 0,
+      prueba: p.prueba ?? {},
     })
     .select("*")
     .single()
   if (error) throw new Error(error.message)
   return parsePlantilla(data as Record<string, unknown>)
+}
+
+/** Cambia el HTML, los huecos o la prueba de una plantilla, revisando que siga siendo segura. */
+export async function actualizarPlantilla(
+  accountId: string,
+  plantillaId: string,
+  cambios: {
+    html?: string
+    huecos?: unknown
+    foto?: unknown
+    prueba?: Record<string, unknown>
+    estado?: EstadoPlantilla
+  }
+): Promise<Plantilla> {
+  const supabase = supabaseAdmin()
+  const { data: fila, error: errorFila } = await supabase
+    .from("brand_kit_plantillas")
+    .select("*")
+    .eq("account_id", accountId)
+    .eq("id", plantillaId)
+    .single()
+  if (errorFila || !fila) throw new Error("No se encontró la plantilla.")
+  const actual = parsePlantilla(fila as Record<string, unknown>)
+  const html = cambios.html ?? actual.html
+  const huecos = cambios.huecos !== undefined ? parseHuecos(cambios.huecos) : actual.huecos
+  if (cambios.html !== undefined || cambios.huecos !== undefined) {
+    const kc = await cargarKit(accountId, actual.kit_id)
+    if (!kc) throw new Error("No se encontró el kit.")
+    const errores = revisarPlantilla(html, huecos, {
+      papeles: kc.archivos.map((a) => a.papel),
+      parciales: Object.keys(kc.kit.parciales),
+    })
+    if (errores.length) throw new Error(errores.join(" "))
+  }
+  const { data, error } = await supabase
+    .from("brand_kit_plantillas")
+    .update({
+      html,
+      huecos,
+      ...(cambios.foto !== undefined ? { foto: parseFoto(cambios.foto) } : {}),
+      ...(cambios.prueba ? { prueba: cambios.prueba } : {}),
+      ...(cambios.estado ? { estado: cambios.estado } : {}),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", plantillaId)
+    .select("*")
+    .single()
+  if (error) throw new Error(error.message)
+  return parsePlantilla(data as Record<string, unknown>)
+}
+
+/** Cambia el sistema, el CSS comun o los trozos comunes de un kit, revisando el CSS. */
+export async function actualizarKit(
+  accountId: string,
+  kitId: string,
+  cambios: {
+    sistema?: unknown
+    css?: string
+    parciales?: Record<string, string>
+    estado?: Kit["estado"]
+    nombre?: string
+  }
+): Promise<void> {
+  const errores = [
+    ...(cambios.css !== undefined ? revisarCss(cambios.css) : []),
+    ...Object.values(cambios.parciales ?? {}).flatMap(revisarCss),
+  ]
+  if (errores.length) throw new Error(errores.join(" "))
+  const { error } = await supabaseAdmin()
+    .from("brand_kits")
+    .update({
+      ...(cambios.sistema !== undefined ? { sistema: parseSistema(cambios.sistema) } : {}),
+      ...(cambios.css !== undefined ? { css: cambios.css } : {}),
+      ...(cambios.parciales ? { parciales: cambios.parciales } : {}),
+      ...(cambios.estado ? { estado: cambios.estado } : {}),
+      ...(cambios.nombre ? { nombre: cambios.nombre.slice(0, 120) } : {}),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("account_id", accountId)
+    .eq("id", kitId)
+  if (error) throw new Error(error.message)
 }
 
 /** Cambia el estado de una plantilla (aprobar o pedir que se rehaga) y guarda su prueba. */

@@ -74,6 +74,14 @@ const REDES = ["linkedin", "instagram", "facebook"] as const
 /** Cada panel scrollea por su cuenta para que la ventana no crezca sin fin. */
 const PANEL = "min-h-0 flex-1 overflow-y-auto pr-1"
 
+/** Lo que el navegador vio mal al dibujar una lamina del kit. */
+const TEXTO_PROBLEMA: Record<string, string> = {
+  se_sale: "se sale del área segura",
+  choca: "choca con otro elemento",
+  desborda: "no entra en su caja",
+  letra_pequena: "letra por debajo del mínimo del kit",
+}
+
 /** La pestaña que toca abrir: la etapa mas avanzada que alcanzo el hecho. */
 function pestanaInicial(f: Ficha): string {
   if (f.piezas.length > 0) {
@@ -478,6 +486,40 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
       ) : (
         <p className="leading-relaxed whitespace-pre-wrap">{texto || "(sin texto)"}</p>
       )}
+
+      {/* La marca tiene kit de diseño pero esta pieza no salio con el: que se
+          vea antes de publicarla, con el motivo. */}
+      {esCarrusel && pieza.payload.respaldo ? (
+        <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+          <span className="font-medium">Dibujada con respaldo:</span> no salió con el kit de diseño de la marca.{" "}
+          {pieza.payload.respaldo}
+        </p>
+      ) : null}
+      {esCarrusel &&
+      pieza.payload.kit &&
+      (pieza.payload.problemasDibujo?.length || pieza.payload.avisosKit?.length) ? (
+        <details className="rounded-lg border p-3 text-xs">
+          <summary className="cursor-pointer font-medium">
+            Kit {pieza.payload.kit.nombre} (v{pieza.payload.kit.version}) ·{" "}
+            {(() => {
+              const n = (pieza.payload.problemasDibujo?.length ?? 0) + (pieza.payload.avisosKit?.length ?? 0)
+              return n === 1 ? "1 aviso" : `${n} avisos`
+            })()}
+          </summary>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {(pieza.payload.avisosKit ?? []).map((a, i) => (
+              <li key={`a${i}`} className="text-muted-foreground leading-relaxed">
+                {a}
+              </li>
+            ))}
+            {(pieza.payload.problemasDibujo ?? []).map((p, i) => (
+              <li key={i} className="text-muted-foreground leading-relaxed">
+                Lámina {p.lamina} · {p.hueco}: {TEXTO_PROBLEMA[p.tipo] ?? p.tipo} ({p.detalle})
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
 
       {/* Lo que el agente planeo antes de escribir cada lamina. No se publica:
           sirve para ver de donde sale cada afirmacion. */}

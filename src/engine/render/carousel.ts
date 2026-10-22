@@ -4,6 +4,7 @@ import { elegirDeBiblioteca, hayFotosEnBiblioteca, type HuecoDeFoto } from "../m
 import type { FotoDeBiblioteca } from "../marca/imagenes-modelo"
 import { supabaseAdmin } from "../supabase-admin"
 import { terminosDeBusqueda } from "./keywords"
+import type { KitDelCarrusel, ProblemaDibujo } from "./kit-carrusel"
 import { BancoDeFotos, descargarFotoPexels, pexelsConfigurado } from "./pexels"
 import {
   descargarFoto,
@@ -52,6 +53,14 @@ export type CarouselPayload = {
   plan?: PlanLamina[]
   /** Las fotos que salieron de la biblioteca de la marca, por lamina (1 es la portada). */
   fotosBiblioteca?: FotoDeBiblioteca[]
+  /** El kit de diseño con que se dibujo. Sin el, salio con las plantillas de siempre. */
+  kit?: KitDelCarrusel
+  /** La marca tiene kit pero esta pieza salio con las plantillas de siempre: por que. */
+  respaldo?: string
+  /** Lo que el navegador vio mal en las laminas del kit (un texto que se sale o choca). */
+  problemasDibujo?: ProblemaDibujo[]
+  /** Lo que no salio como debia al maquetar con el kit, sin llegar a impedirlo. */
+  avisosKit?: string[]
 }
 
 /** Lo que el agente deja en `jobs_instagram.respuesta`. */
@@ -346,12 +355,14 @@ export function estiloConCierre(estilo: Estilo, cierre: CierreDelGuion | null): 
 /**
  * Dibuja y sube el carrusel entero.
  *
- * Las imagenes se generan en serie y no en paralelo: son hasta diez PNG de
- * 1080x1350 y hacerlas a la vez dispara la memoria de la funcion sin ganar gran
- * cosa, porque el cuello es el propio render.
+ * Si la marca tiene un kit de diseño activo, con sus plantillas (kit-carrusel.ts).
+ * Si no lo tiene, o el kit no puede con esta pieza, con las plantillas de
+ * siempre; en ese segundo caso la pieza lleva `respaldo` con el motivo, para que
+ * la ficha avise de que no salio con el kit.
  */
 export async function generarCarrusel(
   pieceKey: string,
+  accountId: string,
   respuesta: unknown,
   news: RawNews | null,
   estilo: Estilo = ESTILO_POR_DEFECTO,
@@ -361,7 +372,50 @@ export async function generarCarrusel(
   /** Fotos de la biblioteca que no debe repetir: las que llevaba la pieza antes de redibujarla. */
   evitarImagenes: string[] = []
 ): Promise<CarouselPayload> {
-  const { caption, hashtags, slides, fotos, elemento, cierre, plan, antetitulo } = parseInstagramResponse(respuesta)
+  const guion = parseInstagramResponse(respuesta)
+  let respaldo: string | null = null
+  try {
+    const { kitActivo } = await import("../marca/kit")
+    const kc = await kitActivo(accountId)
+    if (kc) {
+      const { generarCarruselKit } = await import("./kit-carrusel")
+      return await generarCarruselKit(
+        pieceKey,
+        accountId,
+        kc,
+        guion,
+        news,
+        estilo,
+        nichos,
+        conPortadaFacebook,
+        evitarImagenes
+      )
+    }
+  } catch (error) {
+    respaldo = error instanceof Error ? error.message : String(error)
+    console.warn(`[carrusel] ${pieceKey} sale con respaldo: ${respaldo}`)
+  }
+  const carrusel = await generarCarruselSatori(pieceKey, guion, news, estilo, nichos, conPortadaFacebook, evitarImagenes)
+  return respaldo ? { ...carrusel, respaldo } : carrusel
+}
+
+/**
+ * El carrusel con las plantillas de siempre, dibujado con Satori.
+ *
+ * Las imagenes se generan en serie y no en paralelo: son hasta diez PNG de
+ * 1080x1350 y hacerlas a la vez dispara la memoria de la funcion sin ganar gran
+ * cosa, porque el cuello es el propio render.
+ */
+async function generarCarruselSatori(
+  pieceKey: string,
+  guion: ReturnType<typeof parseInstagramResponse>,
+  news: RawNews | null,
+  estilo: Estilo,
+  nichos: string[],
+  conPortadaFacebook: boolean,
+  evitarImagenes: string[]
+): Promise<CarouselPayload> {
+  const { caption, hashtags, slides, fotos, elemento, cierre, plan, antetitulo } = guion
   // De aqui en adelante el estilo ya lleva el cierre de esta pieza.
   estilo = estiloConCierre(estilo, cierre)
 

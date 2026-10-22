@@ -55,6 +55,10 @@ export type PiezaDelTablero = {
     plan?: PlanLamina[]
     fotosBiblioteca?: FotoDeBiblioteca[]
     terminosFoto?: string[]
+    kit?: { nombre: string; version: number }
+    respaldo?: string
+    problemasDibujo?: { lamina: number; tipo: string; hueco: string; detalle: string }[]
+    avisosKit?: string[]
   }
   published_at: string | null
   linkedin_urn: string | null

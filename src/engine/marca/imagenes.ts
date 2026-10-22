@@ -13,6 +13,7 @@ import {
   parseImagen,
   parseRecorte,
   textoDeBusqueda,
+  tonoDe,
   type Etiquetas,
   type FotoDeBiblioteca,
   type Imagen,
@@ -396,10 +397,35 @@ export async function etiquetasDeImagen(
   }
 }
 
+/**
+ * Lo clara que es una imagen, de 0 a 100: la media de su luminancia (Rec. 709).
+ * Se mide sobre la miniatura, que es la zona que se usa si tiene recorte.
+ */
+export async function luminosidadDe(bytes: Buffer): Promise<number | null> {
+  try {
+    const sharp = (await import("sharp")).default
+    const { channels } = await sharp(bytes).flatten({ background: "#ffffff" }).removeAlpha().stats()
+    if (channels.length < 3) return Math.round((channels[0].mean / 255) * 100)
+    const [r, g, b] = channels.map((c) => c.mean / 255)
+    return Math.round((0.2126 * r + 0.7152 * g + 0.0722 * b) * 100)
+  } catch {
+    return null
+  }
+}
+
+async function luminosidadDeMini(imagen: Imagen): Promise<number | null> {
+  const { data, error } = await supabaseAdmin().storage.from(BUCKET_IMAGENES).download(miniDe(imagen))
+  if (error || !data) return null
+  return luminosidadDe(Buffer.from(await data.arrayBuffer()))
+}
+
 async function etiquetarUna(accountId: string, imagen: Imagen, marca: string): Promise<boolean> {
   const supabase = supabaseAdmin()
   const url = (await urlsFirmadas([imagen.ruta], 15 * 60)).get(imagen.ruta)
-  const e = url ? await etiquetasDeImagen(accountId, url, imagen.nombre_original, marca) : null
+  const [e, luminosidad] = await Promise.all([
+    url ? etiquetasDeImagen(accountId, url, imagen.nombre_original, marca) : null,
+    luminosidadDeMini(imagen),
+  ])
   if (!e) {
     await supabase
       .from("brand_imagenes")
@@ -411,6 +437,7 @@ async function etiquetarUna(accountId: string, imagen: Imagen, marca: string): P
     .from("brand_imagenes")
     .update({
       ...e,
+      ...(luminosidad !== null ? { luminosidad } : {}),
       texto_busqueda: textoDeBusqueda(e),
       etiquetado: "hecho",
       etiquetado_con: MODELO_IMAGENES,
@@ -477,6 +504,32 @@ export type HuecoDeFoto = {
   uso: UsoImagen
   /** El titular y el cuerpo de la lamina, para que la foto vaya con lo que dice. */
   texto: string
+  /** Lo que pide la plantilla del kit: una foto oscura o clara, y donde queda el texto. */
+  tono?: "oscura" | "clara" | "cualquiera"
+  espacio?: "arriba" | "abajo" | "centro" | "cualquiera"
+}
+
+/** Si la foto va con el tono que pide el hueco. Sin luminosidad no se sabe, y no descarta. */
+function vaConTono(h: HuecoDeFoto, c: Pick<Imagen, "luminosidad">): boolean {
+  const tono = tonoDe(c.luminosidad)
+  if (!h.tono || h.tono === "cualquiera" || tono === null) return true
+  return tono === h.tono
+}
+
+/**
+ * Las candidatas sin luminosidad la calculan ahora, de su miniatura, y la
+ * guardan: es un dato de la imagen, no de la pieza. Nunca lanza.
+ */
+async function completarLuminosidad(pool: Candidata[]): Promise<void> {
+  const faltan = pool.filter((c) => c.luminosidad === null)
+  await Promise.all(
+    faltan.map(async (c) => {
+      const l = await luminosidadDeMini(c).catch(() => null)
+      if (l === null) return
+      c.luminosidad = l
+      await supabaseAdmin().from("brand_imagenes").update({ luminosidad: l }).eq("id", c.id)
+    })
+  )
 }
 
 export type FotoElegida = { foto: string; imagenId: string; motivo: string }
@@ -605,6 +658,7 @@ export async function elegirDeBiblioteca(opciones: {
     const palabras = palabrasDe([...opciones.terminos, ...huecos.map((h) => h.texto)].join(" "))
     const pool = (await candidatas(accountId, palabras, evitar)).slice(0, CANDIDATAS_PARA_ELEGIR)
     if (pool.length === 0) return elegidas
+    if (huecos.some((h) => h.tono && h.tono !== "cualquiera")) await completarLuminosidad(pool)
 
     const urls = await urlsFirmadas(pool.map(miniDe), 15 * 60)
     const vistas = pool.filter((c) => urls.has(miniDe(c)))
@@ -632,14 +686,26 @@ export async function asignarConClaude(
   urls: Map<string, string>,
   terminos: string[]
 ): Promise<Map<number, Asignacion> | null> {
+  // Lo que pide la plantilla del kit va con la lamina: el diseño se rompe con
+  // una foto clara debajo de un texto blanco.
+  const pide = (h: HuecoDeFoto) =>
+    [
+      h.tono && h.tono !== "cualquiera" ? `pide foto ${h.tono}` : "",
+      h.espacio && h.espacio !== "cualquiera" ? `el texto va ${h.espacio === "centro" ? "al centro" : h.espacio}` : "",
+    ]
+      .filter(Boolean)
+      .join(", ")
   const laminas = huecos
-    .map((h) => `- Lamina ${h.indice + 1} (${h.uso}): ${h.texto.replace(/\s+/g, " ").slice(0, 300)}`)
+    .map((h) => {
+      const p = pide(h)
+      return `- Lamina ${h.indice + 1} (${h.uso}${p ? `; ${p}` : ""}): ${h.texto.replace(/\s+/g, " ").slice(0, 300)}`
+    })
     .join("\n")
   const fichas = pool
-    .map(
-      (c, i) =>
-        `- Candidata ${i + 1}: ${c.descripcion || "(sin descripcion)"} | sirve para: ${c.usos_sugeridos.join(", ") || "sin indicar"} | espacio para texto: ${c.espacio_texto ?? "?"} | ${c.orientacion}${c.personas ? " | con personas" : ""}`
-    )
+    .map((c, i) => {
+      const tono = tonoDe(c.luminosidad)
+      return `- Candidata ${i + 1}: ${c.descripcion || "(sin descripcion)"} | sirve para: ${c.usos_sugeridos.join(", ") || "sin indicar"} | espacio para texto: ${c.espacio_texto ?? "?"} | ${c.orientacion}${c.personas ? " | con personas" : ""}${tono ? ` | ${tono} (luminosidad ${c.luminosidad}/100)` : ""}`
+    })
     .join("\n")
   const r = await llamarClaude({
     accountId,
@@ -659,6 +725,8 @@ export async function asignarConClaude(
       const n = Number(a.imagen) - 1
       if (!huecos.some((h) => h.indice === indice) || salida.has(indice)) continue
       if (a.imagen === null || !Number.isInteger(n) || n < 0 || n >= pool.length || usadas.has(n)) continue
+      // El tono no se negocia: una foto clara bajo un texto blanco no se lee.
+      if (!vaConTono(huecos.find((h) => h.indice === indice)!, pool[n])) continue
       usadas.add(n)
       salida.set(indice, { imagen: pool[n], motivo: typeof a.motivo === "string" ? a.motivo.slice(0, 300) : "" })
     }
@@ -673,7 +741,9 @@ function asignarPorPuntos(huecos: HuecoDeFoto[], pool: Candidata[]): Map<number,
   const salida = new Map<number, Asignacion>()
   const libres = [...pool]
   for (const h of huecos) {
-    const i = libres.findIndex((c) => c.usos_sugeridos.length === 0 || c.usos_sugeridos.includes(h.uso))
+    const i = libres.findIndex(
+      (c) => (c.usos_sugeridos.length === 0 || c.usos_sugeridos.includes(h.uso)) && vaConTono(h, c)
+    )
     if (i < 0) continue
     const [c] = libres.splice(i, 1)
     salida.set(h.indice, { imagen: c, motivo: "Elegida por coincidencia de etiquetas." })
@@ -794,7 +864,8 @@ export async function recortarImagen(accountId: string, id: string, bruto: Recor
 
   const { error } = await supabase
     .from("brand_imagenes")
-    .update({ recorte, ruta_mini_recorte: rutaMini, orientacion, updated_at: new Date().toISOString() })
+    // La luminosidad era la de la zona anterior: se vuelve a calcular al elegir.
+    .update({ recorte, ruta_mini_recorte: rutaMini, orientacion, luminosidad: null, updated_at: new Date().toISOString() })
     .eq("id", id)
     .eq("account_id", accountId)
   if (error) throw new Error(error.message)

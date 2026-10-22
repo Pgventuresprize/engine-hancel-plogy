@@ -32,8 +32,6 @@ const ABIERTAS = [
   "/api/videos/tick",
   "/api/redaccion/tick",
   "/api/publicacion/tick",
-  // Prototipo del dibujo con navegador: se prueba desde fuera con INGEST_SECRET.
-  "/api/render/navegador",
 ]
 
 function esAbierta(pathname: string): boolean {

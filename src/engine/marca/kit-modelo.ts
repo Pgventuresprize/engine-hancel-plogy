@@ -27,7 +27,7 @@ export const FORMATOS = {
 } as const
 export type Formato = keyof typeof FORMATOS
 
-export const ESTADOS_KIT = ["borrador", "revision", "activo", "archivado"] as const
+export const ESTADOS_KIT = ["importando", "borrador", "revision", "activo", "archivado"] as const
 export type EstadoKit = (typeof ESTADOS_KIT)[number]
 
 export const ESTADOS_PLANTILLA = ["pendiente", "aprobada", "rehacer"] as const
@@ -36,7 +36,7 @@ export type EstadoPlantilla = (typeof ESTADOS_PLANTILLA)[number]
 export const FONDOS = ["claro", "oscuro", "acento", "foto"] as const
 export type Fondo = (typeof FONDOS)[number]
 
-export const TIPOS_ARCHIVO = ["fuente", "logo", "imagen", "referencia"] as const
+export const TIPOS_ARCHIVO = ["fuente", "logo", "imagen", "referencia", "prueba"] as const
 export type TipoArchivo = (typeof TIPOS_ARCHIVO)[number]
 
 export const MIME_ARCHIVO: Record<string, string> = {
@@ -188,6 +188,60 @@ export type DatosLamina = {
   total: number
   /** La foto de la lamina como data URI, si la plantilla la usa. */
   foto?: string | null
+}
+
+// ------------------------------------------------- catalogo para el redactor
+
+/**
+ * Lo que necesita saber quien escribe el carrusel de un tipo de lamina del kit:
+ * para que sirve y cuanto texto cabe. Con varias plantillas del mismo tipo vale
+ * la medida mas holgada: el maquetador elige despues la que mejor le quede.
+ */
+export type TipoDelKit = {
+  tipo: string
+  /** Solo en los cierres: los CTA para los que hay plantilla. */
+  cta: string[]
+  cuando: string
+  titulo: number | null
+  cuerpo: number | null
+  items: { min: number; max: number; largo: number } | null
+}
+
+/** Los nombres con que un kit puede llamar al titular y al texto de apoyo. */
+const COMO_TITULO = ["titulo", "cta", "cita"]
+const COMO_CUERPO = ["cuerpo", "motivo", "subtitulo", "texto"]
+
+export function tiposDelKit(plantillas: Plantilla[]): TipoDelKit[] {
+  const grupos = new Map<string, Plantilla[]>()
+  for (const p of plantillas) {
+    // Cada CTA tiene sus cierres: un cierre de "seguir" no sirve para "palabra".
+    const clave = p.tipo === "cierre" ? `cierre:${[...p.cta_tipos].sort().join(",")}` : p.tipo
+    grupos.set(clave, [...(grupos.get(clave) ?? []), p])
+  }
+  const mayor = (ps: Plantilla[], nombres: string[]) => {
+    const medidas = ps.flatMap((p) => {
+      const h = nombres.map((n) => p.huecos.find((x) => x.nombre === n && x.tipo !== "lista")).find(Boolean)
+      return h ? [h.max] : []
+    })
+    return medidas.length ? Math.max(...medidas) : null
+  }
+  return [...grupos.values()].map((ps) => {
+    const listas = ps.flatMap((p) => p.huecos.filter((h) => h.tipo === "lista" && h.nombre === "items"))
+    return {
+      tipo: ps[0].tipo,
+      cta: ps[0].tipo === "cierre" ? ps[0].cta_tipos : [],
+      cuando: TIPOS_COMUNES[ps[0].tipo] ?? ps[0].cuando_usar,
+      titulo: mayor(ps, COMO_TITULO),
+      cuerpo: mayor(ps, COMO_CUERPO),
+      items: listas.length
+        ? {
+            min: Math.min(...listas.map((h) => h.min_items ?? 2)),
+            max: Math.max(...listas.map((h) => h.max_items ?? 5)),
+            largo: Math.max(...listas.map((h) => h.max)),
+          }
+        : null,
+    }
+  })
 }
 
 // ------------------------------------------------------------------ parseo
@@ -462,18 +516,35 @@ export function cssDeFuentes(archivos: ArchivoKit[], datos: Record<string, strin
       const familia = String(a.meta.familia).replace(/['"\\]/g, "")
       const peso = Number(a.meta.peso) || 400
       const estilo = a.meta.estilo === "italic" ? "italic" : "normal"
-      return `@font-face{font-family:'${familia}';font-weight:${peso};font-style:${estilo};src:url(${datos[a.papel]}) format('${formato[a.mime] ?? "truetype"}')}`
+      // Los alias son nombres de sistema (Arial, Helvetica) que esta fuente reemplaza.
+      const alias = Array.isArray(a.meta.alias) ? a.meta.alias.map((n) => String(n).replace(/['"\\]/g, "")) : []
+      return [familia, ...alias]
+        .map(
+          (nombre) =>
+            `@font-face{font-family:'${nombre}';font-weight:${peso};font-style:${estilo};src:url(${datos[a.papel]}) format('${formato[a.mime] ?? "truetype"}')}`
+        )
+        .join("\n")
     })
     .join("\n")
 }
 
+/**
+ * Oculta la numeracion de la lamina. La portada suelta de Facebook es una sola
+ * imagen: un "01/06" y unos puntos invitan a deslizar donde no hay nada.
+ * data-paginacion es la marca que pide el importador; contador y puntos, los
+ * nombres de zona que usaban los kits de antes.
+ */
+export const CSS_SIN_PAGINACION =
+  '[data-paginacion],[data-zona="contador"],[data-zona="puntos"]{display:none!important}'
+
 /** La pagina completa de una lamina, lista para el navegador. */
-export function paginaDeLamina(css: string, fuentes: string, cuerpo: string, formato: Formato): string {
+export function paginaDeLamina(css: string, fuentes: string, cuerpo: string, formato: Formato, cssExtra = ""): string {
   const { ancho, alto } = FORMATOS[formato]
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><style>
 ${fuentes}
 *{box-sizing:border-box;margin:0}
 html,body{width:${ancho}px;height:${alto}px;overflow:hidden}
 ${css}
+${cssExtra}
 </style></head><body>${cuerpo}</body></html>`
 }

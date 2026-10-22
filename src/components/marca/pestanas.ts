@@ -9,6 +9,7 @@ export const PESTANAS = [
   { valor: "editorial", etiqueta: "Editorial" },
   { valor: "cta", etiqueta: "CTA" },
   { valor: "visual", etiqueta: "Visual" },
+  { valor: "kit", etiqueta: "Kit de diseño" },
   { valor: "imagenes", etiqueta: "Imágenes" },
   { valor: "skills", etiqueta: "Skills" },
   { valor: "ejemplos", etiqueta: "Ejemplos" },
