@@ -547,6 +547,7 @@ export async function regenerateCarousel(pieceId: string): Promise<ActionResult>
       .maybeSingle()
 
     const news = await noticiaDelAngulo(pieza.content_angle_id)
+    const { imagenesDePieza, registrarUsos } = await import("@/engine/marca/imagenes")
     const carrusel = await generarCarrusel(
       (job as { id: string }).id,
       (job as { respuesta: unknown }).respuesta,
@@ -555,7 +556,9 @@ export async function regenerateCarousel(pieceId: string): Promise<ActionResult>
       await nichosConocidos(pieza.account_id),
       // Solo si hay pieza de Facebook que actualizar: dibujarla siempre seria
       // una llamada de mas a Satori en la mayoria de las regeneraciones.
-      Boolean(hermanaFacebook)
+      Boolean(hermanaFacebook),
+      // Regenerar es pedir otras fotos: las que tenia no vuelven a salir.
+      await imagenesDePieza(pieza.account_id, pieceId)
     )
 
     // El texto lo escribio el agente y no cambia porque se redibujen las imagenes.
@@ -573,6 +576,7 @@ export async function regenerateCarousel(pieceId: string): Promise<ActionResult>
       .eq("account_id", await idDeCuentaActual())
 
     if (error) throw new Error(error.message)
+    await registrarUsos(pieza.account_id, pieceId, "instagram", carrusel.fotosBiblioteca)
 
     // La pieza de Facebook que salio de este mismo carrusel lleva la portada:
     // si se redibujo, la suya tambien cambia. Solo si no se publico ya, porque
@@ -992,6 +996,8 @@ async function facebookDesdeCarruselExistente(angleId: string): Promise<boolean>
       true
     )
     portada = rehecho.portadaFacebook ?? rehecho.images[0] ?? null
+    const { registrarUsos } = await import("@/engine/marca/imagenes")
+    await registrarUsos(accountId, pieza.id, "instagram", rehecho.fotosBiblioteca)
 
     await supabase
       .from("content_pieces")

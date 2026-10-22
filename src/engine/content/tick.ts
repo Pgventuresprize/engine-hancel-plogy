@@ -13,6 +13,7 @@ import { getPublishSchedules, marcarTanda } from "../publish/schedule"
 import { generarCarrusel, nichosConocidos, noticiaDelAngulo, parseInstagramResponse } from "../render/carousel"
 import { armarPublicacionFacebook } from "../render/facebook"
 import { estiloDesdeConfig } from "../render/theme"
+import { etiquetarPendientes, registrarUsos } from "../marca/imagenes"
 import { supabaseAdmin } from "../supabase-admin"
 import {
   claimAngleJobs,
@@ -250,6 +251,21 @@ export async function runContentTick(
         for (const e of res.errores) errors.push(`[${cuenta.slug}] analisis: ${e}`)
       } catch (error) {
         errors.push(`[${cuenta.slug}] ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+  }
+
+  // ------------------------------------------------- fotos de la biblioteca
+  //
+  // Las fotos que se subieron y Claude aun no ha mirado. Al subir ya se lanza
+  // una tanda; esto recoge lo que quedo (una subida de cientos, un fallo). Una
+  // tanda corta por cuenta: cuatro a la vez son unos diez segundos.
+  if (!esManual) {
+    for (const cuenta of cuentas) {
+      try {
+        await etiquetarPendientes(cuenta.id, 8)
+      } catch (error) {
+        errors.push(`[${cuenta.slug}] biblioteca: ${error instanceof Error ? error.message : String(error)}`)
       }
     }
   }
@@ -622,8 +638,12 @@ export async function runContentTick(
       // La misma para Instagram y Facebook: las dos salen del mismo guion.
       const revision = await revisionDeRespuesta(job.account_id, "instagram", job.respuesta, job.input)
 
+      // La pieza que se queda con los usos de las fotos de la biblioteca: la de
+      // Instagram si la hay, si no la de Facebook, que lleva la portada.
+      let piezaConFotos: { id: string; red: string } | null = null
+
       if (destinos.includes("instagram")) {
-        const { error } = await supabase.from("content_pieces").insert({
+        const { data: creada, error } = await supabase.from("content_pieces").insert({
           account_id: job.account_id,
           content_angle_id: job.content_angle_id,
           raw_news_id: news?.id ?? null,
@@ -634,12 +654,13 @@ export async function runContentTick(
           variables_usadas: (job.input?.variables ?? null) as Variables | null,
           generated_at: new Date().toISOString(),
           revision,
-        })
+        }).select("id").single()
 
         // 23505 es el indice de una pieza por red: ya hay carrusel de esta
         // noticia, asi que no hay nada que hacer y tampoco nada que reportar.
         if (error && error.code !== "23505") throw new Error(error.message)
         if (!error) carouselsCreated++
+        if (creada) piezaConFotos = { id: (creada as { id: string }).id, red: "instagram" }
       }
 
       await supabase
@@ -653,7 +674,7 @@ export async function runContentTick(
       // primera.
       if (destinos.includes("facebook") && (carrusel.portadaFacebook ?? carrusel.images[0])) {
         const { caption, hashtags, slides } = parseInstagramResponse(job.respuesta)
-        const { error: errorFacebook } = await supabase.from("content_pieces").insert({
+        const { data: creadaFb, error: errorFacebook } = await supabase.from("content_pieces").insert({
           account_id: job.account_id,
           content_angle_id: job.content_angle_id,
           raw_news_id: news?.id ?? null,
@@ -669,7 +690,8 @@ export async function runContentTick(
           variables_usadas: (job.input?.variables ?? null) as Variables | null,
           generated_at: new Date().toISOString(),
           revision,
-        })
+        }).select("id").single()
+        if (!piezaConFotos && creadaFb) piezaConFotos = { id: (creadaFb as { id: string }).id, red: "facebook" }
         if (errorFacebook && errorFacebook.code !== "23505") {
           // La de Instagram ya esta guardada; la de Facebook se puede rehacer
           // desde la interfaz. No merece tumbar el carrusel.
@@ -678,6 +700,8 @@ export async function runContentTick(
           facebookCreated++
         }
       }
+
+      if (piezaConFotos) await registrarUsos(job.account_id, piezaConFotos.id, piezaConFotos.red, carrusel.fotosBiblioteca)
 
       log.emit("content.carousel.created", `Carrusel de ${carrusel.slideCount} imagenes`, {
         accountId: job.account_id,

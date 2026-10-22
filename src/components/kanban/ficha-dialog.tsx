@@ -498,6 +498,33 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
         </details>
       ) : null}
 
+      {/* De donde salieron las fotos: las de la biblioteca de la marca, con el
+          motivo del agente; las demas laminas con foto vienen de Pexels. Para
+          otras fotos, "Regenerar imagenes": las que tiene no vuelven a salir. */}
+      {esCarrusel && (pieza.payload.fotosBiblioteca?.length || pieza.payload.terminosFoto?.length) ? (
+        <details className="rounded-lg border p-3 text-xs">
+          <summary className="cursor-pointer font-medium">
+            Fotos{" "}
+            {pieza.payload.fotosBiblioteca?.length
+              ? `· ${pieza.payload.fotosBiblioteca.length} de la biblioteca`
+              : "· de Pexels"}
+          </summary>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {(pieza.payload.fotosBiblioteca ?? []).map((f) => (
+              <li key={f.lamina} className="leading-relaxed">
+                <span className="font-medium">Lámina {f.lamina}</span>
+                {f.motivo ? <span className="text-muted-foreground"> · {f.motivo}</span> : null}
+              </li>
+            ))}
+            {pieza.payload.terminosFoto?.length ? (
+              <li className="text-muted-foreground leading-relaxed">
+                Búsquedas en Pexels para el resto: {pieza.payload.terminosFoto.join(", ")}
+              </li>
+            ) : null}
+          </ul>
+        </details>
+      ) : null}
+
       {/* Que entro en el prompt que la escribio y que no: sirve para saber de
           donde sale un fallo que se repite. */}
       {pieza.receta ? (

@@ -5,6 +5,7 @@ import { PestanaIdentidad } from "@/components/marca/identidad"
 import { MarcaTabs } from "@/components/marca/marca-tabs"
 import { PESTANAS, type Pestana } from "@/components/marca/pestanas"
 import { PestanaEjemplos } from "@/components/marca/ejemplos"
+import { PestanaImagenes } from "@/components/marca/imagenes"
 import { PestanaSkills } from "@/components/marca/skills"
 import { PestanaVisual } from "@/components/marca/visual"
 import { PestanaVoz } from "@/components/marca/voz"
@@ -71,6 +72,7 @@ export default async function MarcaPage({ searchParams }: { searchParams: Promis
             ),
             cta: <EditorCtas ctas={editorial.ctas} />,
             visual: <PestanaVisual estilo={estilo} paleta={paleta} pexelsConfigurado={pexelsConfigurado()} />,
+            imagenes: <PestanaImagenes />,
             skills: <PestanaSkills skills={skills} pilares={pilares} />,
             ejemplos: <PestanaEjemplos ejemplos={ejemplos} pilares={pilares} />,
           }}

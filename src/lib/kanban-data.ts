@@ -7,6 +7,7 @@ import { redesActivas as redesActivas_ } from "@/engine/agents/redes"
 import { ajustesDe, type Agente } from "@/engine/agents/settings"
 import { parseCriterio } from "@/engine/content/criterio"
 import { parseRevision, type Revision } from "@/engine/content/revisor"
+import type { FotoDeBiblioteca } from "@/engine/marca/imagenes-modelo"
 import type { PlanLamina } from "@/engine/render/carousel"
 import { parseClasificacion } from "@/engine/marca/clasificacion"
 import { supabaseAdmin } from "@/engine/supabase-admin"
@@ -47,7 +48,14 @@ export type PiezaDelTablero = {
   id: string
   network: string
   status: string
-  payload: PiecePayload & { images?: string[]; caption?: string; image?: string | null; plan?: PlanLamina[] }
+  payload: PiecePayload & {
+    images?: string[]
+    caption?: string
+    image?: string | null
+    plan?: PlanLamina[]
+    fotosBiblioteca?: FotoDeBiblioteca[]
+    terminosFoto?: string[]
+  }
   published_at: string | null
   linkedin_urn: string | null
   publish_error: string | null

@@ -204,6 +204,28 @@ Al retomar uno, se detalla como bloque antes de construir.
 - **Por qué esperó:** lo resuelve la biblioteca de imágenes (Paso 3): la portada
   sale de fotos de la marca y la miniatura deja de ser el respaldo.
 - **Cuándo:** con el Paso 3; si algo queda, se ajusta ahí.
+- **Estado (2026-10-22):** hecho en el código del Paso 3. La miniatura ya no es
+  respaldo; el agente que elige no pone de fondo a una persona si el texto habla
+  de otra. Falta verlo con fotos reales de la marca.
+
+### Cambiar la foto de una sola lámina desde la ficha
+- **Qué es:** en la ficha del carrusel, elegir otra foto para una lámina (de la
+  biblioteca o de Pexels) y redibujar solo esa.
+- **Por qué esperó:** hoy "Regenerar imágenes" cambia todas y no repite las que
+  tenía; con eso alcanza para empezar. La ficha ya dice de dónde salió cada foto.
+- **Cuándo:** si en el uso diario se quiere tocar una lámina sin perder las demás.
+
+### Pasar la biblioteca a Cloudflare R2 o al plan Pro
+- **Qué es:** el storage gratuito de Supabase es 1 GB compartido con los
+  carruseles; caben unas 3.000 a 3.500 fotos. Marca › Imágenes enseña el espacio
+  usado y se pone en rojo pasado el 85 %.
+- **Cuándo:** al acercarse al límite. R2 da 10 GB sin costo de descarga; el
+  cambio está en imagenes.ts (subida, lectura y enlaces firmados).
+
+### Subir fotos HEIC del iPhone
+- **Qué es:** Chrome no abre HEIC, así que la subida las marca como fallo y pide
+  exportarlas a JPG. Safari sí las abre.
+- **Cuándo:** si se suben fotos directo del iPhone desde Chrome a menudo.
 
 ### Importar ejemplos desde .html, PDF o Word
 - **Qué es:** que el importador de ejemplos lea también el `carrusel.html` del

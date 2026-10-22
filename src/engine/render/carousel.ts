@@ -1,5 +1,7 @@
 import type { RawNews } from "@/lib/types"
 
+import { elegirDeBiblioteca, hayFotosEnBiblioteca, type HuecoDeFoto } from "../marca/imagenes"
+import type { FotoDeBiblioteca } from "../marca/imagenes-modelo"
 import { supabaseAdmin } from "../supabase-admin"
 import { terminosDeBusqueda } from "./keywords"
 import { BancoDeFotos, descargarFotoPexels, pexelsConfigurado } from "./pexels"
@@ -48,6 +50,8 @@ export type CarouselPayload = {
   portadaFacebook?: string
   /** Lo que el agente planeo de cada lamina: funcion, que aporta y su fuente. */
   plan?: PlanLamina[]
+  /** Las fotos que salieron de la biblioteca de la marca, por lamina (1 es la portada). */
+  fotosBiblioteca?: FotoDeBiblioteca[]
 }
 
 /** Lo que el agente deja en `jobs_instagram.respuesta`. */
@@ -353,7 +357,9 @@ export async function generarCarrusel(
   estilo: Estilo = ESTILO_POR_DEFECTO,
   nichos: string[] = [],
   /** Dibuja ademas la portada suelta que usa Facebook. */
-  conPortadaFacebook = false
+  conPortadaFacebook = false,
+  /** Fotos de la biblioteca que no debe repetir: las que llevaba la pieza antes de redibujarla. */
+  evitarImagenes: string[] = []
 ): Promise<CarouselPayload> {
   const { caption, hashtags, slides, fotos, elemento, cierre, plan, antetitulo } = parseInstagramResponse(respuesta)
   // De aqui en adelante el estilo ya lleva el cierre de esta pieza.
@@ -361,7 +367,7 @@ export async function generarCarrusel(
 
   // Plogy tiene su propia estructura de laminas, no la clasica recoloreada.
   if (estilo.plantilla === "plogy") {
-    return generarCarruselPlogy(pieceKey, { caption, hashtags, slides, fotos, elemento, cierre, plan, antetitulo }, news, estilo, nichos, conPortadaFacebook)
+    return generarCarruselPlogy(pieceKey, { caption, hashtags, slides, fotos, elemento, cierre, plan, antetitulo }, news, estilo, nichos, conPortadaFacebook, evitarImagenes)
   }
 
   // El cierre lo escribe siempre el agente, con el CTA de la pieza y lo que
@@ -372,7 +378,9 @@ export async function generarCarrusel(
   // de pasarse.
   if (cierre && slides.length >= MAX_SLIDES) slides.length = MAX_SLIDES - 1
 
-  const variantes = repartirVariantes(slides, estilo.usarFotos && pexelsConfigurado())
+  // Hay laminas con foto si hay de donde sacarla: la biblioteca de la marca o Pexels.
+  const conBiblioteca = Boolean(estilo.usarFotos && news?.account_id && (await hayFotosEnBiblioteca(news.account_id)))
+  const variantes = repartirVariantes(slides, estilo.usarFotos && (pexelsConfigurado() || conBiblioteca))
   if (cierre) {
     slides.push({
       n: slides.length + 1,
@@ -439,7 +447,27 @@ export async function generarCarrusel(
   // devuelve nada —sin clave de Pexels, red caida, terminos agotados— se recurre
   // a la imagen de la noticia: es una miniatura de unos 300px y se ve mas
   // blanda, pero una portada blanda es mejor que una portada vacia.
-  const fotoPortada = (await delBanco()) ?? (await descargarFoto(news?.image_url))
+  //
+  // Antes que el banco, la biblioteca de la marca: fotos suyas, elegidas para lo
+  // que dice cada lamina y sin repetir lo usado en los ultimos dias. Lo que no
+  // encuentre ahi sale de Pexels. La miniatura de la noticia ya no es respaldo:
+  // salia pixelada y a veces con una persona que no era de la que hablaba el
+  // titular.
+  const huecos: HuecoDeFoto[] = slides.flatMap((slide, i) =>
+    i === 0 || conFoto[i] || variantes[i] === "cierre"
+      ? [{ indice: i, uso: i === 0 ? "portada" : variantes[i] === "cierre" ? "cierre" : "fondo", texto: textoDeLamina(slide) }]
+      : []
+  ) as HuecoDeFoto[]
+  const deBiblioteca = conBiblioteca
+    ? await elegirDeBiblioteca({
+        accountId: news!.account_id,
+        huecos,
+        terminos: [antetitulo, ...terminos].filter(Boolean),
+        evitar: evitarImagenes,
+      })
+    : new Map()
+
+  const fotoPortada = deBiblioteca.get(0)?.foto ?? (await delBanco())
   const sinFotoPortada = fotoPortada === null
 
   // El antetitulo situa el post antes de que nadie lea el titular. Lo escribe el
@@ -454,7 +482,7 @@ export async function generarCarrusel(
       indice === 0
         ? fotoPortada
         : conFoto[indice] || variantes[indice] === "cierre"
-          ? await delBanco()
+          ? (deBiblioteca.get(indice)?.foto ?? (await delBanco()))
           : null
 
     imagenes.push(
@@ -514,6 +542,21 @@ export async function generarCarrusel(
     terminosFoto: terminos.slice(0, 6),
     creditos,
     ...(plan.length ? { plan } : {}),
+    ...fotosUsadas(deBiblioteca),
+  }
+}
+
+/** Lo que dice una lamina, para elegir una foto que vaya con ello. */
+function textoDeLamina(slide: Slide): string {
+  if (slide.type === "photo_hook") return slide.hook ?? ""
+  return [slide.title, slide.lead, slide.body, ...(slide.items ?? [])].filter(Boolean).join(". ")
+}
+
+/** Las fotos de la biblioteca que lleva el carrusel, para anotar sus usos al guardar la pieza. */
+function fotosUsadas(elegidas: Map<number, { imagenId: string; motivo: string }>): { fotosBiblioteca?: FotoDeBiblioteca[] } {
+  if (elegidas.size === 0) return {}
+  return {
+    fotosBiblioteca: [...elegidas].map(([indice, e]) => ({ lamina: indice + 1, imagenId: e.imagenId, motivo: e.motivo })),
   }
 }
 
@@ -607,7 +650,8 @@ async function generarCarruselPlogy(
   news: RawNews | null,
   estilo: Estilo,
   nichos: string[],
-  conPortadaFacebook: boolean
+  conPortadaFacebook: boolean,
+  evitarImagenes: string[]
 ): Promise<CarouselPayload> {
   const { renderPlogy, fotoEnByN, repartirPlogy } = await import("./plogy")
   const { caption, hashtags, fotos, elemento } = guion
@@ -633,12 +677,28 @@ async function generarCarruselPlogy(
   const total = slides.length + (guion.cierre ? 1 : 0)
   const titularDe = (s: Slide) => (s.type === "photo_hook" ? (s.hook ?? "") : (s.title ?? ""))
 
+  // Igual que en la clasica: primero la biblioteca de la marca, luego Pexels.
+  const huecos: HuecoDeFoto[] = slides.flatMap((slide, i) =>
+    reparto[i].composicion === "portada" || reparto[i].composicion === "foto"
+      ? [{ indice: i, uso: (i === 0 ? "portada" : "fondo") as HuecoDeFoto["uso"], texto: textoDeLamina(slide) }]
+      : []
+  )
+  const deBiblioteca =
+    estilo.usarFotos && news?.account_id && (await hayFotosEnBiblioteca(news.account_id))
+      ? await elegirDeBiblioteca({
+          accountId: news.account_id,
+          huecos,
+          terminos: [guion.antetitulo, ...terminos].filter(Boolean),
+          evitar: evitarImagenes,
+        })
+      : new Map<number, { foto: string; imagenId: string; motivo: string }>()
+
   const imagenes: Buffer[] = []
   let fotoPortada: string | null = null
   for (const [i, slide] of slides.entries()) {
     const { composicion, fondo } = reparto[i]
     const necesitaFoto = composicion === "portada" || composicion === "foto"
-    const foto = necesitaFoto ? await fotoEnByN((await delBanco()) ?? (i === 0 ? await descargarFoto(news?.image_url) : null)) : null
+    const foto = necesitaFoto ? await fotoEnByN(deBiblioteca.get(i)?.foto ?? (await delBanco())) : null
     if (i === 0) fotoPortada = foto
     imagenes.push(
       await renderPlogy({
@@ -710,5 +770,6 @@ async function generarCarruselPlogy(
     terminosFoto: terminos.slice(0, 6),
     creditos,
     ...(guion.plan.length ? { plan: guion.plan } : {}),
+    ...fotosUsadas(deBiblioteca),
   }
 }
