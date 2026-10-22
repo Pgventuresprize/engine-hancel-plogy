@@ -70,6 +70,70 @@ Decisiones tomadas:
 | Orden | Primero se investiga como se construyen las marcas; despues se diseñan las estrategias |
 | Alcance | El metodo sirve para cualquier tipo de marca, no solo personales |
 | Interfaz principal | Un equipo de agentes conversacionales para dar direccion, planear y crear |
+| Espacios | La aplicacion de Plogy y la de cada persona estan separadas; Plogy tiene ademas una vista de todo, con etiquetas por marca (2026-10-22) |
+
+## Dos aplicaciones: la de Plogy y la de cada persona
+
+Pedido 2026-10-22. Hoy la unica forma de ver el contenido es el kanban de la
+cuenta, y meter ahi el contenido personal de cada uno lo volveria confuso. Hace
+falta una division clara.
+
+### El espacio de cada persona
+
+La marca personal de Luciano es **su aplicacion**: entra y ve solo lo suyo.
+
+- Su kanban, sus ideas, sus piezas, su calendario de publicacion, sus
+  conversaciones. Nada de Plogy ni de Juan Francisco mezclado.
+- Un menu mas corto: no tiene lo que es de la empresa (extraccion de noticias si
+  usa las de Plogy, visual, equipo, miembros, conexiones de la empresa). Tiene
+  su chat, su kanban, sus ideas, su publicacion, su perfil y sus redes.
+- El chat es lo principal: la mayoria de las conversaciones viven aqui.
+
+### El espacio de Plogy
+
+La aplicacion de la empresa, con dos vistas:
+
+- **Plogy:** su kanban y su contenido, solo de la marca Plogy. Es lo que se ve
+  por defecto.
+- **Todas las marcas:** lo de Plogy y lo de cada marca personal, mapeado en un
+  solo lugar. Cada pieza, idea y conversacion lleva la **etiqueta de su marca**
+  (Plogy, Luciano, Juan Francisco), con filtros por marca, persona, red y
+  estado. Sirve para ver el conjunto: que sale esta semana en todas las marcas,
+  si dos marcas van a hablar de lo mismo el mismo dia, como empuja cada marca
+  personal hacia Plogy.
+- Ademas, todo lo que es de la empresa: equipo, marcas, miembros, visual,
+  conexiones.
+
+Desde "Todas las marcas" una pieza personal se abre, pero se trabaja en el
+espacio de su marca: al editarla, se salta al espacio de Luciano. Asi cada
+pieza se escribe siempre con el prompt y la voz de su marca.
+
+### Saber siempre donde se esta
+
+- El selector separa "Plogy (empresa)" de las marcas personales.
+- Cada espacio se distingue a simple vista (nombre y color en la cabecera): no
+  se puede confundir el kanban de Plogy con el de Luciano.
+
+### Conversaciones entre espacios
+
+- Una conversacion pertenece a una marca, la del espacio donde se abrio. Lo
+  normal es que vivan en el espacio de cada persona.
+- En la vista "Todas las marcas" de Plogy aparecen las de todas las marcas, con
+  su etiqueta.
+- **Cambiar de marca dentro de la conversacion:** si en una conversacion de
+  Plogy sale una idea que le va mejor a Luciano, se puede pasar la idea, o la
+  conversacion entera, a la marca de Luciano. El cambio queda visible en el
+  hilo ("desde aqui, en la marca de Luciano") y los agentes cambian de marca con
+  el: otra voz, otros pilares, otras redes.
+
+### Lo tecnico
+
+- Ya sale casi gratis del diseño de cuentas hijas: cada marca es una cuenta y
+  todo esta acotado por cuenta, asi que el espacio personal ya ve solo lo suyo.
+- Lo nuevo es la vista "Todas las marcas": consultas sobre la empresa y sus
+  hijas (`account_id in (...)`) desde un solo helper, con el mismo control de
+  pertenencia.
+- El menu depende del tipo de cuenta (`empresa` o `persona`).
 
 ## Paso 0 — Investigar como se construyen las marcas
 
@@ -456,7 +520,10 @@ En `marca/bloque.ts`, para una cuenta `tipo = 'persona'`:
   marcas hijas**, con el rol que tiene en la empresa. Es el control de seguridad:
   la cookie solo propone; una marca hija entra si su empresa esta en las
   membresias del usuario.
-- Selector agrupado: `Plogy`, y debajo `Luciano` y `Juan Francisco`.
+- Selector agrupado: `Plogy (empresa)`, y debajo `Luciano` y `Juan Francisco`.
+- Los dos espacios (ver "Dos aplicaciones"): el menu segun el tipo de cuenta,
+  la cabecera que distingue cada espacio y, en Plogy, la vista "Todas las
+  marcas" con etiquetas y filtros.
 - Configuracion > Empresa (owner): seccion **Marcas** para crear, renombrar y
   archivar. `crearMarca(empresaId, personaId)` crea la marca sobre una persona
   del equipo: inserta la cuenta con `parent_id`, `tipo = 'persona'` y
@@ -541,6 +608,12 @@ videos y la cadencia de ideas. Falta la aprobacion:
   opcion junto al guion para grabar?
 - Fotos de las personas: fuera por ahora; si vuelven, se etiquetan por persona
   en la biblioteca compartida.
+- Vista "Todas las marcas": ¿desde Plogy solo se ven y se abren las piezas
+  personales, o tambien se editan ahi mismo? Por defecto, se abren y para
+  editar se salta al espacio de la marca.
+- Al cambiar una conversacion de marca: ¿se mueve entera, o se queda en la
+  original y la idea pasa a la otra? Por defecto, se puede hacer cualquiera de
+  las dos.
 - Conversaciones: ¿cuanto tiempo se guardan antes de limpiarlas? ¿Alguna es
   privada de quien la escribio, o todas son del equipo?
 - Tipos de marca: ¿con cuales arranca Hancel? La tabla del Paso 0 es un punto
