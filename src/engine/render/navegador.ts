@@ -127,6 +127,13 @@ const MEDIR = `(() => {
       return { left: r.left, right: r.right, top: medio - alto / 2, bottom: medio + alto / 2, width: r.width, height: alto }
     })
   }
+  const figuraDe = (el) => el.querySelector(':scope > .fig')
+  // La letra que se ve: la de una figura achicada con zoom es su tamano por el zoom.
+  const conTexto = (n) => [...n.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim())
+  const letraVista = (n) => {
+    const f = n.closest('.fig')
+    return parseFloat(getComputedStyle(n).fontSize) * (f && f.style.zoom ? Number(f.style.zoom) : 1)
+  }
   const chocan = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1
   // Una zona redonda (border-radius del 50 %) se mide como circulo.
   const tocaZona = (r, el) => {
@@ -149,6 +156,13 @@ const MEDIR = `(() => {
       out.push({ tipo: 'se_sale', detalle: 'ocupa ' + Math.round(caja.left) + ',' + Math.round(caja.top) + ' a ' + Math.round(caja.right) + ',' + Math.round(caja.bottom) })
     if (el.scrollHeight > el.clientHeight + 2 && getComputedStyle(el).overflow !== 'visible')
       out.push({ tipo: 'desborda', detalle: 'el texto no entra en su caja' })
+    // Una figura tiene que caber en la caja que le da la plantilla.
+    const fig = figuraDe(el)
+    if (fig) {
+      const f = fig.getBoundingClientRect(), c = el.getBoundingClientRect()
+      if (f.bottom > c.bottom + 2 || f.right > c.right + 2)
+        out.push({ tipo: 'desborda', detalle: 'la figura no entra en su caja' })
+    }
     for (const otro of huecos) {
       if (otro === el || otro.contains(el) || el.contains(otro)) continue
       const suyas = lineas(otro)
@@ -161,18 +175,29 @@ const MEDIR = `(() => {
     return out
   }
   // Mientras algo no quepa, se encoge un paso el hueco que mas margen tenga
-  // (de los que lo permiten), y se vuelve a medir todo.
-  const encogibles = huecos.filter((el) => el.dataset.encoger).map((el) => {
-    const [desde, hasta] = el.dataset.encoger.split(':').map(Number)
-    el.style.fontSize = desde + 'px'
-    return { el, desde, hasta, t: desde }
-  })
+  // (de los que lo permiten), y se vuelve a medir todo. Un texto baja su letra
+  // de 4 en 4 px; una figura se achica entera (zoom) de 5 en 5 %, hasta que su
+  // letra mas pequena llegue al minimo del hueco o al 55 %.
+  const encogibles = [
+    ...huecos.filter((el) => el.dataset.encoger).map((el) => {
+      const [desde, hasta] = el.dataset.encoger.split(':').map(Number)
+      el.style.fontSize = desde + 'px'
+      return { el, desde, hasta, t: desde, paso: 4, poner: (t) => { el.style.fontSize = t + 'px' } }
+    }),
+    ...huecos.filter(figuraDe).map((el) => {
+      const fig = figuraDe(el)
+      const letras = [fig, ...fig.querySelectorAll('*')].filter(conTexto).map((n) => parseFloat(getComputedStyle(n).fontSize))
+      const min = Number(el.dataset.min || 0)
+      const hasta = Math.ceil(Math.max(55, letras.length && min ? (100 * min) / Math.min(...letras) : 55))
+      return { el, desde: 100, hasta: Math.min(100, hasta), t: 100, paso: 5, poner: (t) => { fig.style.zoom = String(t / 100) } }
+    }),
+  ]
   const hayFallos = () => huecos.some((el) => fallos(el).length)
-  for (let vuelta = 0; vuelta < 60 && hayFallos(); vuelta++) {
-    const c = encogibles.filter((e) => e.t - 4 >= e.hasta).sort((a, b) => b.t / b.hasta - a.t / a.hasta)[0]
+  for (let vuelta = 0; vuelta < 80 && hayFallos(); vuelta++) {
+    const c = encogibles.filter((e) => e.t - e.paso >= e.hasta).sort((a, b) => b.t / b.hasta - a.t / a.hasta)[0]
     if (!c) break
-    c.t -= 4
-    c.el.style.fontSize = c.t + 'px'
+    c.t -= c.paso
+    c.poner(c.t)
   }
   const encogidos = {}
   for (const e of encogibles) if (e.t !== e.desde) encogidos[e.el.dataset.hueco] = e.t
@@ -182,8 +207,7 @@ const MEDIR = `(() => {
     const min = Number(el.dataset.min || 0)
     // Solo cuenta la letra de lo que tiene texto propio: un hueco vacio o la
     // caja de una lista no se leen, aunque su tamano de letra sea el de base.
-    const conTexto = (n) => [...n.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim())
-    const letras = [el, ...el.querySelectorAll('*')].filter(conTexto).map((n) => parseFloat(getComputedStyle(n).fontSize))
+    const letras = [el, ...el.querySelectorAll('*')].filter(conTexto).map(letraVista)
     const menor = letras.length ? Math.min(...letras) : Infinity
     if (min && menor < min - 0.5) problemas.push({ tipo: 'letra_pequena', hueco: el.dataset.hueco, detalle: Math.round(menor) + ' px, el minimo es ' + min })
   }

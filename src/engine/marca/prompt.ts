@@ -4,6 +4,7 @@ import { promptArmado, type DatosParaPrompt } from "./armado"
 import { ejemplosDe } from "./ejemplos"
 import type { AgenteConMarca } from "./bloque"
 import { identidadEditorial } from "./editorial"
+import { figurasDelKit } from "./figuras"
 import { kitActivo, tiposDelKit } from "./kit"
 import { perfilDe } from "./perfil"
 import { skillsDe } from "./skills"
@@ -30,13 +31,20 @@ export async function datosParaPrompt(accountId: string): Promise<DatosParaPromp
     }),
     // Sin kit (o si no se puede leer) se escribe como siempre y se dibuja con la plantilla de antes.
     kitActivo(accountId)
-      .then((kc) => (kc ? tiposDelKit(kc.plantillas) : undefined))
+      .then((kc) => (kc ? { tipos: tiposDelKit(kc.plantillas), figuras: figurasDelKit(kc.kit.parciales) } : undefined))
       .catch((e) => {
         console.error("[marca] No se pudo leer el kit de diseño:", e instanceof Error ? e.message : e)
         return undefined
       }),
   ])
-  return { perfil, editorial, skills, listas, ejemplos, ...(kit?.length ? { kit } : {}) }
+  return {
+    perfil,
+    editorial,
+    skills,
+    listas,
+    ejemplos,
+    ...(kit?.tipos.length ? { kit: kit.tipos, ...(kit.figuras.length ? { figuras: kit.figuras } : {}) } : {}),
+  }
 }
 
 /** Si la plantilla del carrusel de la cuenta dibuja listas. Ante la duda, no. */

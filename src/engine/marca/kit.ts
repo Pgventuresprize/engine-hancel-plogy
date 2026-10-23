@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "../supabase-admin"
+import { cssDeFiguras, figuraAHtml } from "./figuras"
 import { faltaTabla } from "./imagenes"
 import {
   BUCKET_KITS,
@@ -130,9 +131,10 @@ export async function armarLamina(
   { sinPaginacion = false } = {}
 ): Promise<string> {
   const archivos = await archivosComoDatos(kc)
-  const cuerpo = rellenarPlantilla(plantilla.html, datos, archivos, kc.kit.parciales)
+  const figura = datos.figura ? figuraAHtml(datos.figura, plantilla.fondo) : ""
+  const cuerpo = rellenarPlantilla(plantilla.html, datos, archivos, kc.kit.parciales, figura)
   return paginaDeLamina(
-    kc.kit.css,
+    `${kc.kit.css}\n${figura ? cssDeFiguras(kc.kit.parciales) : ""}`,
     cssDeFuentes(kc.archivos, archivos),
     cuerpo,
     plantilla.formato,

@@ -49,6 +49,7 @@ CÓMO ELEGIR
 - Varía: no repitas la misma plantilla en láminas seguidas si otra sirve igual, y sigue el ritmo de fondos del kit cuando puedas.
 - Respeta el máximo de caracteres de cada hueco. Si no cabe ni quitando muletillas, elige otra plantilla con más sitio.
 - Una plantilla con foto obligatoria solo para una lámina que se preste a una foto.
+- Una lámina que trae figura va en una plantilla con hueco de figura: de su tipo si hay, si no de otro tipo del medio. La figura la pone el sistema tal cual: no la copies en los huecos de texto ni llenes el hueco de figura.
 - En los huecos que admiten resaltado, marca con *asteriscos* de 1 a 4 palabras que ya están y llevan el peso de la frase (el kit las pinta de su color de acento). No en todos los huecos.
 
 RESPONDE SOLO con este JSON, sin texto alrededor:
@@ -63,6 +64,8 @@ function catalogo(plantillas: Plantilla[]): { texto: string; porClave: Map<strin
       porClave.set(clave, p)
       const huecos = p.huecos
         .map((h) => {
+          if (h.tipo === "figura")
+            return `    - ${h.nombre} (hueco de figura${h.obligatorio ? ", obligatorio: solo para láminas con figura" : ""}): lo llena el sistema con la figura de la lámina`
           const forma =
             h.tipo === "lista"
               ? `lista de ${h.min_items ?? 1} a ${h.max_items ?? 5}, cada punto hasta ${h.max} caracteres`
@@ -89,6 +92,7 @@ function guionComoTexto(g: Guion, slides: Slide[]): string {
       s.title ? `  título: ${s.title}` : "",
       s.body ? `  cuerpo: ${s.body}` : "",
       s.items?.length ? `  puntos:\n${s.items.map((t) => `    - ${t}`).join("\n")}` : "",
+      s.figura ? `  figura: ${s.figura.tipo} con ${s.figura.items.length} elementos (la pone el sistema)` : "",
     ]
       .filter(Boolean)
       .join("\n")
@@ -139,13 +143,16 @@ export function quitado(fuente: string, puesto: string): { cifras: string[]; par
 /**
  * Lo que se tolera: ninguna cifra nueva ni perdida, una palabra nueva, y quitar
  * hasta un cuarto de las palabras (conectores, muletillas, una frase partida que
- * se dice mas corta). Mas que eso ya es otra lamina.
+ * se dice mas corta). Mas que eso ya es otra lamina. En el cierre, hasta el 40 %:
+ * es la llamada a la accion, sin datos ni criterio, y las plantillas de cierre
+ * reparten poco texto en muchos huecos (la accion, la palabra, la respuesta).
  */
-const fiel = ({ propio, permitido }: { propio: string; permitido: string }, puesto: string) => {
+const fiel = ({ propio, permitido }: { propio: string; permitido: string }, puesto: string, quitar = 0.25) => {
   const a = agregado(permitido, puesto)
   const q = quitado(propio, puesto)
-  return a.cifras.length === 0 && a.palabras.length <= 1 && q.cifras.length === 0 && q.parteDePalabras <= 0.25
+  return a.cifras.length === 0 && a.palabras.length <= 1 && q.cifras.length === 0 && q.parteDePalabras <= quitar
 }
+const QUITAR_EN_CIERRE = 0.4
 
 /**
  * El texto de una lamina del guion: `propio` es lo que tiene que quedar y
@@ -175,7 +182,7 @@ export async function maquetar(
   slides: Slide[],
   modelo = MODELO_MAQUETA,
   esfuerzo: "low" | "medium" | "high" = ESFUERZO_MAQUETA
-): Promise<{ laminas: LaminaKit[]; descartadas: number[]; error?: string }> {
+): Promise<{ laminas: LaminaKit[]; descartadas: number[]; motivos?: string[]; error?: string }> {
   const automaticas = laminasDeGuionClasico(slides, g.antetitulo, g.cierre)
   const { texto: cat, porClave } = catalogo(kc.plantillas)
   const ritmo = kc.kit.sistema.ritmo.length ? `\nRitmo de fondos del kit: ${kc.kit.sistema.ritmo.join(", ")}.` : ""
@@ -200,14 +207,20 @@ export async function maquetar(
   }
 
   const descartadas: number[] = []
+  const motivos: string[] = []
+  const descartar = (i: number, motivo: string, auto: LaminaKit) => {
+    descartadas.push(i + 1)
+    motivos.push(`${auto.tipo === "cierre" ? "cierre" : `lámina ${i + 1}`}: ${motivo}`)
+    return auto
+  }
   const laminas = automaticas.map((auto, i): LaminaKit => {
     const esCierre = auto.tipo === "cierre"
     const suya = (bruto.laminas ?? []).find((l) => (esCierre ? l.lamina === "cierre" : Number(l.lamina) === i + 1))
     const p = typeof suya?.plantilla === "string" ? porClave.get(suya.plantilla) : undefined
-    if (!suya || !p || (esCierre !== (p.tipo === "cierre")) || (i === 0) !== (p.tipo === "portada")) {
-      descartadas.push(i + 1)
-      return auto
-    }
+    if (!suya) return descartar(i, "el maquetador no la devolvió", auto)
+    if (!p) return descartar(i, `la plantilla ${String(suya.plantilla)} no existe`, auto)
+    if (esCierre !== (p.tipo === "cierre") || (i === 0) !== (p.tipo === "portada"))
+      return descartar(i, `la puso en una plantilla de ${p.tipo}`, auto)
     const huecos = (suya.huecos ?? {}) as Record<string, unknown>
     const textos: Record<string, string> = {}
     const listas: Record<string, string[]> = {}
@@ -219,11 +232,28 @@ export async function maquetar(
       } else if (typeof v === "string" && v.trim()) textos[h.nombre] = v.trim()
     }
     const puesto = [...Object.values(textos), ...Object.values(listas).flat()].join(" ").replace(/\*/g, "")
-    if (!puesto || !fiel(fuenteDe(g, slides, i), puesto)) {
-      descartadas.push(i + 1)
-      return auto
+    if (!puesto) return descartar(i, "no llenó ningún hueco", auto)
+    const fuente = fuenteDe(g, slides, i)
+    const tope = esCierre ? QUITAR_EN_CIERRE : 0.25
+    if (!fiel(fuente, puesto, tope)) {
+      const a = agregado(fuente.permitido, puesto)
+      const q = quitado(fuente.propio, puesto)
+      const que = [
+        a.cifras.length ? `agregó cifras (${a.cifras.join(", ")})` : "",
+        a.palabras.length > 1 ? `agregó palabras (${a.palabras.slice(0, 6).join(", ")})` : "",
+        q.cifras.length ? `quitó cifras (${q.cifras.join(", ")})` : "",
+        q.parteDePalabras > tope ? `quitó el ${Math.round(q.parteDePalabras * 100)} % del texto` : "",
+      ].filter(Boolean)
+      return descartar(i, que.join("; ") || "cambió el texto", auto)
     }
-    return { tipo: p.tipo, plantilla: p.id, textos, listas, cta_tipo: auto.cta_tipo }
+    return {
+      tipo: p.tipo,
+      plantilla: p.id,
+      textos,
+      listas,
+      cta_tipo: auto.cta_tipo,
+      ...(auto.figura ? { figura: auto.figura } : {}),
+    }
   })
-  return { laminas, descartadas }
+  return { laminas, descartadas, motivos }
 }

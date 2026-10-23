@@ -1,5 +1,6 @@
 import { armarPrompt, bloqueMarca, type AgenteConMarca, type DatosDeMarca } from "./bloque"
 import type { Ejemplo } from "./ejemplos-modelo"
+import type { TipoFigura } from "./figuras"
 import type { TipoDelKit } from "./kit-modelo"
 import { bloqueSkills, type Skill } from "./skills-modelo"
 
@@ -24,6 +25,8 @@ export type DatosParaPrompt = DatosDeMarca & {
    * Sin kit, el carrusel se escribe como siempre.
    */
   kit?: TipoDelKit[]
+  /** Las figuras que sabe dibujar ese kit (barras, tabla, niveles...). */
+  figuras?: TipoFigura[]
 }
 
 export function promptArmado(

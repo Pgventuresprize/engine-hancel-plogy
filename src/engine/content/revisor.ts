@@ -288,6 +288,24 @@ function slidesDe(bruto: Bruto): Bruto[] {
 }
 
 /**
+ * Los textos de la figura de una lamina (con kit de diseño): su titulo, sus
+ * elementos, sus celdas. Se publican como el resto, asi que se revisan igual.
+ */
+function mapearFigura(f: Bruto, donde: string, fn: (donde: string, texto: string) => string): Bruto {
+  const conTexto = (o: Bruto, claves: string[]) => {
+    const nuevo: Bruto = { ...o }
+    for (const clave of claves) if (typeof o[clave] === "string") nuevo[clave] = fn(donde, o[clave] as string)
+    for (const clave of ["columnas", "celdas"])
+      if (Array.isArray(o[clave])) nuevo[clave] = (o[clave] as unknown[]).map((c) => (typeof c === "string" ? fn(donde, c) : c))
+    return nuevo
+  }
+  const nueva = conTexto(f, ["titulo", "pie", "boton"])
+  if (Array.isArray(f.items))
+    nueva.items = f.items.map((it) => (esObjeto(it) ? conTexto(it, ["texto", "nota", "cifra", "autor"]) : it))
+  return nueva
+}
+
+/**
  * Pasa una funcion por cada texto del guion y devuelve el guion nuevo. Es la
  * misma lista de textos que se revisa, asi que lo que se arregla y lo que se
  * comprueba nunca se desfasan.
@@ -301,6 +319,7 @@ function mapearTextosCarrusel(bruto: Bruto, fn: (donde: string, texto: string) =
     if (Array.isArray(s.items)) {
       nueva.items = s.items.map((it) => (typeof it === "string" ? fn(`lámina ${i + 1} (lista)`, it) : it))
     }
+    if (esObjeto(s.figura)) nueva.figura = mapearFigura(s.figura, `lámina ${i + 1} (figura)`, fn)
     return nueva
   })
   const cierre = esObjeto(bruto.cierre)

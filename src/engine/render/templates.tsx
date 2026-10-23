@@ -1,3 +1,4 @@
+import type { Figura } from "../marca/figuras"
 import { ALTO, ANCHO, ESCALA, MARGEN, TOPES, type Estilo, type Variante } from "./theme"
 
 /**
@@ -27,6 +28,8 @@ export type SlideTexto = {
   items?: string[] | null
   /** Con kit de diseño: el tipo de lamina del kit que pidio quien escribio (dato, lista...). */
   tipoLamina?: string | null
+  /** Con kit de diseño: la figura que construye la lamina (barras, tabla, niveles...). */
+  figura?: Figura | null
 }
 
 export type SlidePortada = {

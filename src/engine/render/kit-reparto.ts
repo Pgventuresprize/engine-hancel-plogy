@@ -1,3 +1,4 @@
+import type { Figura } from "../marca/figuras"
 import type { Fondo, Plantilla } from "../marca/kit-modelo"
 import type { Slide } from "./templates"
 
@@ -21,6 +22,8 @@ export type LaminaKit = {
   listas: Record<string, string[]>
   /** Solo en el cierre: que pide el CTA (seguir, comentar, palabra...). */
   cta_tipo?: string | null
+  /** La figura que construye la lamina (barras, tabla, niveles...), si trae. */
+  figura?: Figura | null
 }
 
 export type LaminaRepartida = {
@@ -49,7 +52,10 @@ const TIPO_RESPALDO: Record<string, string[]> = {
   comparacion: ["idea"],
   cita: ["idea"],
   tesis: ["idea"],
+  figura: ["idea"],
 }
+
+const conFigura = (p: Plantilla) => p.huecos.some((h) => h.tipo === "figura")
 
 const lleno = (l: LaminaKit, nombre: string) =>
   Boolean(l.textos[nombre]?.trim()) || (l.listas[nombre]?.length ?? 0) > 0
@@ -76,6 +82,10 @@ export function encaje(p: Plantilla, l: LaminaKit): number | null {
   let puntos = 10
   const nombres = new Set(p.huecos.map((h) => h.nombre))
   for (const h of p.huecos) {
+    if (h.tipo === "figura") {
+      if (!l.figura && h.obligatorio) return null
+      continue
+    }
     if (h.tipo === "lista") {
       const items = (l.listas[h.nombre] ?? []).filter((s) => s.trim())
       if (!items.length) {
@@ -102,6 +112,8 @@ export function encaje(p: Plantilla, l: LaminaKit): number | null {
     puntos -= 3
   }
   for (const [k, v] of Object.entries(l.listas)) if (v.length && !nombres.has(k)) puntos -= 6
+  // Una figura que no se enseña es la mitad de la lamina.
+  if (l.figura && !conFigura(p)) puntos -= 6
   return puntos
 }
 
@@ -116,13 +128,20 @@ function candidatas(plantillas: Plantilla[], l: LaminaKit): { p: Plantilla; cast
       castigo: !l.cta_tipo || p.cta_tipos.includes(l.cta_tipo) ? 0 : p.cta_tipos.length === 0 ? 1 : 6,
     }))
   }
+  // Una lamina con figura tambien puede ir en las plantillas con hueco de
+  // figura de otro tipo del medio: mejor otro tipo que perder la figura.
+  const otrasConFigura = l.figura
+    ? plantillas
+        .filter((p) => p.tipo !== l.tipo && p.tipo !== "portada" && p.tipo !== "cierre" && conFigura(p))
+        .map((p) => ({ p, castigo: 1 }))
+    : []
   const propias = deTipo(l.tipo)
-  if (propias.length) return propias.map((p) => ({ p, castigo: 0 }))
+  if (propias.length) return [...propias.map((p) => ({ p, castigo: 0 })), ...otrasConFigura]
   for (const otro of TIPO_RESPALDO[l.tipo] ?? []) {
     const suyas = deTipo(otro)
-    if (suyas.length) return suyas.map((p) => ({ p, castigo: 2 }))
+    if (suyas.length) return [...suyas.map((p) => ({ p, castigo: 2 })), ...otrasConFigura]
   }
-  return []
+  return otrasConFigura
 }
 
 /**
@@ -132,10 +151,16 @@ function candidatas(plantillas: Plantilla[], l: LaminaKit): { p: Plantilla; cast
 export function repartirKit(
   plantillas: Plantilla[],
   laminas: LaminaKit[],
-  ritmo: Fondo[] = []
+  ritmo: Fondo[] = [],
+  /** Cuantas laminas con foto lleva un carrusel del kit, de media. */
+  fotosPorCarrusel = 0
 ): (LaminaRepartida | null)[] {
   const usadas = new Map<string, number>()
   let fondoAnterior: Fondo | null = null
+  let conFoto = 0
+  // Las fotos se reparten a lo largo del carrusel: mientras vaya por debajo de
+  // la proporcion del kit, una plantilla con foto suma.
+  const proporcion = laminas.length ? Math.min(1, fotosPorCarrusel / Math.max(laminas.length, 7)) : 0
   return laminas.map((l, i) => {
     // Si ninguna plantilla de su tipo puede con el texto (un dato sin la cifra
     // aparte, por ejemplo), la lamina se enseña como una idea antes que no salir.
@@ -153,6 +178,7 @@ export function repartirKit(
         if (l.plantilla && l.plantilla === p.id) puntos += 20
         if (ritmo.length && p.fondo === ritmo[i % ritmo.length]) puntos += 1
         if (fondoAnterior && p.fondo === fondoAnterior) puntos -= 1.5
+        if (proporcion && p.foto.usa !== "no" && conFoto < proporcion * (i + 1)) puntos += 1.5
         puntos -= 2.5 * (usadas.get(p.id) ?? 0)
         return [{ plantilla: p, lamina: adaptada, puntos }]
       })
@@ -161,6 +187,7 @@ export function repartirKit(
     const [mejor, ...resto] = puntuadas
     usadas.set(mejor.plantilla.id, (usadas.get(mejor.plantilla.id) ?? 0) + 1)
     fondoAnterior = mejor.plantilla.fondo
+    if (mejor.plantilla.foto.usa !== "no") conFoto += 1
     return {
       plantilla: mejor.plantilla,
       lamina: mejor.lamina,
@@ -190,11 +217,13 @@ export function laminasDeGuionClasico(
       }
     }
     const items = (s.items ?? []).map(limpio).filter(Boolean)
+    const deducido = s.figura ? "figura" : items.length >= 2 ? "lista" : "idea"
     return {
       // El que pidio quien escribio; si no lo trae, el que se deduce del texto.
-      tipo: s.tipoLamina && s.tipoLamina !== "portada" && s.tipoLamina !== "cierre" ? s.tipoLamina : items.length >= 2 ? "lista" : "idea",
+      tipo: s.tipoLamina && s.tipoLamina !== "portada" && s.tipoLamina !== "cierre" ? s.tipoLamina : deducido,
       textos: { titulo: limpio(s.title), cuerpo: limpio(s.body), antetitulo: limpio(s.lead) },
       listas: items.length >= 2 ? { items } : {},
+      ...(s.figura ? { figura: s.figura } : {}),
     }
   })
   if (cierre)

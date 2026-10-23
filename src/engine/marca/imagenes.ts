@@ -501,7 +501,8 @@ export async function etiquetarPendientes(accountId: string, limite = 20): Promi
 export type HuecoDeFoto = {
   /** 0 es la portada. */
   indice: number
-  uso: UsoImagen
+  /** inserto: la foto va dentro de la lamina (una banda, una tarjeta), sin texto encima. */
+  uso: UsoImagen | "inserto"
   /** El titular y el cuerpo de la lamina, para que la foto vaya con lo que dice. */
   texto: string
   /** Lo que pide la plantilla del kit: una foto oscura o clara, y donde queda el texto. */
@@ -626,6 +627,7 @@ const SISTEMA_ELEGIR = `Eres el editor de fotografia de la marca. Eliges la foto
 
 - La foto tiene que ir con lo que dice esa lamina, o al menos con el tema de la pieza, sin contradecirlo ni distraer.
 - La portada pide la foto con mas fuerza y espacio para un titular grande. El cierre lleva una tarjeta de vidrio encima: pide una foto tranquila.
+- Una lamina "inserto" lleva la foto dentro, en una banda o una tarjeta, sin texto encima: pide un sujeto claro que ilustre lo que dice esa lamina, no espacio libre.
 - Una persona reconocible no va de fondo si el texto habla de otra persona: parece que fuera ella.
 - Cada candidata se usa como mucho una vez.
 - Si ninguna candidata sirve para una lamina, deja esa lamina con "imagen": null. Mejor sin foto de la marca que con una que no pega: se buscara otra fuera.
@@ -742,7 +744,8 @@ function asignarPorPuntos(huecos: HuecoDeFoto[], pool: Candidata[]): Map<number,
   const libres = [...pool]
   for (const h of huecos) {
     const i = libres.findIndex(
-      (c) => (c.usos_sugeridos.length === 0 || c.usos_sugeridos.includes(h.uso)) && vaConTono(h, c)
+      (c) =>
+        (h.uso === "inserto" || c.usos_sugeridos.length === 0 || c.usos_sugeridos.includes(h.uso)) && vaConTono(h, c)
     )
     if (i < 0) continue
     const [c] = libres.splice(i, 1)

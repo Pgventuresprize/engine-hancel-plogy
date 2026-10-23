@@ -1,5 +1,6 @@
 import type { RawNews } from "@/lib/types"
 
+import { cifrasInventadas, figurasDelKit, type TipoFigura } from "../marca/figuras"
 import { elegirDeBiblioteca, hayFotosEnBiblioteca, type FotoElegida, type HuecoDeFoto } from "../marca/imagenes"
 import { armarLamina, medidasDe, type DatosLamina, type KitCargado } from "../marca/kit"
 import type { CarouselPayload, parseInstagramResponse } from "./carousel"
@@ -10,6 +11,7 @@ import { cerrarNavegador, dibujarLaminas, type LaminaDibujada, type Problema } f
 import { BancoDeFotos, descargarFotoPexels, pexelsConfigurado } from "./pexels"
 import { MAX_SLIDES } from "./render"
 import { subirCarrusel, subirImagenSuelta } from "./storage"
+import type { Slide } from "./templates"
 import type { Estilo } from "./theme"
 
 /**
@@ -36,6 +38,42 @@ const graves = (d: LaminaDibujada) => d.problemas.filter((p) => GRAVES.has(p.tip
 const textoDe = (l: LaminaKit) =>
   [...Object.values(l.textos), ...Object.values(l.listas).flat()].filter(Boolean).join(". ")
 
+/**
+ * Las figuras del guion que se pueden dibujar. Se quita (y se avisa) la que el
+ * kit no sabe dibujar y la que trae una cifra que no esta en la noticia ni en el
+ * texto del carrusel, salvo que se presente como ejemplo hipotetico: una figura
+ * no puede ser el sitio por donde entra un dato inventado.
+ */
+export function figurasComprobadas(
+  slides: Slide[],
+  news: Pick<RawNews, "title" | "snippet" | "full_content" | "analysis_notes"> | null,
+  delKit: TipoFigura[]
+): { slides: Slide[]; avisos: string[] } {
+  const textoDe = (s: Slide) =>
+    s.type === "photo_hook" ? (s.hook ?? "") : [s.lead, s.title, s.body, ...(s.items ?? [])].filter(Boolean).join(" ")
+  const fuente = [news?.title, news?.snippet, news?.full_content, news?.analysis_notes, ...slides.map(textoDe)]
+    .filter(Boolean)
+    .join(" ")
+  const avisos: string[] = []
+  const limpias = slides.map((s, i) => {
+    if (s.type !== "text" || !s.figura) return s
+    const { figura, ...sinFigura } = s
+    if (!delKit.includes(figura.tipo)) {
+      avisos.push(`Lámina ${i + 1}: el kit no tiene la figura "${figura.tipo}"; sale sin ella.`)
+      return sinFigura
+    }
+    const inventadas = figura.hipotetico ? [] : cifrasInventadas(figura, fuente)
+    if (inventadas.length) {
+      avisos.push(
+        `Lámina ${i + 1}: la figura traía cifras que no están en la noticia ni en el texto (${inventadas.join(", ")}); sale sin ella.`
+      )
+      return sinFigura
+    }
+    return s
+  })
+  return { slides: limpias, avisos }
+}
+
 /** Un fallo del navegador (se cayo, tardo demasiado) merece otro intento con uno nuevo. */
 async function dibujarConReintento(htmls: string[], medidas: { ancho: number; alto: number }) {
   try {
@@ -59,21 +97,34 @@ export async function generarCarruselKit(
 ): Promise<CarouselPayload & { kit: KitDelCarrusel }> {
   const { caption, hashtags, fotos, antetitulo, plan } = guion
   // Hasta el tope de Instagram, contando el cierre.
-  const slides = guion.slides.slice(0, MAX_SLIDES - (guion.cierre ? 1 : 0))
+  const { slides, avisos: avisosFiguras } = figurasComprobadas(
+    guion.slides.slice(0, MAX_SLIDES - (guion.cierre ? 1 : 0)),
+    news,
+    figurasDelKit(kc.kit.parciales)
+  )
   // El maquetador pone el guion en las plantillas; lo que no supere su
   // comprobacion sale del reparto automatico.
-  const maqueta = await maquetar(accountId, kc, guion, slides)
+  const fotosDelKit = kc.kit.sistema.fotos_por_carrusel ?? 0
+  let maqueta = await maquetar(accountId, kc, guion, slides)
+  // Una plantilla con huecos obligatorios que el reparto automatico no sabe
+  // llenar (la palabra y la respuesta de un cierre de DM) deja la lamina sin
+  // sitio: el maquetador se prueba otra vez antes de dibujar con el respaldo.
+  if (repartirKit(kc.plantillas, maqueta.laminas, kc.kit.sistema.ritmo, fotosDelKit).some((r) => r === null)) {
+    const otra = await maquetar(accountId, kc, guion, slides)
+    if (otra.descartadas.length < maqueta.descartadas.length) maqueta = otra
+  }
   const laminas = maqueta.laminas
   const avisosKit = [
+    ...avisosFiguras,
     ...(maqueta.error ? [`El maquetador no respondió (${maqueta.error}): láminas repartidas automáticamente.`] : []),
     ...(maqueta.descartadas.length
       ? [
-          `Láminas ${maqueta.descartadas.join(", ")} repartidas automáticamente: la maqueta cambiaba el texto o no usaba una plantilla válida.`,
+          `Láminas ${maqueta.descartadas.join(", ")} repartidas automáticamente: ${maqueta.motivos?.join(" / ") || "la maqueta cambiaba el texto o no usaba una plantilla válida"}.`,
         ]
       : []),
   ]
 
-  const reparto = repartirKit(kc.plantillas, laminas, kc.kit.sistema.ritmo)
+  const reparto = repartirKit(kc.plantillas, laminas, kc.kit.sistema.ritmo, fotosDelKit)
   const sinPlantilla = reparto.findIndex((r) => r === null)
   if (sinPlantilla >= 0)
     throw new Error(
@@ -110,8 +161,13 @@ export async function generarCarruselKit(
   const banco = new BancoDeFotos(terminos)
   const creditos: { autor: string; url: string }[] = []
   const fotoDe: (string | null)[] = repartidas.map((_, i) => deBiblioteca.get(i)?.foto ?? null)
+  // Las fotos que lleva un carrusel del kit de este largo (el kit lo cuenta en
+  // uno tipico de 7): hasta ahi, una plantilla con foto opcional tambien la busca fuera.
+  const objetivo = Math.round((fotosDelKit * repartidas.length) / 7)
   for (const [i, r] of repartidas.entries()) {
-    if (fotoDe[i] || r.plantilla.foto.usa !== "obligatoria") continue
+    if (fotoDe[i] || r.plantilla.foto.usa === "no") continue
+    const faltan = fotoDe.filter(Boolean).length < objetivo
+    if (r.plantilla.foto.usa === "opcional" && !faltan) continue
     if (estilo.usarFotos && pexelsConfigurado()) {
       const elegida = await banco.siguiente()
       const descargada = elegida ? await descargarFotoPexels(elegida) : null
@@ -122,6 +178,7 @@ export async function generarCarruselKit(
       }
     }
     // Sin foto, mejor otra plantilla que la pida opcional o no la use.
+    if (r.plantilla.foto.usa !== "obligatoria") continue
     const otra = r.alternativas.find((a) => a.plantilla.foto.usa !== "obligatoria")
     if (otra) repartidas[i] = { ...otra, alternativas: r.alternativas.filter((a) => a !== otra) }
   }
@@ -133,6 +190,7 @@ export async function generarCarruselKit(
     n: i + 1,
     total,
     foto: fotoDe[i],
+    figura: r.lamina.figura ?? null,
   })
   const medidas = medidasDe(repartidas[0].plantilla)
   const htmls = await Promise.all(repartidas.map((r, i) => armarLamina(kc, r.plantilla, datosDe(r, i))))

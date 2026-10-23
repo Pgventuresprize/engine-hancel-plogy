@@ -12,6 +12,7 @@
  *   {{?fuente}}..{{/fuente}} solo aparece si el hueco (o la foto) tiene algo
  *   {{a:logo_oscuro}}     un archivo del kit como data URI; {{a:foto}} es la foto de la lamina
  *   {{p:marco}}           un trozo comun del kit (el marco con logo, contador y puntos)
+ *   {{f:figura}}          la figura de la lamina (barras, tabla, pasos...: ver figuras.ts)
  *   {{s:n}} {{s:total}}   numero de lamina y total; {{s:n2}} y {{s:total2}} con dos cifras (01)
  *   {{s:puntos}}          un <i></i> por lamina; la actual lleva class="on"
  *
@@ -19,6 +20,8 @@
  * La lamina va dentro de un elemento con data-lamina (y data-seguro con su area
  * segura); el navegador mide los elementos con data-hueco y data-zona.
  */
+
+import type { Figura } from "./figuras"
 
 export const BUCKET_KITS = "marca-kits"
 
@@ -64,6 +67,7 @@ export const TIPOS_COMUNES: Record<string, string> = {
   cita: "Lo que dijo alguien, con su autor.",
   tesis: "La postura de la marca en una frase fuerte.",
   criterio: "Lo que la marca recomienda hacer: reglas o pasos propios.",
+  figura: "Una idea que se demuestra con una figura (barras, tabla, pasos, opciones...): titular, una frase y la figura.",
   cierre: "La ultima lamina: sintesis y una sola accion (el CTA).",
 }
 
@@ -84,9 +88,10 @@ export const HUECOS_COMUNES: Record<string, string> = {
   derecha: "El lado derecho de una comparacion.",
   cta: "La accion del cierre (Sigue a la marca, Comenta PALABRA...).",
   motivo: "Una linea con la razon para hacer la accion.",
+  figura: "La figura de la lamina: barras, tabla, niveles, opciones... la arma el motor con los datos de la pieza.",
 }
 
-export const TIPOS_HUECO = ["texto", "lista", "numero"] as const
+export const TIPOS_HUECO = ["texto", "lista", "numero", "figura"] as const
 export type TipoHueco = (typeof TIPOS_HUECO)[number]
 
 export type Hueco = {
@@ -105,7 +110,8 @@ export type Hueco = {
 /** Que foto acepta una plantilla. */
 export type FotoPlantilla = {
   usa: "no" | "opcional" | "obligatoria"
-  uso: "portada" | "fondo" | "cierre"
+  /** inserto: la foto va dentro de la lamina (una banda, una tarjeta), no detras del texto. */
+  uso: "portada" | "fondo" | "cierre" | "inserto"
   tono: "oscura" | "clara" | "cualquiera"
   espacio: "arriba" | "abajo" | "centro" | "cualquiera"
   orientacion: "vertical" | "apaisada" | "cuadrada" | "cualquiera"
@@ -131,6 +137,8 @@ export type SistemaVisual = {
   /** El orden de fondos que sigue el kit a lo largo de un carrusel. */
   ritmo: Fondo[]
   reglas: { letra_minima: number; notas: string[] }
+  /** Cuantas laminas de un carrusel del kit llevan foto, de media (contando portada y cierre). */
+  fotos_por_carrusel?: number
 }
 
 export type Kit = {
@@ -188,6 +196,8 @@ export type DatosLamina = {
   total: number
   /** La foto de la lamina como data URI, si la plantilla la usa. */
   foto?: string | null
+  /** La figura de la lamina, si la plantilla tiene hueco para ella. */
+  figura?: Figura | null
 }
 
 // ------------------------------------------------- catalogo para el redactor
@@ -205,6 +215,8 @@ export type TipoDelKit = {
   titulo: number | null
   cuerpo: number | null
   items: { min: number; max: number; largo: number } | null
+  /** Si alguna de sus plantillas tiene hueco para una figura. */
+  figura: boolean
 }
 
 /** Los nombres con que un kit puede llamar al titular y al texto de apoyo. */
@@ -240,6 +252,7 @@ export function tiposDelKit(plantillas: Plantilla[]): TipoDelKit[] {
             largo: Math.max(...listas.map((h) => h.max)),
           }
         : null,
+      figura: ps.some((p) => p.huecos.some((h) => h.tipo === "figura")),
     }
   })
 }
@@ -283,7 +296,7 @@ export function parseFoto(bruto: unknown): FotoPlantilla {
   const o = (bruto ?? {}) as Record<string, unknown>
   return {
     usa: de(["no", "opcional", "obligatoria"] as const, o.usa, "no"),
-    uso: de(["portada", "fondo", "cierre"] as const, o.uso, "fondo"),
+    uso: de(["portada", "fondo", "cierre", "inserto"] as const, o.uso, "fondo"),
     tono: de(["oscura", "clara", "cualquiera"] as const, o.tono, "cualquiera"),
     espacio: de(["arriba", "abajo", "centro", "cualquiera"] as const, o.espacio, "cualquiera"),
     orientacion: de(["vertical", "apaisada", "cuadrada", "cualquiera"] as const, o.orientacion, "cualquiera"),
@@ -315,7 +328,9 @@ export function parseSistema(bruto: unknown): SistemaVisual {
     ? o.ritmo.filter((f): f is Fondo => FONDOS.includes(f as Fondo)).slice(0, 20)
     : []
   const reglas = (o.reglas ?? {}) as Record<string, unknown>
+  const fotos = Number(o.fotos_por_carrusel)
   return {
+    ...(fotos > 0 ? { fotos_por_carrusel: Math.min(20, Math.round(fotos * 10) / 10) } : {}),
     colores,
     fuentes,
     logos,
@@ -421,12 +436,15 @@ export function revisarPlantilla(
   if (!/data-lamina/.test(html)) errores.push("La plantilla no marca su lamina con data-lamina.")
   const nombres = new Set(huecos.map((h) => h.nombre))
   const listas = new Set(huecos.filter((h) => h.tipo === "lista").map((h) => h.nombre))
+  const figuras = new Set(huecos.filter((h) => h.tipo === "figura").map((h) => h.nombre))
   const papeles = new Set([...ctx.papeles, "foto"])
   for (const [, marca] of html.matchAll(/\{\{([^}]*)\}\}/g)) {
-    const m = /^([tap#?/s]):?(.*)$/.exec(marca.trim())
+    const m = /^([tapf#?/s]):?(.*)$/.exec(marca.trim())
     const [clase, nombre] = m ? [m[1], m[2].trim()] : ["", marca]
     if (marca === "." || marca === "i") continue
-    if (clase === "t" && !nombres.has(nombre)) errores.push(`{{t:${nombre}}} no es un hueco declarado.`)
+    if (clase === "t" && (!nombres.has(nombre) || figuras.has(nombre)))
+      errores.push(`{{t:${nombre}}} no es un hueco de texto declarado.`)
+    else if (clase === "f" && !figuras.has(nombre)) errores.push(`{{f:${nombre}}} no es un hueco de figura declarado.`)
     else if (clase === "#" && !listas.has(nombre)) errores.push(`{{#${nombre}}} no es una lista declarada.`)
     else if ((clase === "?" || clase === "/") && !nombres.has(nombre) && nombre !== "foto")
       errores.push(`{{${clase}${nombre}}} no es un hueco declarado.`)
@@ -434,10 +452,11 @@ export function revisarPlantilla(
     else if (clase === "p" && !ctx.parciales.includes(nombre))
       errores.push(`{{p:${nombre}}} no es un trozo comun del kit.`)
     else if (clase === "s" && !SISTEMA.includes(nombre)) errores.push(`{{s:${nombre}}} no existe.`)
-    else if (!"tap#?/s".includes(clase)) errores.push(`{{${marca}}} no se entiende.`)
+    else if (!"tapf#?/s".includes(clase)) errores.push(`{{${marca}}} no se entiende.`)
   }
   for (const h of huecos) {
-    const usado = h.tipo === "lista" ? html.includes(`{{#${h.nombre}}}`) : html.includes(`{{t:${h.nombre}}}`)
+    const marca = h.tipo === "lista" ? `{{#${h.nombre}}}` : h.tipo === "figura" ? `{{f:${h.nombre}}}` : `{{t:${h.nombre}}}`
+    const usado = html.includes(marca)
     if (!usado) errores.push(`El hueco ${h.nombre} esta declarado pero la plantilla no lo usa.`)
   }
   return [...new Set(errores)]
@@ -468,18 +487,22 @@ const dosCifras = (n: number) => String(n).padStart(2, "0")
 
 /**
  * Rellena una plantilla. `archivos` son los data URI del kit por papel; los
- * trozos comunes se insertan primero porque tambien llevan huecos.
+ * trozos comunes se insertan primero porque tambien llevan huecos. `figura` es
+ * el HTML de la figura ya armado (figuras.ts), que va en {{f:...}}.
  */
 export function rellenarPlantilla(
   html: string,
   datos: DatosLamina,
   archivos: Record<string, string>,
-  parciales: Record<string, string>
+  parciales: Record<string, string>,
+  figura = ""
 ): string {
   const tiene = (nombre: string) =>
     nombre === "foto"
       ? Boolean(datos.foto)
-      : Boolean(datos.textos[nombre]?.trim()) || (datos.listas[nombre]?.length ?? 0) > 0
+      : Boolean(datos.textos[nombre]?.trim()) ||
+        (datos.listas[nombre]?.length ?? 0) > 0 ||
+        (Boolean(figura) && new RegExp(`\\{\\{f:${nombre}\\}\\}`).test(html))
   const conParciales = html.replace(/\{\{p:(\w+)\}\}/g, (_, k: string) => parciales[k] ?? "")
   return (
     conParciales
@@ -490,6 +513,7 @@ export function rellenarPlantilla(
           .join("")
       )
       .replace(/\{\{t:(\w+)\}\}/g, (_, k: string) => textoAHtml(datos.textos[k] ?? ""))
+      .replace(/\{\{f:\w+\}\}/g, () => figura)
       .replace(/\{\{a:(\w+)\}\}/g, (_, k: string) => (k === "foto" ? (datos.foto ?? "") : (archivos[k] ?? "")))
       // {{s:puntos}} antes que {{s:n}}: no se pisan porque cada uno es exacto.
       .replace(/\{\{s:puntos\}\}/g, () =>

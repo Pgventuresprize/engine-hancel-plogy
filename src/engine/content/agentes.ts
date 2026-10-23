@@ -6,6 +6,7 @@ import { identidadEditorial } from "../marca/editorial"
 import { ejemplosDe } from "../marca/ejemplos"
 import { ctasUsables, TIPOS_CTA, type TipoCta } from "../marca/editorial-modelo"
 import { perfilDe } from "../marca/perfil"
+import { DESCRIPCION_FIGURA, FORMA_FIGURA, LIMITES_FIGURA, type TipoFigura } from "../marca/figuras"
 import type { TipoDelKit } from "../marca/kit-modelo"
 import type { PerfilMarca } from "../marca/perfil-modelo"
 import { corregirTextos } from "../studio/ortografia"
@@ -639,8 +640,11 @@ export function situacionDe(input: LinkedinJobInput): Situacion {
 
 const rango = (min: number, max: number) => (min === max ? `${min}` : `${min} a ${max}`)
 
-/** Con el plan de cada lamina, el guion pide mas salida: en la prueba fueron 1.650 tokens. */
-const MAX_TOKENS_INSTAGRAM = 5000
+/**
+ * Con el plan de cada lamina, el guion pide mas salida: en la prueba fueron
+ * 1.650 tokens. Las figuras del kit suman sus datos.
+ */
+const MAX_TOKENS_INSTAGRAM = 8000
 
 /**
  * El formato del carrusel con los numeros de la marca: cuantas laminas, cuantos
@@ -652,10 +656,40 @@ export function contratoInstagram(
   /** La plantilla dibuja listas numeradas: se ofrecen las laminas de pasos. */
   listas = false,
   /** Los tipos de lamina del kit de diseño activo de la marca, si tiene. */
-  kit: TipoDelKit[] = []
+  kit: TipoDelKit[] = [],
+  /** Las figuras que sabe dibujar ese kit (barras, tabla, niveles...). */
+  figuras: TipoFigura[] = []
 ): string {
-  const base = contratoInstagramBase(perfil, listas || kit.some((t) => t.items), kit.length > 0)
-  return kit.length ? `${base}\n\n${bloqueKit(kit)}` : base
+  const conFiguras = kit.length > 0 && figuras.length > 0 && kit.some((t) => t.figura)
+  const base = contratoInstagramBase(perfil, listas || kit.some((t) => t.items), kit.length > 0, conFiguras)
+  if (!kit.length) return base
+  return [base, bloqueKit(kit), conFiguras ? bloqueFiguras(figuras) : ""].filter(Boolean).join("\n\n")
+}
+
+/**
+ * Las figuras del kit: que puede construir dentro de una lamina y con que
+ * datos. La regla de las cifras es la misma que la del resto del guion: nada
+ * que no salga del contenido, y lo ilustrativo dice que lo es.
+ */
+function bloqueFiguras(figuras: TipoFigura[]): string {
+  const lineas = figuras
+    .map((f) => {
+      const l = LIMITES_FIGURA[f]
+      return `- ${f}: ${DESCRIPCION_FIGURA[f]} De ${l.min} a ${l.max} elementos, cada texto hasta ${l.texto} caracteres${l.nota ? ` (nota hasta ${l.nota})` : ""}.\n  ${FORMA_FIGURA[f]}`
+    })
+    .join("\n")
+  return `FIGURAS
+Las láminas de este kit muestran lo que dicen con una figura construida con datos: unas barras, una tabla, una escalera de niveles, una encuesta, una caja de comentario. Una lámina de un tipo que "admite figura" puede llevar "figura" con una de estas:
+${lineas}
+- Pon figura en cada lámina cuyo contenido ya tiene esa forma: cifras que se comparan, pasos en orden, opciones, un antes y un después, herramientas que se nombran, frases que dijo alguien, un comando o un comentario. En un carrusel de este kit lo normal es que la mayoría de las láminas del medio lleven una; la portada y el cierre no.
+- La figura enseña lo que afirma la lámina, no otra cosa. Con figura, el título dice la idea y el cuerpo va en una frase corta: el detalle va en la figura.
+- Una figura no resume quitando reservas. Cada elemento conserva su atribución y su condición ("según Reuters", "cerca de", "en un caso", "sin confirmar"): si una celda o un paso no se puede decir corto sin perder la reserva, esa parte no va en la figura, va en el texto. Un flujo que muestra lo que pasó en un caso lo dice en su título o en el pie. Una cifra lleva al lado qué mide y contra qué se compara.
+- Respeta los límites de cada figura: tiene el sitio justo para ellos. Si no cabe, menos elementos, no más largos.
+- En un checklist, "no" se dibuja como lo que no está o no vale (en muchos kits, tachado): escribe cada punto en positivo ("Booleanos robustos", con "no") y nunca en negativo ("Nadie tiene booleanos"), que tachado se lee al revés.
+- Cada cifra de una figura sale del contenido o del texto de las láminas, tal cual. Nunca inventes una cifra, un porcentaje ni un resultado para tener figura: hay figuras sin números (niveles, flujo, pastillas, checklist, citas, interfaz).
+- Si la figura es un ejemplo para explicar (una cuenta ilustrativa, un caso inventado), lleva "hipotetico": true y la lámina lo dice. Una encuesta sin datos no lleva porcentajes.
+- En una cita, el texto es literal de la fuente; si está traducido, el pie lo dice.
+- En la lámina de criterio la figura puede ordenar los pasos (niveles, checklist, flujo), pero cada punto conserva lo concreto.`
 }
 
 /**
@@ -675,7 +709,7 @@ function bloqueKit(kit: TipoDelKit[]): string {
   const lineas = kit
     .map((t) => {
       const nombre = t.tipo === "cierre" ? `cierre${t.cta.length ? ` (CTA ${t.cta.join(", ")})` : ""}` : t.tipo
-      return `- ${nombre}: ${t.cuando}${medida(t) ? ` Cabe: ${medida(t)}.` : ""}`
+      return `- ${nombre}${t.figura ? " (admite figura)" : ""}: ${t.cuando}${medida(t) ? ` Cabe: ${medida(t)}.` : ""}`
     })
     .join("\n")
   return `EL KIT DE DISEÑO DE LA MARCA
@@ -692,13 +726,14 @@ ${lineas}
 function contratoInstagramBase(
   perfil: Pick<PerfilMarca, "laminas_min" | "laminas_max" | "hashtags_min" | "hashtags_max" | "emojis_instagram">,
   listas: boolean,
-  conKit: boolean
+  conKit: boolean,
+  conFiguras = false
 ): string {
   const laminas = rango(perfil.laminas_min, perfil.laminas_max)
   const sinHashtags = perfil.hashtags_max === 0
   const hashtags = sinHashtags ? "" : `"<${rango(perfil.hashtags_min, perfil.hashtags_max)} en minúscula sin espacios>"`
   return `RESPONDE SOLO con este JSON, sin texto alrededor:
-{"slide_count":<${laminas}>,"caption":"<2 a 4 frases con la tesis y el cta, oraciones completas>","hashtags":[${hashtags}],"fotos":["<5 a 8 búsquedas en inglés>"],"elemento":"<una búsqueda en español de la cosa concreta>","antetitulo":"<2 a 4 palabras en español que sitúan la pieza>","slides":[{"n":1,"type":"photo_hook",${conKit ? '"tipo_lamina":"portada",' : ""}"funcion":"<función narrativa>","aporta":"<qué hace necesaria la siguiente>","fuente":"<de qué parte del contenido sale, o criterio de la marca>","hook":"<máx 95 caracteres>"},{"n":2,"type":"text",${conKit ? '"tipo_lamina":"<tipo del kit>",' : ""}"funcion":"<...>","aporta":"<...>","fuente":"<...>","title":"<máx 65 caracteres>","body":"<máx 2 frases>"}],"cierre":{"title":"<máx 40 caracteres: la acción del CTA>","body":"<máx 140 caracteres: la razón para hacerlo>"}}
+{"slide_count":<${laminas}>,"caption":"<2 a 4 frases con la tesis y el cta, oraciones completas>","hashtags":[${hashtags}],"fotos":["<5 a 8 búsquedas en inglés>"],"elemento":"<una búsqueda en español de la cosa concreta>","antetitulo":"<2 a 4 palabras en español que sitúan la pieza>","slides":[{"n":1,"type":"photo_hook",${conKit ? '"tipo_lamina":"portada",' : ""}"funcion":"<función narrativa>","aporta":"<qué hace necesaria la siguiente>","fuente":"<de qué parte del contenido sale, o criterio de la marca>","hook":"<máx 95 caracteres>"},{"n":2,"type":"text",${conKit ? '"tipo_lamina":"<tipo del kit>",' : ""}"funcion":"<...>","aporta":"<...>","fuente":"<...>","title":"<máx 65 caracteres>","body":"<máx 2 frases>"${conFiguras ? ',"figura":<una figura de las de abajo, u omítela>' : ""}}],"cierre":{"title":"<máx 40 caracteres: la acción del CTA>","body":"<máx 140 caracteres: la razón para hacerlo>"}}
 
 El array slides va en orden y tiene ${perfil.laminas_min === perfil.laminas_max ? "exactamente" : "de"} ${laminas} elementos, tantos como sostenga el contenido: el primero photo_hook, los demás text.
 PLANEA CADA LÁMINA ANTES DE ESCRIBIRLA. Cada elemento de slides lleva primero tres campos: "funcion" (tensión, hecho, mecanismo, criterio, síntesis...), "aporta" (qué deja abierto o qué hace necesaria la siguiente) y "fuente" (de qué parte del contenido sale lo que afirma, o "criterio de la marca" si es opinión de la marca). Escríbelos primero y después el texto, de modo que el texto cumpla esa función y no afirme nada que su fuente no diga. Estos tres campos no se publican.

@@ -5,6 +5,8 @@
  * reglas que luego lee el servidor. Ver kit-importar.ts.
  */
 
+import type { Figura, TipoFigura } from "./figuras"
+
 /** Cada archivo de la carpeta del kit, segun para que sirve al importar. */
 export type ClaseArchivo =
   | "html" // piezas o paginas del kit: se dibujan para sacar las laminas y su HTML
@@ -192,12 +194,47 @@ export type TareaPlantilla = {
   error?: string
 }
 
+export const ETAPAS_FIGURA = ["escribir", "comprobar", "estres", "hecha", "fallo"] as const
+export type EtapaFigura = (typeof ETAPAS_FIGURA)[number]
+
+/**
+ * Una figura del kit (barras, tabla, niveles...: ver figuras.ts) cuyo CSS hay
+ * que escribir mirando como la dibuja el kit.
+ */
+export type TareaFigura = {
+  tipo: TipoFigura
+  /** Las laminas donde aparece, la mejor primero. */
+  referencias: number[]
+  /** Como la dibuja el kit, en una linea (lo dice el catalogo). */
+  como: string
+  etapa: EtapaFigura
+  ronda: number
+  /** El CSS escrito; pasa a los trozos comunes del kit al terminar el paso. */
+  css?: string
+  /** La lamina con la que se compara y donde esta la figura en ella (px de 1080x1350). */
+  ref?: number
+  caja?: [number, number, number, number]
+  fondo?: string
+  /** Los datos de la figura de esa lamina, para dibujarla igual. */
+  datos?: Figura
+  parecido?: number
+  diferencias?: string[]
+  errores?: string[]
+  problemas?: string[]
+  error?: string
+}
+
 export const PASOS_IMPORTACION = [
   { clave: "subir", nombre: "Subir el kit", detalle: "Se sube una copia de lo necesario." },
   { clave: "leer", nombre: "Leer colores y fuentes", detalle: "Lo exacto: CSS, fuentes y logos." },
   { clave: "referencias", nombre: "Dibujar las láminas del kit", detalle: "Cada pieza HTML, lámina por lámina." },
   { clave: "catalogo", nombre: "Entender el kit", detalle: "Claude ve todas las láminas y los documentos." },
   { clave: "base", nombre: "Escribir la base", detalle: "El CSS común y el marco de las láminas." },
+  {
+    clave: "figuras",
+    nombre: "Escribir las figuras",
+    detalle: "Barras, tablas, pasos, encuestas... con el estilo del kit.",
+  },
   {
     clave: "plantillas",
     nombre: "Escribir y comprobar plantillas",
@@ -212,6 +249,8 @@ export type Importacion = {
   archivos: ArchivoImportado[]
   referencias: Referencia[]
   tareas: TareaPlantilla[]
+  /** Las figuras del kit que hay que escribir (las de un kit importado antes no tienen). */
+  figuras?: TareaFigura[]
   /** Las paginas HTML ya dibujadas (el paso de referencias va por tandas). */
   paginas_hechas?: string[]
   /** Los colores que mas usa el CSS del kit, con cuantas veces aparecen. */
@@ -241,6 +280,7 @@ export function parseImportacion(bruto: unknown): Importacion | null {
     archivos: Array.isArray(o.archivos) ? o.archivos : [],
     referencias: Array.isArray(o.referencias) ? o.referencias : [],
     tareas: Array.isArray(o.tareas) ? o.tareas : [],
+    figuras: Array.isArray(o.figuras) ? o.figuras : [],
     paginas_hechas: Array.isArray(o.paginas_hechas) ? o.paginas_hechas : [],
     colores: Array.isArray(o.colores) ? o.colores : [],
     fuentes: Array.isArray(o.fuentes) ? o.fuentes : [],

@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og"
 
+import { parseFigura } from "../marca/figuras"
 import { cargarFuente } from "./fonts"
 import {
   Composicion,
@@ -281,6 +282,9 @@ export function parseSlides(valor: unknown): Slide[] {
       ? obj.items.filter((x): x is string => typeof x === "string" && x.trim().length > 0).map((x) => x.trim()).slice(0, 5)
       : []
     if (!title && !body && items.length === 0) continue
+    // Con kit de diseño: la figura que construye la lamina. Una que no se
+    // entiende se deja fuera; la lamina sale igual, con su texto.
+    const figura = parseFigura(obj.figura)
 
     slides.push({
       n,
@@ -290,6 +294,7 @@ export function parseSlides(valor: unknown): Slide[] {
       lead: texto(obj.lead),
       items: items.length ? items : null,
       ...(tipoLamina ? { tipoLamina } : {}),
+      ...(figura ? { figura } : {}),
     })
   }
 

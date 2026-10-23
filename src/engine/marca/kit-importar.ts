@@ -5,6 +5,7 @@ import { capturar, dibujarLaminas, laminasDePagina } from "../render/navegador"
 import { supabaseAdmin } from "../supabase-admin"
 import {
   armarLamina,
+  archivosComoDatos,
   actualizarKit,
   actualizarPlantilla,
   cargarKit,
@@ -13,6 +14,19 @@ import {
   subirArchivoKit,
   type KitCargado,
 } from "./kit"
+import {
+  DESCRIPCION_FIGURA,
+  figuraAHtml,
+  figuraDeMuestra,
+  figurasDelKit,
+  FORMA_FIGURA,
+  LIMITES_FIGURA,
+  parseFigura,
+  PREFIJO_FIGURA,
+  TIPOS_FIGURA,
+  type Figura,
+  type TipoFigura,
+} from "./figuras"
 import { cssDeFuentesCargadas, fuentesDePagina, pedidosAGoogle, type Fuente } from "./kit-fuentes"
 import {
   carpetaDe,
@@ -24,12 +38,15 @@ import {
   type ArchivoImportado,
   type Importacion,
   type Referencia,
+  type TareaFigura,
   type TareaPlantilla,
 } from "./kit-importar-modelo"
 import {
   BUCKET_KITS,
+  cssDeFuentes,
   FORMATOS,
   HUECOS_COMUNES,
+  paginaDeLamina,
   parseHuecos,
   revisarCss,
   revisarPlantilla,
@@ -56,6 +73,8 @@ export * from "./kit-importar-modelo"
  *   catalogo     Claude ve todas las laminas y los documentos y dice que tipos
  *                de lamina tiene el kit, el sistema visual y que logo va en cada fondo.
  *   base         Claude escribe el CSS comun y el marco.
+ *   figuras      por cada figura que usa el kit (barras, tabla, niveles...):
+ *                su CSS, comparado con la figura del kit y probado al limite.
  *   plantillas   por cada tipo: escribir, comparar con su original (y corregir,
  *                hasta 3 rondas) y probar con textos al limite.
  *   cerrar       guarda lo que hace falta y borra la copia subida.
@@ -76,8 +95,11 @@ const MAX_RONDAS = 3
 const MAX_INTENTOS_ESCRIBIR = 3
 /** A partir de este parecido (0 a 10) la plantilla se da por buena. */
 const PARECIDO_BUENO = 8
-const MAX_REFERENCIAS = 240
-const MAX_TIPOS = 14
+const MAX_REFERENCIAS = 300
+const MAX_TIPOS = 18
+/** Cuantas figuras se escriben a la vez en una llamada, y rondas para corregir cada una. */
+const FIGURAS_A_LA_VEZ = 3
+const MAX_RONDAS_FIGURA = 2
 const SEGUNDOS_URL = 60 * 60
 
 const FORMATOS_LAMINA = [
@@ -312,6 +334,7 @@ export async function avanzarImportacion(accountId: string, kitId: string): Prom
     else if (imp.paso === "referencias") await pasoReferencias(accountId, kitId, imp, inicio)
     else if (imp.paso === "catalogo") await pasoCatalogo(accountId, kitId, imp)
     else if (imp.paso === "base") await pasoBase(accountId, kitId, imp)
+    else if (imp.paso === "figuras") await pasoFiguras(accountId, kitId, imp)
     else if (imp.paso === "plantillas") await pasoPlantillas(accountId, kitId, imp)
     else if (imp.paso === "cerrar") await pasoCerrar(accountId, kitId, imp)
   } catch (error) {
@@ -475,7 +498,12 @@ async function pasoReferencias(accountId: string, kitId: string, imp: Importacio
   const sharp = (await import("sharp")).default
   imp.paginas_hechas ??= []
   const temporal = carpetaTemporal(accountId, kitId)
-  const pendientes = imp.archivos.filter((a) => a.clase === "html" && !imp.paginas_hechas!.includes(a.ruta))
+  // Las piezas publicadas primero: si el kit pasa del tope de laminas, que
+  // sobren las paginas de apoyo (briefs, reportes), no los carruseles.
+  const pieza = (ruta: string) => (/carrusel|carousel|slides?|lamina|post|pieza/i.test(ruta) ? 0 : 1)
+  const pendientes = imp.archivos
+    .filter((a) => a.clase === "html" && !imp.paginas_hechas!.includes(a.ruta))
+    .sort((a, b) => pieza(a.ruta) - pieza(b.ruta))
 
   for (const html of pendientes) {
     if (Date.now() - inicio > PRESUPUESTO_MS) return
@@ -664,6 +692,10 @@ ${await documentosDelKit(imp, 50_000)}
 Tu trabajo:
 1. El sistema visual: los colores con el papel que cumplen (fondo claro, fondo oscuro, acento, texto, texto suave...), la familia de títulos y la de texto (como se llaman en las fuentes de arriba), qué logo va sobre fondo claro, sobre oscuro, sobre el color de acento, y cuál es el símbolo suelto si existe; el ritmo de fondos típico de un carrusel; la letra mínima en px (de 1080 de ancho): si los documentos del kit la dicen, esa; si no, la más pequeña que se lee en sus láminas y las reglas visuales que el kit deja claras (en sus láminas o en sus documentos).
 2. Los tipos de lámina distintos que tiene el kit. Solo láminas de 1080x1350. Para cada composición que se repita o que el kit use con intención (portada, idea, dato, lista, comparación, cita, tesis, criterio, cierre... o una propia), elige las mejores referencias (los números), la mejor primero. Entre dos láminas iguales, prefiere la que tiene HTML: de ella sale el código exacto y su foto. Si un tipo tiene variantes claramente distintas (portada con foto y portada tipográfica; cierres distintos según la acción), cada variante es un tipo aparte con su clave. Tiene que haber al menos una portada y un cierre. Máximo ${MAX_TIPOS}.
+   No te quedes solo con la versión tipográfica de cada tipo: si el kit enseña láminas del medio con una figura (abajo) o con una foto dentro (una banda de foto arriba, una foto en una tarjeta), esas composiciones son tipos o variantes con su clave, y sus referencias son láminas que las tienen. Una lámina cuya protagonista es una figura es del tipo "figura" (con variantes por fondo si el kit las usa).
+3. Las figuras: lo que el kit construye con datos dentro de una lámina. Las que el sistema sabe armar: ${TIPOS_FIGURA.map((t) => `${t} (${DESCRIPCION_FIGURA[t]})`).join("; ")}.
+   Para cada una que el kit use (aunque sea con otro aspecto: una escalera de tarjetas es "niveles", una caja de comentario con su botón es "interfaz"), di en qué láminas aparece (la más clara primero) y cómo la dibuja el kit en una línea. Solo las que se ven en sus láminas.
+4. Las fotos: cuántas láminas de un carrusel típico del kit llevan foto (contando portada y cierre), de media, en "fotos_por_carrusel".
 
 Tipos que ya entiende el sistema (usa estos nombres si encajan): ${Object.entries(TIPOS_COMUNES)
     .map(([k, v]) => `${k} (${v})`)
@@ -678,10 +710,14 @@ Responde con este JSON:
     "fuentes": [{"papel": "titulos", "familia": "<familia>"}, {"papel": "texto", "familia": "<familia>"}],
     "logos": {"claro": "L<n>", "oscuro": "L<n>", "acento": "L<n>", "simbolo": "L<n>"},
     "ritmo": ["claro" | "oscuro" | "acento" | "foto", ...],
-    "reglas": {"letra_minima": <px>, "notas": ["<regla concreta del kit>", ...]}
+    "reglas": {"letra_minima": <px>, "notas": ["<regla concreta del kit>", ...]},
+    "fotos_por_carrusel": <número>
   },
   "tipos": [
     {"clave": "<slug único, a-z0-9_>", "tipo": "<tipo>", "nombre": "<nombre corto>", "cuando_usar": "<una línea para quien escribe>", "cta_tipos": [], "referencias": [<n>, ...]}
+  ],
+  "figuras": [
+    {"tipo": "<una de las figuras de arriba>", "referencias": [<n>, ...], "como": "<cómo la dibuja el kit>"}
   ]
 }
 Si un logo no existe, déjalo fuera.`
@@ -692,7 +728,8 @@ Si un logo no existe, déjalo fuera.`
     system: OFICIO,
     prompt,
     bloques,
-    maxTokens: 8000,
+    // Piensa con todas las hojas delante y lo que piensa sale del mismo presupuesto.
+    maxTokens: 16000,
   })
   const datos = parsearJSONDeClaude(respuesta) as {
     resumen?: string
@@ -705,6 +742,7 @@ Si un logo no existe, déjalo fuera.`
       cta_tipos?: string[]
       referencias?: number[]
     }[]
+    figuras?: { tipo?: string; referencias?: number[]; como?: string }[]
   }
 
   // Los logos elegidos pasan al kit con su papel.
@@ -758,8 +796,19 @@ Si un logo no existe, déjalo fuera.`
       "Claude no encontró una portada o un cierre claros en el kit: revisa las plantillas antes de activarlo."
     )
   if (!imp.tareas.length) throw new Error("Claude no encontró tipos de lámina de 1080x1350 en el kit.")
+  imp.figuras = (datos.figuras ?? []).flatMap((f): TareaFigura[] => {
+    const tipo = TIPOS_FIGURA.find((t) => t === f.tipo)
+    const referencias = (f.referencias ?? []).map(Number).filter((n) => validas.has(n)).slice(0, 4)
+    if (!tipo || !referencias.length) return []
+    return [{ tipo, referencias, como: String(f.como ?? "").slice(0, 300), etapa: "escribir", ronda: 0 }]
+  })
+  // Una figura por tipo: si Claude repite una, vale la primera.
+  imp.figuras = imp.figuras.filter((f, i) => imp.figuras!.findIndex((g) => g.tipo === f.tipo) === i)
   imp.resumen = String(datos.resumen ?? "").slice(0, 600)
-  anotar(imp, `Catálogo: ${imp.tareas.map((t) => t.clave).join(", ")}.`)
+  anotar(
+    imp,
+    `Catálogo: ${imp.tareas.map((t) => t.clave).join(", ")}. Figuras: ${imp.figuras.map((f) => f.tipo).join(", ") || "ninguna"}.`
+  )
   imp.paso = "base"
 }
 
@@ -846,10 +895,318 @@ Si el marco cambia según el fondo (logo de color en claro, blanco en oscuro), h
     }
     await actualizarKit(accountId, kitId, { css: datos.css, parciales })
     anotar(imp, `Base escrita: ${Object.keys(parciales).join(", ") || "sin trozos comunes"}.`)
-    imp.paso = "plantillas"
+    imp.paso = "figuras"
     return
   }
   throw new Error(`La base no pasó la revisión: ${ultimoError}`)
+}
+
+// ----------------------------------------------------------------- figuras
+
+/** La estructura que arma el motor para cada figura (ver figuraAHtml), para quien escribe su CSS. */
+const ESTRUCTURA_FIGURA = `.fig.fig-<tipo>[data-fondo="claro|oscuro|acento|foto"][data-modo]  la figura; --n es cuántos elementos tiene
+  .fig-rotulo                      "Ejemplo hipotético", solo si lo es
+  .fig-titulo                      el encabezado (qué miden las barras, la pregunta de una encuesta, la cuenta o el título de una ventana)
+  .fig-items > .fig-item           cada elemento; --i es su número (1, 2...) y --v su valor de 0 a 1 si mide algo
+      .es-resaltado                el que la figura destaca (el nivel actual, la barra que importa, la opción elegida)
+      .es-si / .es-no              en un checklist
+      .es-cabecera / .es-fila      en una tabla (la cabecera también es un .fig-item)
+      .fig-num                     su número (niveles, flujo, opciones)
+      .fig-texto .fig-nota         el texto y una línea de apoyo
+      .fig-cifra                   la cifra tal cual se lee ($3,98, 62.000, 29 %)
+      .fig-autor                   quién lo dijo (citas)
+      .fig-marca                   la marca de sí o no (checklist): vacía, la dibujas tú
+      .fig-barra > .fig-relleno    la barra (barras, opciones con porcentaje): el relleno mide var(--v)
+      .fig-cuadros > i.fig-cuadro  los cuadros (cuadricula): uno por unidad de la escala, hasta 100
+      .fig-celda                   cada celda de una fila de tabla
+  .fig-flecha                      entre los pasos de un flujo: vacía, la dibujas tú
+  .fig-accion > .fig-boton         el botón de una interfaz
+  .fig-pie                         una nota pequeña debajo`
+
+/** Recorta una lamina a la caja de su figura (con un margen), en JPEG para comparar. */
+async function recorte(imagen: Buffer, caja: [number, number, number, number]): Promise<Buffer> {
+  const sharp = (await import("sharp")).default
+  const m = 24
+  const left = Math.max(0, caja[0] - m)
+  const top = Math.max(0, caja[1] - m)
+  const width = Math.min(ANCHO, caja[2] + m) - left
+  const height = Math.min(ALTO, caja[3] + m) - top
+  return sharp(imagen).resize(ANCHO, ALTO, { fit: "fill" }).extract({ left, top, width, height }).jpeg({ quality: 88 }).toBuffer()
+}
+
+/**
+ * El color de fondo de la lamina alrededor de una caja: el que mas se repite en
+ * cuatro puntos justo por fuera de sus esquinas.
+ */
+async function fondoAlrededor(imagen: Buffer, caja: [number, number, number, number]): Promise<string> {
+  const sharp = (await import("sharp")).default
+  const { data, info } = await sharp(imagen).resize(ANCHO, ALTO, { fit: "fill" }).removeAlpha().raw().toBuffer({ resolveWithObject: true })
+  const punto = (x: number, y: number) => {
+    const cx = Math.max(0, Math.min(info.width - 1, Math.round(x)))
+    const cy = Math.max(0, Math.min(info.height - 1, Math.round(y)))
+    const i = (cy * info.width + cx) * 3
+    return [data[i], data[i + 1], data[i + 2]]
+  }
+  const [x1, y1, x2, y2] = caja
+  const colores = [punto(x1 - 14, y1 - 14), punto(x2 + 14, y1 - 14), punto(x1 - 14, y2 + 14), punto(x2 + 14, y2 + 14)]
+  const clave = (c: number[]) => c.map((v) => Math.round(v / 12)).join(",")
+  const veces = new Map<string, number>()
+  for (const c of colores) veces.set(clave(c), (veces.get(clave(c)) ?? 0) + 1)
+  const elegido = colores.sort((a, b) => (veces.get(clave(b)) ?? 0) - (veces.get(clave(a)) ?? 0))[0]
+  return `#${elegido.map((v) => v.toString(16).padStart(2, "0")).join("")}`
+}
+
+/** Una figura sola, con su CSS, en la caja y sobre el fondo de su referencia. */
+async function dibujarFigura(
+  kc: KitCargado,
+  css: string,
+  figura: Figura,
+  caja: [number, number, number, number],
+  color: string,
+  fondo: string
+) {
+  const archivos = await archivosComoDatos(kc)
+  const [x1, y1, x2, y2] = caja
+  const cuerpo = `<div data-lamina data-seguro="0,0,${ANCHO},${ALTO}" style="position:relative;width:${ANCHO}px;height:${ALTO}px;background:${color}"><div data-hueco="figura" data-min="${kc.kit.sistema.reglas.letra_minima}" style="position:absolute;left:${x1}px;top:${y1}px;width:${x2 - x1}px;height:${y2 - y1}px">${figuraAHtml(figura, fondo)}</div></div>`
+  const pagina = paginaDeLamina(`${kc.kit.css}\n${css}`, cssDeFuentes(kc.archivos, archivos), cuerpo, "carrusel_4x5")
+  const [dibujada] = await dibujarLaminas([pagina], { ancho: ANCHO, alto: ALTO })
+  return dibujada
+}
+
+const cajaValida = (v: unknown): [number, number, number, number] | null => {
+  if (!Array.isArray(v) || v.length !== 4) return null
+  const [x1, y1, x2, y2] = v.map((n) => Math.round(Number(n)))
+  if (![x1, y1, x2, y2].every(Number.isFinite)) return null
+  const caja: [number, number, number, number] = [
+    Math.max(0, x1),
+    Math.max(0, y1),
+    Math.min(ANCHO, x2),
+    Math.min(ALTO, y2),
+  ]
+  return caja[2] - caja[0] >= 120 && caja[3] - caja[1] >= 60 ? caja : null
+}
+
+const reglasCssFigura = (kc: KitCargado, t: TareaFigura, imp: Importacion) => `Reglas:
+- Todo tu CSS va bajo .fig-${t.tipo} (por ejemplo ".fig-${t.tipo} .fig-item{...}"): no toca nada más de la lámina.
+- La figura no hereda colores ni fuentes de la lámina: ponlos tú, con los del kit, y da variantes con .fig-${t.tipo}[data-fondo="oscuro"], [data-fondo="acento"] y [data-fondo="foto"] según cómo trata el kit cada fondo (lo de sin variante es para fondo claro).
+- Ocupa todo el ancho de su caja y el alto que pida su contenido: nada de alturas fijas, ni posiciones absolutas que salgan de la figura, ni overflow escondido. El número de elementos cambia de una pieza a otra (de ${LIMITES_FIGURA[t.tipo].min} a ${LIMITES_FIGURA[t.tipo].max}): usa flex o grid, y --n, --i y --v si te sirven (por ejemplo width: calc(var(--v) * 100%)).
+- Lo que el kit no enseña (un .fig-num, por ejemplo) va con display:none. .fig-rotulo dice "Ejemplo hipotético": dale el aspecto de las etiquetas del kit. .fig-pie es una nota pequeña.
+- Ninguna letra por debajo de ${kc.kit.sistema.reglas.letra_minima} px.
+- Nada de url(), @import ni @font-face. Fuentes cargadas (familia y peso): ${(imp.fuentes ?? []).map((f) => `${f.familia} ${f.peso}${f.estilo === "italic" ? " itálica" : ""}`).join(", ") || "(las del CSS común)"}.`
+
+async function pasoFiguras(accountId: string, kitId: string, imp: Importacion): Promise<void> {
+  const tareas = imp.figuras ?? []
+  const pendientes = tareas.filter((t) => t.etapa !== "hecha" && t.etapa !== "fallo").slice(0, FIGURAS_A_LA_VEZ)
+  if (pendientes.length) {
+    const kc = await cargarKit(accountId, kitId)
+    if (!kc) throw new Error("No se encontró el kit.")
+    await Promise.all(
+      pendientes.map(async (t) => {
+        try {
+          if (t.etapa === "escribir") await escribirFigura(accountId, imp, kc, t)
+          else if (t.etapa === "comprobar") await comprobarFigura(accountId, kitId, imp, kc, t)
+          else if (t.etapa === "estres") await estresFigura(accountId, kitId, imp, kc, t)
+        } catch (error) {
+          t.error = error instanceof Error ? error.message : String(error)
+          anotar(imp, `Figura ${t.tipo}: ${t.error}`)
+          t.ronda += 1
+          if (t.ronda > MAX_RONDAS_FIGURA + MAX_INTENTOS_ESCRIBIR) t.etapa = "fallo"
+        }
+      })
+    )
+    if (tareas.some((t) => t.etapa !== "hecha" && t.etapa !== "fallo")) return
+  }
+  // Todas listas: su CSS pasa de una vez a los trozos comunes del kit (dos
+  // figuras escribiendo a la vez se pisarian).
+  const hechas = tareas.filter((t) => t.etapa === "hecha" && t.css)
+  if (hechas.length) {
+    const kc = await cargarKit(accountId, kitId)
+    if (!kc) throw new Error("No se encontró el kit.")
+    const parciales = { ...kc.kit.parciales }
+    for (const t of hechas) parciales[PREFIJO_FIGURA + t.tipo] = t.css as string
+    await actualizarKit(accountId, kitId, { parciales })
+  }
+  anotar(imp, `Figuras: ${hechas.map((t) => t.tipo).join(", ") || "ninguna"}.`)
+  imp.paso = "plantillas"
+}
+
+async function escribirFigura(accountId: string, imp: Importacion, kc: KitCargado, t: TareaFigura) {
+  const refs = t.referencias
+    .slice(0, 3)
+    .map((n) => refDe(imp, n))
+    .filter((r): r is Referencia => Boolean(r))
+  const bloques: Bloque[] = []
+  for (const r of refs) {
+    bloques.push({ tipo: "texto", texto: `Lámina ${r.n}:` }, jpgDe(await bajar(r.imagen)))
+    if (r.html)
+      bloques.push({
+        tipo: "texto",
+        texto: `Su HTML original:\n${(await bajar(r.html)).toString("utf8").slice(0, 8000)}`,
+      })
+  }
+  const prompt = `Escribe el CSS de la figura "${t.tipo}" de este kit: ${DESCRIPCION_FIGURA[t.tipo]}
+Cómo la dibuja el kit: ${t.como || "(míralo en las láminas)"}
+Arriba van láminas del kit donde aparece.
+
+El motor arma la figura siempre con esta estructura; los datos cambian en cada pieza y tú solo pones el estilo, para que se vea como en el kit:
+${ESTRUCTURA_FIGURA}
+
+Lo que arma con unos datos de prueba:
+${figuraAHtml(figuraDeMuestra(t.tipo), "claro")}
+
+${reglasCssFigura(kc, t, imp)}
+
+CSS común del kit (ya está cargado en la lámina):
+${kc.kit.css}
+
+Sistema visual: ${JSON.stringify(kc.kit.sistema)}
+${t.errores?.length ? `\nTu intento anterior no pasó la revisión. Corrige esto: ${t.errores.join(" ")}` : ""}
+
+Responde con este JSON:
+{"referencia": <número de la lámina de arriba donde mejor se ve>, "caja": [x1, y1, x2, y2] (dónde está la figura en esa lámina, en px de un lienzo de ${ANCHO}x${ALTO}), "fondo": "claro" | "oscuro" | "acento" | "foto", "datos": <la figura de esa lámina, con esta forma: ${FORMA_FIGURA[t.tipo]}>, "css": "<el CSS de la figura>"}`
+
+  const respuesta = await claude(imp, {
+    accountId,
+    model: MODELO_IMPORTAR,
+    system: OFICIO,
+    prompt,
+    bloques,
+    maxTokens: 12000,
+  })
+  const datos = parsearJSONDeClaude(respuesta) as {
+    referencia?: number
+    caja?: unknown
+    fondo?: string
+    datos?: unknown
+    css?: string
+  }
+  const css = String(datos.css ?? "")
+  const caja = cajaValida(datos.caja)
+  const errores = [
+    ...revisarCss(css),
+    ...(css.includes(`.fig-${t.tipo}`) ? [] : [`El CSS no va bajo .fig-${t.tipo}.`]),
+    ...(caja ? [] : ["La caja no es válida: [x1, y1, x2, y2] dentro de la lámina, de al menos 120x60."]),
+  ]
+  if (errores.length) {
+    t.errores = errores
+    t.ronda += 1
+    if (t.ronda >= MAX_INTENTOS_ESCRIBIR) {
+      t.etapa = "fallo"
+      t.error = `No pasó la revisión: ${errores.join(" ")}`
+    }
+    return
+  }
+  t.css = css
+  t.ref = t.referencias.includes(Number(datos.referencia)) ? Number(datos.referencia) : t.referencias[0]
+  t.caja = caja as [number, number, number, number]
+  t.fondo = ["claro", "oscuro", "acento", "foto"].includes(String(datos.fondo)) ? String(datos.fondo) : "claro"
+  t.datos = parseFigura(datos.datos, [t.tipo]) ?? figuraDeMuestra(t.tipo)
+  t.errores = undefined
+  t.ronda = 0
+  t.etapa = "comprobar"
+  anotar(imp, `Figura ${t.tipo}: CSS escrito.`)
+}
+
+async function comprobarFigura(accountId: string, kitId: string, imp: Importacion, kc: KitCargado, t: TareaFigura) {
+  const r = t.ref ? refDe(imp, t.ref) : undefined
+  if (!r || !t.css || !t.caja || !t.datos) throw new Error("Falta la referencia o el CSS de la figura.")
+  const original = await bajar(r.imagen)
+  const color = await fondoAlrededor(original, t.caja)
+  const dibujada = await dibujarFigura(kc, t.css, t.datos, t.caja, color, t.fondo ?? "claro")
+  const [antes, ahora] = await Promise.all([recorte(original, t.caja), recorte(dibujada.png, t.caja)])
+
+  const prompt = `La primera imagen es la figura "${t.tipo}" tal como está en una lámina del kit. La segunda es la misma figura, con los mismos datos, dibujada con el CSS que se escribió para ella.
+Problemas que midió el navegador: ${JSON.stringify(dibujada.problemas)}
+
+CSS actual de la figura:
+${t.css}
+
+Estructura que arma el motor (no cambia):
+${ESTRUCTURA_FIGURA}
+
+Compara con ojo de diseñador: formas, proporciones, colores, tipografía, aire entre elementos, cómo se marca lo resaltado. Puntúa de 0 a 10 lo que se parece (10: no se distinguen). Si es menos de ${PARECIDO_BUENO}, corrige el CSS con las mismas reglas:
+${reglasCssFigura(kc, t, imp)}
+
+Responde con este JSON:
+{"parecido": <0-10>, "diferencias": ["<lo que se ve distinto, concreto>"], "css": "<el CSS corregido, o null si no hace falta>"}`
+  const respuesta = await claude(imp, {
+    accountId,
+    model: MODELO_IMPORTAR,
+    system: OFICIO,
+    prompt,
+    bloques: [
+      { tipo: "texto", texto: "En el kit:" },
+      jpgDe(antes),
+      { tipo: "texto", texto: "Dibujada con el CSS:" },
+      jpgDe(ahora),
+    ],
+    maxTokens: 12000,
+  })
+  const datos = parsearJSONDeClaude(respuesta) as { parecido?: number; diferencias?: string[]; css?: string | null }
+  t.parecido = Math.max(0, Math.min(10, Number(datos.parecido) || 0))
+  t.diferencias = Array.isArray(datos.diferencias) ? datos.diferencias.map(String).slice(0, 8) : []
+  const nuevo = typeof datos.css === "string" ? datos.css : ""
+  if (
+    t.parecido < PARECIDO_BUENO &&
+    t.ronda < MAX_RONDAS_FIGURA &&
+    nuevo.includes(`.fig-${t.tipo}`) &&
+    !revisarCss(nuevo).length
+  ) {
+    t.css = nuevo
+    t.ronda += 1
+    anotar(imp, `Figura ${t.tipo}: parecido ${t.parecido}/10, corregida (ronda ${t.ronda}).`)
+    return
+  }
+  // La figura del kit y la dibujada quedan en el kit para revisarlas.
+  await subirAlKit(accountId, kitId, {
+    papel: `ref_figura_${t.tipo}`,
+    tipo: "referencia",
+    contenido: antes,
+    mime: "image/jpeg",
+    nombre_original: r.origen,
+    meta: { n: r.n, caja: t.caja, figura: t.tipo },
+  })
+  await guardarPrueba(accountId, kitId, `prueba_figura_${t.tipo}`, ahora)
+  anotar(imp, `Figura ${t.tipo}: parecido ${t.parecido}/10 tras ${t.ronda} correcciones.`)
+  t.ronda = 0
+  t.etapa = "estres"
+}
+
+async function estresFigura(accountId: string, kitId: string, imp: Importacion, kc: KitCargado, t: TareaFigura) {
+  const r = t.ref ? refDe(imp, t.ref) : undefined
+  if (!r || !t.css || !t.caja) throw new Error("Falta la referencia o el CSS de la figura.")
+  const color = await fondoAlrededor(await bajar(r.imagen), t.caja)
+  const largo = await dibujarFigura(kc, t.css, figuraDeMuestra(t.tipo, "largo"), t.caja, color, t.fondo ?? "claro")
+  const corto = await dibujarFigura(kc, t.css, figuraDeMuestra(t.tipo, "corto"), t.caja, color, t.fondo ?? "claro")
+  // La de fondo oscuro, si la referencia es clara (y al reves): que sus variantes existan.
+  const otroFondo = t.fondo === "oscuro" ? "claro" : "oscuro"
+  const otroColor = kc.kit.sistema.colores.find((c) => c.papel.toLowerCase().includes(otroFondo === "oscuro" ? "oscur" : "clar"))?.valor
+  const contraste = otroColor
+    ? await dibujarFigura(kc, t.css, t.datos ?? figuraDeMuestra(t.tipo), t.caja, otroColor, otroFondo)
+    : null
+  await guardarPrueba(accountId, kitId, `prueba_figura_${t.tipo}_largo`, await recorte(largo.png, t.caja))
+  if (contraste) await guardarPrueba(accountId, kitId, `prueba_figura_${t.tipo}_${otroFondo}`, await recorte(contraste.png, t.caja))
+  t.problemas = [
+    ...largo.problemas.map((p) => `al límite: ${p.detalle}`),
+    ...corto.problemas.map((p) => `con lo mínimo: ${p.detalle}`),
+  ]
+  const zoom = largo.encogidos.figura
+  anotar(
+    imp,
+    `Figura ${t.tipo}: probada al límite${zoom ? ` (se achica al ${zoom} %)` : ""}${t.problemas.length ? `, ${t.problemas.length} problemas` : ""}.`
+  )
+  t.etapa = "hecha"
+}
+
+/** Lo que sabe quien escribe una plantilla de las figuras del kit. Vacio si el kit no tiene. */
+function bloqueFigurasPlantilla(kc: KitCargado): string {
+  const figuras = figurasDelKit(kc.kit.parciales)
+  if (!figuras.length) return ""
+  return `Figuras del kit: ${figuras.join(", ")}. Las arma el motor con los datos de cada pieza; su CSS ya está escrito y cargado en todas las láminas.
+- Si la referencia tiene una figura (unas barras, una tabla, unos pasos, una encuesta, una caja de comentario...), no la copies ni la dibujes: declara un hueco {"nombre": "figura", "tipo": "figura", "obligatorio": <true si la lámina no se sostiene sin ella>, "descripcion": "<qué figura va bien ahí>"} y pon {{f:figura}} solo dentro de un elemento con data-hueco="figura" y data-min="<letra mínima>". Ese elemento es la caja de la figura: dale el sitio que ocupa en la referencia, con ancho y alto definidos (por ejemplo flex:1 y min-height:0 en una columna, o posición absoluta), sin overflow:hidden. Si la figura no cabe, el motor la achica entera.
+- En esa caja puede caer cualquier figura del kit, no solo la de la referencia.
+- En texto_referencia, "figura" lleva los datos de la figura de la referencia, con la forma de su tipo:
+${figuras.map((f) => `  ${f}: ${FORMA_FIGURA[f]}`).join("\n")}`
 }
 
 // --------------------------------------------------------------- plantillas
@@ -887,7 +1244,7 @@ type Escrita = {
   foto?: Record<string, unknown>
   huecos?: unknown
   html?: string
-  texto_referencia?: { textos?: Record<string, string>; listas?: Record<string, string[]> }
+  texto_referencia?: { textos?: Record<string, string>; listas?: Record<string, string[]>; figura?: unknown }
 }
 
 const refDe = (imp: Importacion, n: number) => imp.referencias.find((r) => r.n === n)
@@ -923,9 +1280,11 @@ ${kc.kit.css}
 Trozos comunes que puedes usar con {{p:nombre}}:
 ${
   Object.entries(kc.kit.parciales)
+    .filter(([k]) => !k.startsWith(PREFIJO_FIGURA))
     .map(([k, v]) => `--- ${k} ---\n${v}`)
     .join("\n") || "(ninguno)"
 }
+${bloqueFigurasPlantilla(kc)}
 
 Archivos del kit para {{a:papel}}: ${papeles.join(", ") || "(ninguno)"}, y {{a:foto}} para la foto de la lámina.
 Sistema visual: ${JSON.stringify(kc.kit.sistema)}
@@ -935,10 +1294,10 @@ ${LENGUAJE}
 Huecos con nombre común (úsalos si encajan; puedes crear otros con su descripción): ${Object.entries(HUECOS_COMUNES)
     .map(([k, v]) => `${k}: ${v}`)
     .join(" | ")}
-- Cada hueco: {"nombre","tipo":"texto"|"lista"|"numero","max":<caracteres que caben sin romper el diseño: el sitio que tiene el hueco en la lámina, no lo que mide el texto de la referencia>,"min_items","max_items" (solo listas),"obligatorio":bool,"resaltado":bool (si el kit resalta palabras en ese texto),"descripcion"}.
+- Cada hueco: {"nombre","tipo":"texto"|"lista"|"numero"|"figura","max":<caracteres que caben sin romper el diseño: el sitio que tiene el hueco en la lámina, no lo que mide el texto de la referencia>,"min_items","max_items" (solo listas),"obligatorio":bool,"resaltado":bool (si el kit resalta palabras en ese texto),"descripcion"}.
 - Si en la referencia cada punto de una lista lleva un título corto y una explicación debajo, el hueco de la lista acepta los dos: el punto llega como "**Título.** explicación" y la plantilla lo enseña así (la negrita sale como <b>). Su max cuenta los dos.
 - Lo que en la referencia es contenido de la pieza va en huecos; lo que se repite igual en todas las láminas del tipo (rótulos fijos de la marca, adornos) va fijo en la plantilla.
-- La foto: si la lámina lleva foto, usa {{a:foto}}; si es opcional, envuélvela en {{?foto}}...{{/foto}}. Di qué foto acepta: usa (no, opcional, obligatoria), uso (portada, fondo, cierre), tono (oscura, clara, cualquiera: según cómo la trata el kit, por ejemplo una mezcla screen sobre negro pide foto oscura), espacio (dónde tiene que quedar aire para el texto), orientacion.
+- La foto: si la lámina lleva foto, usa {{a:foto}}; si es opcional, envuélvela en {{?foto}}...{{/foto}}. Di qué foto acepta: usa (no, opcional, obligatoria), uso (portada, fondo, cierre, o inserto si la foto va dentro de la lámina, en una banda o una tarjeta, y no detrás del texto), tono (oscura, clara, cualquiera: según cómo la trata el kit, por ejemplo una mezcla screen sobre negro pide foto oscura), espacio (dónde tiene que quedar aire para el texto), orientacion.
 
 CSS original de la pieza de la referencia (las url de archivos están como "(archivo)"):
 ${css || "(sin CSS: sácalo de la imagen)"}
@@ -952,7 +1311,7 @@ Responde con este JSON:
   "foto": {"usa": "...", "uso": "...", "tono": "...", "espacio": "...", "orientacion": "..."},
   "huecos": [...],
   "html": "<style>lo propio de esta lámina</style><section ... data-lamina data-seguro=\\"...\\">...</section>",
-  "texto_referencia": {"textos": {"<hueco>": "<el texto exacto de la referencia principal, con *resaltes* donde el kit resalta>"}, "listas": {"<hueco>": ["..."]}}
+  "texto_referencia": {"textos": {"<hueco>": "<el texto exacto de la referencia principal, con *resaltes* donde el kit resalta>"}, "listas": {"<hueco>": ["..."]}${figurasDelKit(kc.kit.parciales).length ? ', "figura": <la figura de la referencia principal en el JSON de su forma, o null>' : ""}}
 }`
 
   const respuesta = await claude(imp, {
@@ -1059,7 +1418,7 @@ async function contextoDe(accountId: string, kitId: string, plantillaId: string)
   const archivoRef = kc.archivos.find((a) => a.id === plantilla.referencia_archivo_id)
   const referencia = archivoRef ? await bajar(archivoRef.ruta) : null
   const prueba = plantilla.prueba as {
-    texto_referencia?: { textos?: Record<string, string>; listas?: Record<string, string[]> }
+    texto_referencia?: { textos?: Record<string, string>; listas?: Record<string, string[]>; figura?: unknown }
     foto_referencia?: string | null
     referencia?: { indice?: number; total?: number }
   }
@@ -1078,7 +1437,7 @@ async function fotoNeutra(): Promise<string> {
 
 const datosDeReferencia = (
   prueba: {
-    texto_referencia?: { textos?: Record<string, string>; listas?: Record<string, string[]> }
+    texto_referencia?: { textos?: Record<string, string>; listas?: Record<string, string[]>; figura?: unknown }
     referencia?: { indice?: number; total?: number }
   },
   foto: string | null
@@ -1088,6 +1447,7 @@ const datosDeReferencia = (
   n: prueba.referencia?.indice ?? 1,
   total: prueba.referencia?.total ?? 7,
   foto,
+  figura: parseFigura(prueba.texto_referencia?.figura),
 })
 
 /** Diferencia media por pixel (0 a 255) entre dos imagenes, a media resolucion. */
@@ -1130,7 +1490,7 @@ ${plantilla.html}
 CSS común del kit:
 ${kc.kit.css}
 
-Compara con ojo de diseñador: composición, márgenes, tamaños y pesos de letra, colores, tratamiento de la foto, adornos. Puntúa de 0 a 10 lo que se parece (10: no se distinguen). Si es menos de ${PARECIDO_BUENO}, corrige el HTML de la plantilla (mismas reglas y mismos huecos; no toques el CSS común).
+Compara con ojo de diseñador: composición, márgenes, tamaños y pesos de letra, colores, tratamiento de la foto, adornos. Puntúa de 0 a 10 lo que se parece (10: no se distinguen). Si es menos de ${PARECIDO_BUENO}, corrige el HTML de la plantilla (mismas reglas y mismos huecos; no toques el CSS común ni el de las figuras: si hay una figura, la arma el motor y tú solo mueves su caja).
 ${LENGUAJE}
 
 Responde con este JSON:
@@ -1193,19 +1553,36 @@ function alargar(base: string, largo: number): string {
 function textosDePrueba(
   huecos: Hueco[],
   ref: DatosLamina,
-  modo: "largo" | "corto"
-): Pick<DatosLamina, "textos" | "listas"> {
+  modo: "largo" | "corto",
+  figurasKit: TipoFigura[] = []
+): Pick<DatosLamina, "textos" | "listas" | "figura"> {
   const textos: Record<string, string> = {}
   const listas: Record<string, string[]> = {}
+  let figura: Figura | null = null
   for (const h of huecos) {
+    if (h.tipo === "figura") {
+      // La figura de la referencia, al limite o con lo minimo.
+      const tipo = ref.figura?.tipo ?? figurasKit[0]
+      if (tipo && (modo === "largo" || h.obligatorio)) figura = figuraDeMuestra(tipo, modo)
+      continue
+    }
     if (h.tipo === "lista") {
       const base = ref.listas[h.nombre] ?? []
       const n = modo === "largo" ? (h.max_items ?? 5) : (h.min_items ?? 2)
-      listas[h.nombre] = Array.from({ length: n }, (_, i) =>
-        modo === "largo"
-          ? alargar(base[i % Math.max(1, base.length)] ?? "", h.max)
-          : base[i]?.replace(/\*/g, "").split(/\s+/).slice(0, 2).join(" ") || "Punto"
-      )
+      listas[h.nombre] = Array.from({ length: n }, (_, i) => {
+        const punto = base[i % Math.max(1, base.length)] ?? ""
+        if (modo === "corto") return base[i]?.replace(/\*/g, "").split(/\s+/).slice(0, 2).join(" ") || "Punto"
+        // Con la misma forma que la referencia: si sus puntos llevan una parte
+        // en **negrita** (que el kit suele poner en su propia linea), el de
+        // prueba tambien, o la prueba mide menos lineas de las que salen.
+        const negrita = /\*\*([^*]+)\*\*/.exec(punto)
+        if (!negrita) return alargar(punto, h.max)
+        const antes = punto.slice(0, negrita.index).replace(/\*/g, "").trim()
+        const despues = punto.slice(negrita.index + negrita[0].length).replace(/\*/g, "").trim()
+        const titulo = alargar(negrita[1], Math.min(h.max, Math.round(negrita[1].length * 1.3)))
+        const resto = Math.max(0, h.max - titulo.length - antes.length - 2)
+        return [antes, `**${titulo}**`, alargar(despues || negrita[1], resto)].filter(Boolean).join(" ")
+      })
       continue
     }
     const base = ref.textos[h.nombre] ?? h.descripcion
@@ -1228,46 +1605,60 @@ function textosDePrueba(
           : largo
     }
   }
-  return { textos, listas }
+  return { textos, listas, figura }
 }
 
 async function estres(accountId: string, kitId: string, imp: Importacion, t: TareaPlantilla) {
   if (!t.plantilla_id) throw new Error("La plantilla no se guardó.")
   const { kc, plantilla, foto, prueba } = await contextoDe(accountId, kitId, t.plantilla_id)
   const ref = datosDeReferencia(prueba, foto)
+  const figurasKit = figurasDelKit(kc.kit.parciales)
   let huecos = plantilla.huecos
+  // El maximo con que se escribio cada hueco: ninguno baja de un 60 % de el.
+  // Lo que no cabe ni asi es un choque de la plantilla y queda en la prueba.
+  const original: Record<string, number> = {
+    ...Object.fromEntries(huecos.map((h) => [h.nombre, h.max])),
+    ...((plantilla.prueba.max_original as Record<string, number> | undefined) ?? {}),
+  }
   const ajustes: string[] = []
   let largo = await dibujarLaminas(
-    [await armarLamina(kc, plantilla, { ...ref, ...textosDePrueba(huecos, ref, "largo") })],
+    [await armarLamina(kc, plantilla, { ...ref, ...textosDePrueba(huecos, ref, "largo", figurasKit) })],
     { ancho: ANCHO, alto: ALTO }
   )
   // Si con el maximo algo no cabe, se baja el maximo de ese hueco y se vuelve a medir.
   for (let vuelta = 0; vuelta < 5 && largo[0].problemas.length; vuelta++) {
-    const culpables = new Set(largo[0].problemas.map((p) => p.hueco))
+    // En un choque cuentan los dos huecos; si uno es una lista, se acorta la
+    // lista, que es la que empuja a lo de abajo.
+    const nombres = new Set(huecos.map((h) => h.nombre))
+    const culpables = new Set(
+      largo[0].problemas.flatMap((p) => {
+        const otro = /^con (\S+)/.exec(p.detalle)?.[1]
+        return otro && nombres.has(otro) ? [p.hueco, otro] : [p.hueco]
+      })
+    )
+    const soloListas = huecos.some((h) => h.tipo === "lista" && culpables.has(h.nombre))
     let cambio = false
     huecos = huecos.map((h) => {
-      if (!culpables.has(h.nombre)) return h
+      if (!culpables.has(h.nombre) || h.tipo === "figura" || (soloListas && h.tipo !== "lista")) return h
       if (h.tipo === "lista" && (h.max_items ?? 0) > (h.min_items ?? 1) && vuelta % 2 === 1) {
         cambio = true
         ajustes.push(`${h.nombre}: ${h.max_items} → ${(h.max_items ?? 2) - 1} puntos`)
         return { ...h, max_items: (h.max_items ?? 2) - 1 }
       }
-      const max = Math.max(4, Math.floor(h.max * 0.85))
-      // Un hueco ya en su minimo no se arregla acortando: el choque es de la
-      // plantilla y queda en la prueba para que la persona lo vea.
-      if (max === h.max) return h
+      const max = Math.max(4, Math.ceil((original[h.nombre] ?? h.max) * 0.6), Math.floor(h.max * 0.85))
+      if (max >= h.max) return h
       cambio = true
       ajustes.push(`${h.nombre}: ${h.max} → ${max} caracteres`)
       return { ...h, max }
     })
     if (!cambio) break
     largo = await dibujarLaminas(
-      [await armarLamina(kc, { ...plantilla, huecos }, { ...ref, ...textosDePrueba(huecos, ref, "largo") })],
+      [await armarLamina(kc, { ...plantilla, huecos }, { ...ref, ...textosDePrueba(huecos, ref, "largo", figurasKit) })],
       { ancho: ANCHO, alto: ALTO }
     )
   }
   const corto = await dibujarLaminas(
-    [await armarLamina(kc, { ...plantilla, huecos }, { ...ref, ...textosDePrueba(huecos, ref, "corto") })],
+    [await armarLamina(kc, { ...plantilla, huecos }, { ...ref, ...textosDePrueba(huecos, ref, "corto", figurasKit) })],
     { ancho: ANCHO, alto: ALTO }
   )
   await guardarPrueba(accountId, kitId, `prueba_${t.clave}_largo`, largo[0].png)
@@ -1276,6 +1667,7 @@ async function estres(accountId: string, kitId: string, imp: Importacion, t: Tar
     huecos,
     prueba: {
       ...plantilla.prueba,
+      max_original: original,
       ajustes,
       problemas_largo: largo[0].problemas,
       problemas_corto: corto[0].problemas,
@@ -1284,6 +1676,41 @@ async function estres(accountId: string, kitId: string, imp: Importacion, t: Tar
   })
   anotar(imp, `${t.clave}: probada con textos al límite${ajustes.length ? ` (${ajustes.length} ajustes)` : ""}.`)
   t.etapa = "hecha"
+}
+
+/**
+ * Vuelve a probar una plantilla con textos al limite, sin Claude: ajusta sus
+ * maximos a lo que de verdad cabe y guarda las pruebas nuevas. Para cuando
+ * cambia como se prueba, o el CSS de las figuras.
+ */
+export async function reprobarPlantilla(accountId: string, plantillaId: string): Promise<Plantilla> {
+  const { data } = await supabaseAdmin()
+    .from("brand_kit_plantillas")
+    .select("kit_id")
+    .eq("account_id", accountId)
+    .eq("id", plantillaId)
+    .single()
+  if (!data) throw new Error("No se encontró la plantilla.")
+  const kitId = String(data.kit_id)
+  const kc = await cargarKit(accountId, kitId)
+  const plantilla = kc?.plantillas.find((p) => p.id === plantillaId)
+  if (!kc || !plantilla) throw new Error("No se encontró la plantilla.")
+  const clave =
+    kc.archivos.find((a) => a.id === plantilla.referencia_archivo_id)?.papel.replace(/^ref_/, "") ??
+    `${plantilla.tipo}_${plantillaId.slice(0, 6)}`
+  const imp: Importacion = parseImportacion({ paso: "listo" })!
+  await estres(accountId, kitId, imp, {
+    clave,
+    tipo: plantilla.tipo,
+    nombre: plantilla.nombre,
+    cuando_usar: plantilla.cuando_usar,
+    cta_tipos: plantilla.cta_tipos,
+    referencias: [],
+    plantilla_id: plantillaId,
+    etapa: "estres",
+    ronda: 0,
+  })
+  return (await cargarKit(accountId, kitId))?.plantillas.find((p) => p.id === plantillaId) ?? plantilla
 }
 
 // ------------------------------------------------------------------ cerrar
