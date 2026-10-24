@@ -209,7 +209,7 @@ function subir(ruta: string, contenido: Buffer, mime: string): Promise<void> {
 
 /** Llama a Claude y suma lo gastado a la importacion. Lanza si falla. */
 async function claude(imp: Importacion, opciones: LlamadaClaude): Promise<string> {
-  const r = await llamarClaude({ timeoutMs: 230_000, ...opciones })
+  const r = await llamarClaude({ paso: "kit-importar", timeoutMs: 230_000, ...opciones })
   if (!r.ok) throw new Error(r.error)
   imp.tokens.entrada += r.uso.entrada
   imp.tokens.salida += r.uso.salida

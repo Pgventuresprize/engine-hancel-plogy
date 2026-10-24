@@ -115,7 +115,7 @@ ${cubiertos || "(ninguno)"}
 CANDIDATOS
 ${candidatos}`
 
-  const r = await llamarClaude({ accountId, model, system: SYSTEM, prompt, maxTokens: 1000 })
+  const r = await llamarClaude({ paso: "repetidas", accountId, model, system: SYSTEM, prompt, maxTokens: 1000 })
   if (!r.ok) throw new Error(`No se pudo comparar los hechos: ${r.error}`)
 
   const bruto = parsearJSONDeClaude(r.texto) as Bruto

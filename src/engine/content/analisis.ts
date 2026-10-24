@@ -305,7 +305,7 @@ export async function analizarUna(
 
 ${bloqueMaterial(articulo, busqueda.ok ? busqueda.texto : null, citadas)}`
 
-  const r = await llamarClaude({
+  const r = await llamarClaude({ paso: "analisis",
     accountId,
     model,
     system,

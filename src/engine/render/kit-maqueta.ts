@@ -186,7 +186,7 @@ export async function maquetar(
   const automaticas = laminasDeGuionClasico(slides, g.antetitulo, g.cierre)
   const { texto: cat, porClave } = catalogo(kc.plantillas)
   const ritmo = kc.kit.sistema.ritmo.length ? `\nRitmo de fondos del kit: ${kc.kit.sistema.ritmo.join(", ")}.` : ""
-  const r = await llamarClaude({
+  const r = await llamarClaude({ paso: "maquetador",
     accountId,
     model: modelo,
     esfuerzo,

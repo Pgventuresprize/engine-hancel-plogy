@@ -92,7 +92,7 @@ export async function probarConexionClaude(): Promise<
 > {
   const { llamarClaude } = await import("@/engine/claude/messages")
   const modelo = "claude-haiku-4-5-20251001"
-  const r = await llamarClaude({
+  const r = await llamarClaude({ paso: "probar-conexion",
     accountId: await cuenta(),
     model: modelo,
     system: "Responde de la forma mas breve posible.",

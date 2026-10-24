@@ -178,7 +178,7 @@ export async function extraerEjemplos(
   const [editorial, perfil, existentes] = await Promise.all([identidadEditorial(accountId), perfilDe(accountId), ejemplosDe(accountId)])
   const avisos: string[] = []
 
-  const indice = await llamarClaude({
+  const indice = await llamarClaude({ paso: "importar-ejemplos",
     accountId,
     model: MODELO,
     system: SISTEMA_INDICE,
@@ -207,7 +207,7 @@ export async function extraerEjemplos(
     const prompt = trozo
       ? `<pieza>\n${trozo}\n</pieza>`
       : `Del archivo de abajo, toma solo la pieza «${p.nombre}» (${p.red}).\n\n<archivo>\n${texto}\n</archivo>`
-    const r = await llamarClaude({ accountId, model: MODELO, system: sistema, prompt, maxTokens: 6000, timeoutMs: 180_000 })
+    const r = await llamarClaude({ paso: "importar-ejemplos", accountId, model: MODELO, system: sistema, prompt, maxTokens: 6000, timeoutMs: 180_000 })
     if (!r.ok) {
       avisos.push(`No se pudo leer «${p.nombre}»: ${r.error}`)
       return null

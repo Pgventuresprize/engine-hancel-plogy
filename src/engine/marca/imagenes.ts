@@ -380,7 +380,7 @@ export async function etiquetasDeImagen(
   nombre: string,
   marca: string
 ): Promise<Etiquetas | null> {
-  const r = await llamarClaude({
+  const r = await llamarClaude({ paso: "fotos-etiquetas",
     accountId,
     model: MODELO_IMAGENES,
     system: SISTEMA_ETIQUETAR,
@@ -709,7 +709,7 @@ export async function asignarConClaude(
       return `- Candidata ${i + 1}: ${c.descripcion || "(sin descripcion)"} | sirve para: ${c.usos_sugeridos.join(", ") || "sin indicar"} | espacio para texto: ${c.espacio_texto ?? "?"} | ${c.orientacion}${c.personas ? " | con personas" : ""}${tono ? ` | ${tono} (luminosidad ${c.luminosidad}/100)` : ""}`
     })
     .join("\n")
-  const r = await llamarClaude({
+  const r = await llamarClaude({ paso: "fotos-asignar",
     accountId,
     model: MODELO_IMAGENES,
     system: SISTEMA_ELEGIR,

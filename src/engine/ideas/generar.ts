@@ -214,7 +214,7 @@ export async function generarRonda(
     // cortado. Y si aun asi llega roto, se pide otra vez antes de rendirse.
     let bruto: { ideas?: unknown } | null = null
     for (let intento = 0; intento < 2 && !bruto; intento++) {
-      const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: 7000 })
+      const r = await llamarClaude({ paso: "ideas", accountId, model, system, prompt, maxTokens: 7000 })
       if (!r.ok) return { pillarId, generadas: aInsertar.length, ronda, uso, error: r.error }
       uso.entrada += r.uso.entrada
       uso.salida += r.uso.salida

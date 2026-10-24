@@ -52,7 +52,7 @@ export async function corregirTextos(accountId: string, textos: string[]): Promi
 
   const aCorregir = indices.map((i) => textos[i])
   try {
-    const r = await llamarClaude({
+    const r = await llamarClaude({ paso: "estudio-ortografia",
       accountId,
       model: MODELO_CORRECTOR,
       system: CORRECTOR_SYSTEM,

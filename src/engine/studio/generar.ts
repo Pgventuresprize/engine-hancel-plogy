@@ -171,7 +171,7 @@ Recuerda: todo lo que escribas lleva sus tildes y sus eñes, aunque la idea de a
   // Data-viz necesita datos reales: el agente los busca en la web en la misma
   // llamada y los cita. Los demas estilos no buscan nada.
   const buscar = Boolean(estilo && conEstilo && (estilo.tipo === "dataviz" || estilo.tipo === "infodatos"))
-  const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: buscar ? 6000 : 4000, buscarWeb: buscar, maxBusquedas: 5 })
+  const r = await llamarClaude({ paso: "estudio", accountId, model, system, prompt, maxTokens: buscar ? 6000 : 4000, buscarWeb: buscar, maxBusquedas: 5 })
   if (!r.ok) throw new Error(r.error)
 
   const bruto = parsearJSONDeClaude(r.texto) as Record<string, unknown>

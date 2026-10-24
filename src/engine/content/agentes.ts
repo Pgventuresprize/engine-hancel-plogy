@@ -253,7 +253,7 @@ ${bloqueVariables(input.variables)}
 
 ${bloqueParaClasificar(editorial)}`
 
-  const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: 1000 })
+  const r = await llamarClaude({ paso: "angulo", accountId, model, system, prompt, maxTokens: 1000 })
   if (!r.ok) throw new Error(r.error)
   let bruto = parsearJSONDeClaude(r.texto)
   let uso = r.uso
@@ -264,7 +264,7 @@ ${bloqueParaClasificar(editorial)}`
   const material = materialDe(n)
   const alcance = alcanceDelAngulo(bruto, material)
   if (alcance.length > 0) {
-    const otra = await llamarClaude({ accountId, model, system, prompt: promptDeCorreccion(prompt, bruto, alcance), maxTokens: 1000 })
+    const otra = await llamarClaude({ paso: "angulo", accountId, model, system, prompt: promptDeCorreccion(prompt, bruto, alcance), maxTokens: 1000 })
     if (otra.ok) {
       uso = sumarUso(uso, otra.uso)
       try {
@@ -363,7 +363,7 @@ async function escribirLinkedin(
   ctx: ContextoRevision,
   longitud: string
 ): Promise<{ version: PostEscrito; hallazgos: Hallazgo[]; arreglos: Arreglo[]; uso: UsoClaude }> {
-  const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: 1800 })
+  const r = await llamarClaude({ paso: "linkedin", accountId, model, system, prompt, maxTokens: 1800 })
   if (!r.ok) throw new Error(r.error)
 
   // El post llega como parrafos y se arma aqui: asi Claude nunca mete saltos de
@@ -801,7 +801,7 @@ export async function generarInstagram(
   const decidido = await conCriterio(accountId, input)
   input = decidido.input
   const prompt = promptInstagram(input)
-  const r = await llamarClaude({ accountId, model, system, prompt, maxTokens: MAX_TOKENS_INSTAGRAM })
+  const r = await llamarClaude({ paso: "instagram", accountId, model, system, prompt, maxTokens: MAX_TOKENS_INSTAGRAM })
   if (!r.ok) throw new Error(r.error)
 
   const ctx = await contextoDeRevision(accountId, input)
@@ -829,7 +829,7 @@ export async function corregirCarrusel(
   const contexto = ctx ?? (await contextoDeRevision(accountId, input))
   const prompt = promptInstagram(input)
   const r = await corregirEnVueltas(anterior, origen, async (pedido, version) => {
-    const respuesta = await llamarClaude({
+    const respuesta = await llamarClaude({ paso: "instagram-correccion",
       accountId,
       model,
       system,

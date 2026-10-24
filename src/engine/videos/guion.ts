@@ -173,7 +173,7 @@ export async function escribirGuion(videoId: string): Promise<{ ok: true } | { o
   const capas: Capas = v.capas ?? { pilar: null, tema: null, subtema: null, intencion: null, narrativa: null, nota: null }
   // Un guion de siete escenas detalladas es una respuesta larga: hasta cuatro
   // minutos y tokens de sobra.
-  const r = await llamarClaude({
+  const r = await llamarClaude({ paso: "video-guion",
     accountId: v.account_id,
     model: a.model,
     system: await promptGuion(v.account_id, a),

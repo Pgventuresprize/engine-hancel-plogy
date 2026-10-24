@@ -291,7 +291,7 @@ Diseña las ${total} láminas.`
 }
 
 async function pedirDiseno(ctx: ContextoLibre, prompt: string, bloques: Bloque[], timeoutMs: number): Promise<Partes> {
-  const r = await llamarClaude({
+  const r = await llamarClaude({ paso: "diseno-libre",
     accountId: ctx.accountId,
     model: ctx.modelo,
     esfuerzo: ctx.esfuerzo,
@@ -403,7 +403,7 @@ export async function criticarDiseno(ctx: ContextoLibre, dibujadas: LaminaDibuja
     { tipo: "texto", texto: "El carrusel nuevo, láminas en orden (de izquierda a derecha y de arriba abajo):" },
     { tipo: "imagen", mime: "image/jpeg", datos: await tira(dibujadas) }
   )
-  const r = await llamarClaude({
+  const r = await llamarClaude({ paso: "diseno-critico",
     accountId: ctx.accountId,
     model: ctx.modelo,
     esfuerzo: "low",

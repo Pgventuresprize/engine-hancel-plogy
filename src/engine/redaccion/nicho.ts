@@ -39,7 +39,7 @@ export async function nichoDeNoticia(
   const respaldo = nichos.find((n) => n.slug === noticia.nichoBusqueda) ?? null
   if (nichos.length === 1) return { slug: nichos[0].slug, nombre: nichos[0].nombre }
 
-  const r = await llamarClaude({
+  const r = await llamarClaude({ paso: "redaccion-nicho",
     accountId,
     model: MODELO,
     system: `Clasificas una noticia en exactamente UNO de los nichos que se te dan: el que mejor describe de que trata la noticia (el producto, la actividad o el asunto principal), no por donde se encontro. Si dos aplican, elige el del asunto central del titular.

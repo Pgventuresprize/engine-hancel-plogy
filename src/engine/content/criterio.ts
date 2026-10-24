@@ -99,7 +99,7 @@ export async function decidirCriterio(
   let uso: UsoClaude | null = null
   let error = ""
   for (let intento = 0; intento < 2; intento++) {
-    const r = await llamarClaude({ accountId, model: modelo, system, prompt, maxTokens: MAX_TOKENS_CRITERIO, timeoutMs: TIMEOUT_CRITERIO_MS })
+    const r = await llamarClaude({ paso: "criterio", accountId, model: modelo, system, prompt, maxTokens: MAX_TOKENS_CRITERIO, timeoutMs: TIMEOUT_CRITERIO_MS })
     if (!r.ok) {
       error = r.error
       continue

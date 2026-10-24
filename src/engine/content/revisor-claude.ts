@@ -226,7 +226,7 @@ export async function revisarConClaude(o: {
   let uso: UsoClaude | null = null
   let error = ""
   for (let intento = 0; intento < 2; intento++) {
-    const r = await llamarClaude({
+    const r = await llamarClaude({ paso: "revisor",
       accountId: o.accountId,
       model: modelo,
       system,

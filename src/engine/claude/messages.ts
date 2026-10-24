@@ -1,4 +1,5 @@
 import { secretosDe } from "../secretos"
+import { supabaseAdmin } from "../supabase-admin"
 
 /**
  * Llamada directa a Claude con el token de tu cuenta.
@@ -65,6 +66,8 @@ export type LlamadaClaude = {
    * Sin el, el valor por defecto del modelo.
    */
   esfuerzo?: "low" | "medium" | "high" | "xhigh" | "max"
+  /** Que paso hace la llamada ("instagram", "diseno-libre"...). Con el se cuenta el gasto por paso. */
+  paso?: string
 }
 
 export type Bloque =
@@ -109,6 +112,32 @@ export async function tokenClaude(accountId: string): Promise<string | null> {
   // terminal al partir la linea al copiarlo.
   const token = (await secretosDe(accountId)).claude_oauth_token?.replace(/\s+/g, "")
   return token ? token : null
+}
+
+/**
+ * Deja constancia de lo que gasto una llamada, en `pipeline_events` con kind
+ * "claude.uso": una fila por llamada, con el paso, el modelo y los tokens. Asi se
+ * puede sumar el gasto por paso y por pieza sin tabla nueva. Nunca lanza:
+ * perder la cuenta no puede tumbar la llamada que ya se pago.
+ */
+async function anotarUso(
+  opciones: LlamadaClaude,
+  uso: UsoClaude,
+  extra: { cacheEscrita: number; busquedas: number; ms: number; sinTexto: boolean }
+): Promise<void> {
+  try {
+    await supabaseAdmin()
+      .from("pipeline_events")
+      .insert({
+        account_id: opciones.accountId,
+        run_id: null,
+        kind: "claude.uso",
+        label: opciones.paso ?? "sin paso",
+        detail: { paso: opciones.paso ?? null, modelo: opciones.model, ...uso, ...extra },
+      })
+  } catch {
+    // Silencio deliberado.
+  }
 }
 
 /**
@@ -167,6 +196,7 @@ export async function llamarClaude(opciones: LlamadaClaude): Promise<ResultadoCl
   // de salida donde Sonnet usa 900).
   const piensaSiempre = opciones.model.includes("opus-5-5")
 
+  const inicio = Date.now()
   try {
     const body: Record<string, unknown> = {
       model: opciones.model,
@@ -228,6 +258,7 @@ export async function llamarClaude(opciones: LlamadaClaude): Promise<ResultadoCl
         output_tokens?: number
         cache_creation_input_tokens?: number
         cache_read_input_tokens?: number
+        server_tool_use?: { web_search_requests?: number }
       }
     }
     const texto = (datos.content ?? [])
@@ -236,19 +267,24 @@ export async function llamarClaude(opciones: LlamadaClaude): Promise<ResultadoCl
       .join("")
       .trim()
 
-    if (!texto) return { ok: false, error: "Claude respondio sin texto." }
-    return {
-      ok: true,
-      texto,
-      uso: {
-        entrada:
-          (datos.usage?.input_tokens ?? 0) +
-          (datos.usage?.cache_creation_input_tokens ?? 0) +
-          (datos.usage?.cache_read_input_tokens ?? 0),
-        salida: datos.usage?.output_tokens ?? 0,
-        deCache: datos.usage?.cache_read_input_tokens ?? 0,
-      },
+    const uso: UsoClaude = {
+      entrada:
+        (datos.usage?.input_tokens ?? 0) +
+        (datos.usage?.cache_creation_input_tokens ?? 0) +
+        (datos.usage?.cache_read_input_tokens ?? 0),
+      salida: datos.usage?.output_tokens ?? 0,
+      deCache: datos.usage?.cache_read_input_tokens ?? 0,
     }
+    // Se anota aunque no haya texto: los tokens se gastaron igual.
+    await anotarUso(opciones, uso, {
+      cacheEscrita: datos.usage?.cache_creation_input_tokens ?? 0,
+      busquedas: datos.usage?.server_tool_use?.web_search_requests ?? 0,
+      ms: Date.now() - inicio,
+      sinTexto: !texto,
+    })
+
+    if (!texto) return { ok: false, error: "Claude respondio sin texto." }
+    return { ok: true, texto, uso }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     return { ok: false, error: message }

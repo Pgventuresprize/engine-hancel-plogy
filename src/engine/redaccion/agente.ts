@@ -200,13 +200,13 @@ export async function redactarNoticia(
   // Una respuesta con el JSON roto (unas comillas sin escapar dentro de una
   // cita) es rara pero pasa: se pide otra vez antes de dar la redaccion por
   // fallida.
-  let r = await llamarClaude({ accountId, model, system, prompt: JSON.stringify(entrada, null, 1), maxTokens: 8000, timeoutMs: 240_000 })
+  let r = await llamarClaude({ paso: "redaccion", accountId, model, system, prompt: JSON.stringify(entrada, null, 1), maxTokens: 8000, timeoutMs: 240_000 })
   if (!r.ok) throw new Error(r.error)
   let bruto: unknown
   try {
     bruto = parsearJSONDeClaude(r.texto)
   } catch {
-    r = await llamarClaude({ accountId, model, system, prompt: JSON.stringify(entrada, null, 1), maxTokens: 8000, timeoutMs: 240_000 })
+    r = await llamarClaude({ paso: "redaccion", accountId, model, system, prompt: JSON.stringify(entrada, null, 1), maxTokens: 8000, timeoutMs: 240_000 })
     if (!r.ok) throw new Error(r.error)
     bruto = parsearJSONDeClaude(r.texto)
   }
@@ -221,7 +221,7 @@ export async function redactarNoticia(
   // paso. Hasta tres veces; se queda la que mas se acerque al rango.
   const fuera = (x: Redaccion) => x.status === "ok" && (x.word_count > MAX_PALABRAS || x.word_count < MIN_PALABRAS)
   for (let i = 0; i < 3 && fuera(redaccion); i++) {
-    const otra = await llamarClaude({
+    const otra = await llamarClaude({ paso: "redaccion",
       accountId,
       model,
       system,

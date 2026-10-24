@@ -20,7 +20,7 @@ export type Punto = { x: number; y: number }
 
 export async function ubicarPartes(accountId: string, imagen: string, partes: string[], contexto: string): Promise<(Punto | null)[]> {
   if (partes.length === 0) return []
-  const r = await llamarClaude({
+  const r = await llamarClaude({ paso: "estudio-ubicar",
     accountId,
     model: MODELO,
     system: SYSTEM,
