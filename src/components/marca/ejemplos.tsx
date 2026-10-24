@@ -17,6 +17,7 @@ import {
   NOMBRE_RED_EJEMPLO,
   REDES_EJEMPLO,
   TOPES_EJEMPLO,
+  topeDeTexto,
   type CamposEjemplo,
   type Ejemplo,
 } from "@/engine/marca/ejemplos-modelo"
@@ -277,15 +278,15 @@ function EditorEjemplo({
         <div className="flex items-baseline justify-between gap-3">
           <Label htmlFor={id("texto")}>La pieza</Label>
           <span
-            className={`text-xs tabular-nums ${v.texto.length > TOPES_EJEMPLO.texto * 0.9 ? "text-amber-600" : "text-muted-foreground"}`}
+            className={`text-xs tabular-nums ${v.texto.length > topeDeTexto(v.red) * 0.9 ? "text-amber-600" : "text-muted-foreground"}`}
           >
-            {v.texto.length} / {TOPES_EJEMPLO.texto}
+            {v.texto.length} / {topeDeTexto(v.red)}
           </span>
         </div>
         <Textarea
           id={id("texto")}
           rows={16}
-          maxLength={TOPES_EJEMPLO.texto}
+          maxLength={topeDeTexto(v.red)}
           value={v.texto}
           placeholder={"Lámina 1: …\nLámina 2: título. Cuerpo.\n…\nCierre: …\nCaption: …\nHashtags: …"}
           onChange={(e) => f.set("texto", e.target.value)}

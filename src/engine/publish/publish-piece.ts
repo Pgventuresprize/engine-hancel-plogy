@@ -21,6 +21,11 @@ import { buildCommentary, publishText, subirImagen, type PublishResult } from ".
 export async function publishPiece(pieceId: string): Promise<PublishResult> {
   const supabase = supabaseAdmin()
 
+  // El recurso sale antes que la pieza: un carrusel que pide comentar una
+  // palabra sin el recurso publicado deja a quien comenta sin nada que leer.
+  const falta = await recursoSinPublicar(pieceId)
+  if (falta) return { ok: false, error: falta }
+
   // Reclamo atomico ANTES de publicar. El error anterior era un check-then-act:
   // se leia published_at, se veia null, se publicaba y despues se marcaba. Los
   // triggers disparan varios ticks casi a la vez, y todos veian null antes de
@@ -169,6 +174,31 @@ async function publicarEnFacebook(piece: ContentPiece): Promise<PublishResult> {
  * Por orden de creacion, que es el orden en que se generaron: si una tanda no da
  * para todas, las mas viejas salen primero.
  */
+/**
+ * Si la pieza promete un recurso que aun no esta en la web, el motivo. Solo
+ * frena las piezas que se escribieron con su recurso (lo dice el input de su
+ * buzon): un recurso escrito despues, a mano, no frena piezas que no lo piden.
+ */
+export async function recursoSinPublicar(pieceId: string): Promise<string | null> {
+  const supabase = supabaseAdmin()
+  const { data: pieza } = await supabase.from("content_pieces").select("job_instagram_id, job_linkedin_id").eq("id", pieceId).maybeSingle()
+  const p = pieza as { job_instagram_id: string | null; job_linkedin_id: string | null } | null
+  if (!p) return null
+  const [tabla, jobId] = p.job_instagram_id ? ["jobs_instagram", p.job_instagram_id] : ["jobs_linkedin", p.job_linkedin_id]
+  if (!jobId) return null
+  const { data: job } = await supabase.from(tabla).select("input").eq("id", jobId).maybeSingle()
+  const recursoId = (job as { input?: { recurso?: { id?: string } | null } } | null)?.input?.recurso?.id
+  if (!recursoId) return null
+  const { data, error } = await supabase.from("content_recursos").select("status, web_url").eq("id", recursoId).maybeSingle()
+  if (error || !data) return null
+  const r = data as { status: string; web_url: string | null }
+  if (r.status === "descartado") return "La pieza pide comentar la palabra de un recurso que se descartó: regenérala o cambia el cierre antes de publicarla."
+  if (r.web_url) return null
+  return r.status === "aprobado"
+    ? "Su recurso está aprobado pero todavía no tiene dirección en la web: espera a que el portal lo reciba."
+    : "Publica primero su recurso: apruébalo en la pestaña Recurso de la ficha para que salga a la web."
+}
+
 export async function pendingToPublish(
   accountId: string,
   network: string,

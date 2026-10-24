@@ -15,6 +15,7 @@ import { datosParaPrompt, type DatosParaPrompt } from "../marca/prompt"
 import { CRITERIO_CONTRATO, CRITERIO_OFICIO } from "../content/criterio"
 import { REVISOR_CONTRATO, REVISOR_OFICIO } from "../content/revisor-claude"
 import { REDACCION_CONTRATO, REDACCION_OFICIO } from "../redaccion/agente"
+import { RECURSO_CONTRATO, RECURSO_OFICIO } from "../recursos/escritor"
 import { armarPorPiezas, textoDelPrompt, type Exigencia, type PiezaDeOficio, type PromptPorPiezas } from "./armador"
 import { ajustesDe, type Agente } from "./settings"
 
@@ -39,7 +40,7 @@ import { ajustesDe, type Agente } from "./settings"
  */
 
 /** Los agentes que hablan con Claude. Extraccion y publicacion no tienen prompt. */
-export const AGENTES_CON_PROMPT = ["analisis", "angulo", "instagram", "linkedin", "criterio", "revisor", "redaccion"] as const
+export const AGENTES_CON_PROMPT = ["analisis", "angulo", "recursos", "instagram", "linkedin", "criterio", "revisor", "redaccion"] as const
 export type AgenteConPrompt = (typeof AGENTES_CON_PROMPT)[number]
 
 /**
@@ -51,6 +52,7 @@ export type AgenteConPrompt = (typeof AGENTES_CON_PROMPT)[number]
 export const PROMPT_DE_FABRICA: Record<AgenteConPrompt, string> = {
   analisis: ANALISIS_OFICIO,
   angulo: ANGULO_OFICIO,
+  recursos: RECURSO_OFICIO,
   instagram: INSTAGRAM_OFICIO,
   linkedin: LINKEDIN_OFICIO,
   criterio: CRITERIO_OFICIO,
@@ -67,6 +69,7 @@ export const PROMPT_DE_FABRICA: Record<AgenteConPrompt, string> = {
 export const CONTRATO: Record<AgenteConPrompt, string | ((datos: DatosParaPrompt) => string)> = {
   analisis: ANALISIS_CONTRATO,
   angulo: ANGULO_CONTRATO,
+  recursos: RECURSO_CONTRATO,
   instagram: ({ perfil, listas, kit, figuras }) => contratoInstagram(perfil, listas === true, kit ?? [], figuras ?? []),
   linkedin: ({ perfil }) => contratoLinkedin(perfil),
   criterio: CRITERIO_CONTRATO,
@@ -77,6 +80,7 @@ export const CONTRATO: Record<AgenteConPrompt, string | ((datos: DatosParaPrompt
 export const PIEZAS_DE_OFICIO: Record<AgenteConPrompt, PiezaDeOficio[]> = {
   analisis: [],
   angulo: [],
+  recursos: [],
   instagram: PIEZAS_INSTAGRAM,
   linkedin: [],
   criterio: [],
@@ -87,7 +91,7 @@ export const PIEZAS_DE_OFICIO: Record<AgenteConPrompt, PiezaDeOficio[]> = {
 const EXIGENCIAS: Partial<Record<AgenteConPrompt, Exigencia>> = { instagram: exigirInstagram }
 
 /** Los agentes que leen ejemplos, y de que red. */
-const RED_DE_EJEMPLOS: Partial<Record<AgenteConPrompt, RedEjemplo>> = { instagram: "instagram", linkedin: "linkedin" }
+const RED_DE_EJEMPLOS: Partial<Record<AgenteConPrompt, RedEjemplo>> = { instagram: "instagram", linkedin: "linkedin", recursos: "recurso" }
 
 /**
  * Los agentes que escriben una pieza ya clasificada: los unicos para los que

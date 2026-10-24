@@ -32,6 +32,10 @@ const PASOS: Record<string, { etiqueta: string; grupo: Grupo }> = {
   "instagram-correccion": { etiqueta: "Corrección de carrusel", grupo: "guion" },
   linkedin: { etiqueta: "Post de LinkedIn", grupo: "guion" },
   revisor: { etiqueta: "Revisor", grupo: "guion" },
+  "recurso-registro": { etiqueta: "Registro del recurso", grupo: "guion" },
+  recurso: { etiqueta: "Reporte o guía", grupo: "guion" },
+  "recurso-revisor": { etiqueta: "Revisor del recurso", grupo: "guion" },
+  "recurso-correccion": { etiqueta: "Corrección del recurso", grupo: "guion" },
   "diseno-libre": { etiqueta: "Diseño libre", grupo: "diseno" },
   "diseno-critico": { etiqueta: "Crítico de diseño", grupo: "diseno" },
   maquetador: { etiqueta: "Maquetador", grupo: "diseno" },
@@ -72,7 +76,7 @@ export type ConsumoPieza = {
   fecha: string
   /** Analisis y angulo: los comparte con las demas piezas de su noticia. */
   compartido: number
-  /** Guion, revisor, criterio y diseño de esta pieza. */
+  /** Guion, revisor, criterio y diseño de esta pieza, y su recurso si lo tiene. */
   propio: number
   llamadas: number
   porGrupo: Record<Grupo, number>
@@ -221,7 +225,9 @@ async function piezasConConsumo(
     let propio = 0
     let llamadas = 0
     for (const uso of porNoticia.get(p.raw_news_id!) ?? []) {
-      if (uso.red && uso.red !== p.network) continue
+      // El recurso es de las piezas que lo prometen: se cuenta como propio de
+      // cada una (lo pagan las dos si post y carrusel lo prometen).
+      if (uso.red && uso.red !== p.network && uso.red !== "recurso") continue
       if (uso.red) propio += uso.tokens
       else compartido += uso.tokens
       porGrupo[uso.grupo] += uso.tokens

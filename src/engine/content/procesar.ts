@@ -6,13 +6,13 @@ import { promptPara } from "../agents/prompts"
 import { leToca } from "../agents/turno"
 import { getSettings } from "../schedule"
 import { supabaseAdmin } from "../supabase-admin"
+import { DURACION_ETAPA_RECURSO, generarRecurso, type InputRecurso } from "../recursos/agente"
 import {
   DURACION_VERSION_MS,
   generarAngulo,
   generarInstagram,
   generarLinkedin,
   situacionDe,
-  type Aplazada,
   type Plazo,
 } from "./agentes"
 import type { AngleJobInput, LinkedinJobInput } from "./types"
@@ -30,10 +30,15 @@ import type { AngleJobInput, LinkedinJobInput } from "./types"
 
 const MAX_POR_TICK = 10
 
-type Buzon = "jobs_angle" | "jobs_linkedin" | "jobs_instagram"
+type Buzon = "jobs_angle" | "jobs_recurso" | "jobs_linkedin" | "jobs_instagram"
 
+/**
+ * A que red se apunta el gasto de cada buzon. El angulo es de todas las piezas
+ * de la noticia; el recurso, de las que lo prometen (ver consumo-data.ts).
+ */
 const RED_DEL_BUZON: Record<Buzon, string | undefined> = {
   jobs_angle: undefined,
+  jobs_recurso: "recurso",
   jobs_linkedin: "linkedin",
   jobs_instagram: "instagram",
 }
@@ -42,15 +47,20 @@ const RED_DEL_BUZON: Record<Buzon, string | undefined> = {
  * Lo que devuelve un agente: la respuesta terminada, o la pieza aplazada con lo
  * que lleva (ver `Plazo` en agentes.ts) para que la siguiente pasada siga.
  */
-type Resultado = { respuesta: unknown; receta?: Receta } | (Aplazada & { receta?: Receta })
+type Resultado = { respuesta: unknown; receta?: Receta } | { aplazada: true; pendiente: unknown; receta?: Receta }
+
+/** El plazo como lo recibe cualquier agente: `pendiente` es lo que dejo su pasada anterior. */
+type PlazoDelBuzon = { hasta: number; pendiente: unknown }
 
 async function procesarBuzon(
   tabla: Buzon,
   agent: Agente,
-  agente: (input: unknown, accountId: string, plazo: Plazo) => Promise<Resultado>,
+  agente: (input: unknown, accountId: string, plazo: PlazoDelBuzon) => Promise<Resultado>,
   disparo: Disparo,
   limite: number,
-  hasta: number
+  hasta: number,
+  /** Lo que tarda la etapa mas larga del agente: menos que eso, no se empieza. */
+  duracion = DURACION_VERSION_MS
 ): Promise<{ procesadas: number; fallidas: number; errores: string[] }> {
   const supabase = supabaseAdmin()
 
@@ -92,7 +102,7 @@ async function procesarBuzon(
 
     // Sin tiempo para una etapa entera no se empieza: se queda en la cola para
     // la siguiente pasada, que llega en cinco minutos. Empezarla era cortarla.
-    if (Date.now() + DURACION_VERSION_MS > hasta) break
+    if (Date.now() + duracion > hasta) break
 
     // Reclamo atomico: si otra pasada ya lo tomo, `claimed` viene vacio.
     // Mientras esta en 'processing', processed_at dice cuando se reclamo: es lo
@@ -107,7 +117,7 @@ async function procesarBuzon(
     if (!claimed) continue
 
     try {
-      const pendiente = (job.respuesta as { pendiente?: Plazo["pendiente"] } | null)?.pendiente ?? null
+      const pendiente = (job.respuesta as { pendiente?: unknown } | null)?.pendiente ?? null
       // El gasto de Claude de este trabajo queda anotado con su noticia; el
       // angulo es compartido entre las piezas, los otros son de su red.
       const noticia = (job.input as { raw_news?: { id?: string } } | null)?.raw_news?.id
@@ -155,7 +165,7 @@ async function reclamarColgados(): Promise<void> {
   const reclamadoAntes = new Date(Date.now() - 6 * 60 * 1000).toISOString()
   // Los reclamados antes de anotar la hora del reclamo, por su antiguedad.
   const creadoAntes = new Date(Date.now() - 30 * 60 * 1000).toISOString()
-  for (const tabla of ["jobs_angle", "jobs_linkedin", "jobs_instagram"] as const) {
+  for (const tabla of ["jobs_angle", "jobs_recurso", "jobs_linkedin", "jobs_instagram"] as const) {
     await supabase
       .from(tabla)
       .update({ status: "pending", processed_at: null })
@@ -163,6 +173,9 @@ async function reclamarColgados(): Promise<void> {
       .or(`processed_at.lt.${reclamadoAntes},and(processed_at.is.null,created_at.lt.${creadoAntes})`)
   }
 }
+
+/** El plazo de los escritores de piezas: lo pendiente es una pieza a medio corregir. */
+const comoPlazo = (p: PlazoDelBuzon): Plazo => ({ hasta: p.hasta, pendiente: p.pendiente as Plazo["pendiente"] })
 
 /** Que dispara la pasada. A mano se ignora el horario del agente. */
 export type Disparo = "auto" | "manual"
@@ -195,9 +208,21 @@ export async function procesarBuzones(
     const r = await generarAngulo(cuenta, input as AngleJobInput, await modeloDe(cuenta, "angulo"), armado)
     return { ...r, receta: armado.receta }
   }, disparo, maxPorBuzon, hasta)
+  // El recurso va antes que el post y el carrusel que lo prometen: al
+  // terminar, el tick los encola con el recurso ya escrito.
+  // En su try: un buzon de recursos que no se puede leer no frena los demas.
+  const recursos = await procesarBuzon("jobs_recurso", "recursos", async (input, cuenta, plazo) => {
+    const armado = await promptPara(cuenta, "recursos", null, (input as InputRecurso).raw_news.id)
+    const r = await generarRecurso(cuenta, input as InputRecurso, await modeloDe(cuenta, "recursos"), armado, plazo)
+    return { ...r, receta: armado.receta }
+  }, disparo, maxPorBuzon, hasta, DURACION_ETAPA_RECURSO).catch((e: unknown) => ({
+    procesadas: 0,
+    fallidas: 0,
+    errores: [`[jobs_recurso] ${e instanceof Error ? e.message : String(e)}`],
+  }))
   const posts = await procesarBuzon("jobs_linkedin", "linkedin", async (input, cuenta, plazo) => {
     const armado = await promptPara(cuenta, "linkedin", situacionDe(input as LinkedinJobInput), (input as LinkedinJobInput).raw_news.id)
-    const r = await generarLinkedin(cuenta, input as LinkedinJobInput, await modeloDe(cuenta, "linkedin"), armado, plazo)
+    const r = await generarLinkedin(cuenta, input as LinkedinJobInput, await modeloDe(cuenta, "linkedin"), armado, comoPlazo(plazo))
     return { ...r, receta: armado.receta }
   }, disparo, maxPorBuzon, hasta)
   // En una pasada acotada, una sola pieza: con el criterio y el revisor con
@@ -205,15 +230,15 @@ export async function procesarBuzones(
   // los 300 s del tick. La pasada cortada dejaba el carrusel colgado media hora
   // y tiraba lo gastado. Al terminar el post salta el aviso y la siguiente
   // pasada recoge el carrusel enseguida.
-  const unaPieza = maxPorBuzon <= 1 && posts.procesadas + posts.fallidas > 0
+  const unaPieza = maxPorBuzon <= 1 && posts.procesadas + posts.fallidas + recursos.procesadas + recursos.fallidas > 0
   const carruseles = unaPieza
     ? { procesadas: 0, fallidas: 0, errores: [] as string[] }
     : await procesarBuzon("jobs_instagram", "instagram", async (input, cuenta, plazo) => {
         const armado = await promptPara(cuenta, "instagram", situacionDe(input as LinkedinJobInput), (input as LinkedinJobInput).raw_news.id)
-        const r = await generarInstagram(cuenta, input as LinkedinJobInput, await modeloDe(cuenta, "instagram"), armado, plazo)
+        const r = await generarInstagram(cuenta, input as LinkedinJobInput, await modeloDe(cuenta, "instagram"), armado, comoPlazo(plazo))
         return { ...r, receta: armado.receta }
       }, disparo, maxPorBuzon, hasta)
-  const resultados = [angulos, posts, carruseles]
+  const resultados = [angulos, recursos, posts, carruseles]
 
   return {
     procesadas: resultados.reduce((n, r) => n + r.procesadas, 0),

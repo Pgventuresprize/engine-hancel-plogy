@@ -41,6 +41,13 @@ export type Regla =
   | "guion_en_nombre"
   | "alcance"
   | "copia_de_ejemplo"
+  | "caption_sin_palabra"
+  // Las del recurso (recursos/modelo.ts): rotulos, fuentes, estructura, palabra y DM.
+  | "sin_rotulo"
+  | "sin_fuente"
+  | "seccion_faltante"
+  | "palabra_clave"
+  | "dm_incompleto"
   // Las del revisor con Claude (revisor-claude.ts): lo que pide leer y entender.
   | "sin_respaldo"
   | "matiz_perdido"
@@ -50,6 +57,10 @@ export type Regla =
   | "dos_ideas"
   | "falta_contexto"
   | "cta_desconectado"
+  | "contradiccion_oculta"
+  | "interes_no_declarado"
+  | "recurso_debil"
+  | "promesa_sin_contenido"
 
 export type Nivel = "frena" | "aviso"
 
@@ -118,6 +129,8 @@ export type ContextoRevision = {
    * repetir aunque un ejemplo lo diga igual: es la misma invitacion de siempre.
    */
   textoCtas?: string
+  /** La palabra del recurso de la pieza, si lo trae: el cierre y el caption la piden tal cual. */
+  palabra?: string | null
 }
 
 /** Lo que la noticia dice: con esto se comprueban las cifras y los nombres. */
@@ -888,6 +901,20 @@ export function revisarCarrusel(respuesta: unknown, ctx: ContextoRevision): Hall
       detalle: `El caption tiene ${nFrases} ${nFrases === 1 ? "frase" : "frases"} y se piden de 2 a 4.`,
       pide: nFrases > 4 ? "Déjalo en 4 frases: la tesis, el porqué y el CTA." : "Escribe de 2 a 4 frases con la tesis y el CTA.",
     })
+  }
+  // Con recurso, la palabra es la que el DM reconoce: otra no entrega nada.
+  if (ctx.palabra && cierre && tituloCierre) {
+    for (const [donde, texto] of [["cierre (título)", tituloCierre], ["caption", caption]] as const) {
+      if (!new RegExp(`\\b${ctx.palabra}\\b`).test(texto)) {
+        hallazgos.push({
+          regla: "caption_sin_palabra",
+          nivel: "frena",
+          donde,
+          detalle: `No pide comentar ${ctx.palabra}, la palabra del recurso de esta pieza.`,
+          pide: `Pide comentar ${ctx.palabra}, en mayúsculas y tal cual: es la que el DM reconoce.`,
+        })
+      }
+    }
   }
   if (cierre && tituloCierre && caption && !captionPideElCta(caption, cierre, r.handle)) {
     hallazgos.push({

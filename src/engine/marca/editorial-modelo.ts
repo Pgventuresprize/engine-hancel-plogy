@@ -15,7 +15,18 @@ export type Pilar = Capa & { pregunta: string | null }
 
 export const TIPOS_CTA = ["seguir", "comentar", "palabra", "dm", "comercial"] as const
 export type TipoCta = (typeof TIPOS_CTA)[number]
-export type Cta = Capa & { tipo: TipoCta; requiere_recurso: boolean; recurso_listo: boolean; activo: boolean }
+export type Cta = Capa & {
+  tipo: TipoCta
+  requiere_recurso: boolean
+  recurso_listo: boolean
+  activo: boolean
+  /**
+   * No promete un recurso fijo sino el que Hancel escribe para cada pieza (el
+   * agente de recursos): no necesita "recurso listo", porque el carrusel no se
+   * escribe hasta que su recurso existe.
+   */
+  recurso_por_pieza: boolean
+}
 
 export type IdentidadEditorial = {
   pilares: Pilar[]
@@ -30,5 +41,5 @@ export type IdentidadEditorial = {
  * mandar es una promesa que nadie va a cumplir.
  */
 export function ctasUsables(ctas: Cta[]): Cta[] {
-  return ctas.filter((c) => c.activo && (!c.requiere_recurso || c.recurso_listo))
+  return ctas.filter((c) => c.activo && (!c.requiere_recurso || c.recurso_listo || c.recurso_por_pieza))
 }

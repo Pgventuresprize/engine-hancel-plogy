@@ -3,6 +3,7 @@ import { MODELOS_DISPONIBLES } from "@/lib/modelos-ia"
 import { MODELO_REDACCION } from "../redaccion/agente"
 import { MODELO_CRITERIO } from "../content/criterio"
 import { MODELO_REVISOR } from "../content/revisor-claude"
+import { MODELO_RECURSO } from "../recursos/escritor"
 import { ajustesDe } from "./settings"
 import type { AgenteConPrompt } from "./prompts"
 
@@ -28,5 +29,7 @@ export async function modeloDe(accountId: string, agent: AgenteConPrompt): Promi
   if (agent === "revisor") return MODELO_REVISOR
   // Ni el criterio, que es lo mas importante de la pieza.
   if (agent === "criterio") return MODELO_CRITERIO
+  // Ni el de recursos: un reporte con fuentes y rotulos es lo mas largo que se escribe.
+  if (agent === "recursos") return MODELO_RECURSO
   return (await modelosClaude(accountId))[agent]
 }

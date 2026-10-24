@@ -61,7 +61,7 @@ export default async function ConsumoPage() {
           <CardHeader>
             <CardTitle>Por post</CardTitle>
             <CardDescription>
-              Lo que costó cada pieza. Compartido es el análisis y el ángulo de su noticia; propio, el guion, el revisor, el criterio y el diseño.
+              Lo que costó cada pieza. Compartido es el análisis y el ángulo de su noticia; propio, el guion, el revisor, el criterio, el diseño y el reporte o la guía que promete, si lleva.
             </CardDescription>
           </CardHeader>
           <CardContent>

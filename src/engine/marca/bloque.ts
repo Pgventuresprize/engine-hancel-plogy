@@ -20,6 +20,7 @@ import { NOMBRE_IDIOMA, nombrePais, type PerfilMarca } from "./perfil-modelo"
 export const AGENTES_CON_MARCA = [
   "analisis",
   "angulo",
+  "recursos",
   "instagram",
   "linkedin",
   "criterio",
@@ -38,6 +39,8 @@ const ESCRIBEN_PARA_PUBLICAR: Seccion[] = ["identidad", "audiencias", "temas", "
 export const QUE_LEE: Record<AgenteConMarca, Seccion[]> = {
   analisis: ["identidad", "audiencias", "temas", "vetos"],
   angulo: ["identidad", "audiencias", "temas", "vetos"],
+  // Escribe lo que la marca entrega: su voz, sus reglas y su CTA, como el carrusel.
+  recursos: ESCRIBEN_PARA_PUBLICAR,
   instagram: ESCRIBEN_PARA_PUBLICAR,
   linkedin: ESCRIBEN_PARA_PUBLICAR,
   // Decide lo que la marca haria: tiene que saber quien es, para quien escribe y que ofrece.
@@ -141,7 +144,9 @@ function construir(s: Seccion, { perfil, editorial }: DatosDeMarca): string | nu
         "CTA QUE LA MARCA USA (el cierre pide uno de estos, el que mejor encaje con la pieza)",
         usables.map((c) => {
           const descripcion = corta(c.description)
-          return `- ${c.name} (${NOMBRE_TIPO_CTA[c.tipo] ?? c.tipo})${descripcion ? `: ${descripcion}` : ""}`
+          // El recurso de estos se escribe para cada pieza: sin el suyo, no se ofrece.
+          const porPieza = c.recurso_por_pieza ? " Solo si la pieza trae su recurso ya escrito, con su palabra." : ""
+          return `- ${c.name} (${NOMBRE_TIPO_CTA[c.tipo] ?? c.tipo})${descripcion ? `: ${descripcion}` : ""}${porPieza}`
         })
       )
     }

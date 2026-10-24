@@ -28,6 +28,8 @@ import {
   markJobUnreadable,
   MAX_DRENAJE_POR_TICK,
 } from "./jobs"
+import { drenarRecursos } from "../recursos/guardar"
+import { procesarWebRecursos } from "../web/recursos"
 import { analizarPendientes } from "./analisis"
 import { procesarBuzones } from "./procesar"
 import { revisionDeRespuesta } from "./revision"
@@ -105,6 +107,8 @@ export type TickSummary = {
   anglesQueued: number
   angleJobsConsumed: number
   anglesCreated: number
+  /** Recursos (reportes y guias) terminados y guardados en esta pasada. */
+  recursosCreated: number
   linkedinQueued: number
   linkedinJobsConsumed: number
   piecesCreated: number
@@ -166,7 +170,7 @@ export async function runContentTick(
   // de mas es un post que igualmente se iba a querer, y separarlos pedia un
   // filtro por buzon que no vale lo que complica.
   const disparoBuzones =
-    forzados.has("angulo") || forzados.has("instagram") || forzados.has("linkedin")
+    forzados.has("angulo") || forzados.has("recursos") || forzados.has("instagram") || forzados.has("linkedin")
       ? ("manual" as const)
       : ("auto" as const)
   const started = new Date()
@@ -328,7 +332,7 @@ export async function runContentTick(
       if (candidatos.length === 0) continue
 
       const ids = candidatos.map((a) => a.id)
-      const [{ data: piezasYa }, { data: igYa }, { data: liYa }] = await Promise.all([
+      const [{ data: piezasYa }, { data: igYa }, { data: liYa }, { data: recursoYa }] = await Promise.all([
         supabase.from("content_pieces").select("content_angle_id, network").in("content_angle_id", ids),
         // Solo los buzones vivos. Uno ya consumido que no dejo pieza —fallo, o
         // se borro la pieza despues— no puede bloquear el angulo para siempre:
@@ -340,6 +344,12 @@ export async function runContentTick(
           .is("consumed_at", null),
         supabase
           .from("jobs_linkedin")
+          .select("content_angle_id")
+          .in("content_angle_id", ids)
+          .is("consumed_at", null),
+        // Un recurso en camino encola el solo las piezas que lo esperan.
+        supabase
+          .from("jobs_recurso")
           .select("content_angle_id")
           .in("content_angle_id", ids)
           .is("consumed_at", null),
@@ -357,6 +367,9 @@ export async function runContentTick(
       }
       for (const j of (liYa ?? []) as { content_angle_id: string }[]) {
         hecho.add(`${j.content_angle_id}:linkedin`)
+      }
+      for (const j of (recursoYa ?? []) as { content_angle_id: string }[]) {
+        for (const red of ["instagram", "facebook", "linkedin"]) hecho.add(`${j.content_angle_id}:${red}`)
       }
 
       const angulos = candidatos
@@ -530,6 +543,27 @@ export async function runContentTick(
             .eq("id", primero.id)
         }
       }
+    }
+  }
+
+  // ---------------------------------------------------------- recursos hechos
+  //
+  // Antes que los posts: al guardar un recurso se encolan las piezas que lo
+  // esperaban, y esas piezas las escribe la siguiente pasada.
+  // En su try: que falle el drenaje de recursos no puede parar los posts.
+  const recursos = await drenarRecursos(log, presupuesto).catch((e: unknown) => {
+    errors.push(`recursos: ${e instanceof Error ? e.message : String(e)}`)
+    return { consumidos: 0, creados: 0, errores: [] as string[] }
+  })
+  errors.push(...recursos.errores)
+  // Los aprobados que no salieron a la web (el portal no respondio) se
+  // reintentan aqui con sus esperas. Sin portal conectado no hace nada.
+  for (const cuenta of cuentas) {
+    try {
+      const web = await procesarWebRecursos(cuenta.id)
+      errors.push(...web.errores)
+    } catch (e) {
+      errors.push(`[${cuenta.slug}] web de recursos: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
 
@@ -985,6 +1019,7 @@ export async function runContentTick(
     anglesQueued,
     angleJobsConsumed,
     anglesCreated,
+    recursosCreated: recursos.creados,
     linkedinQueued,
     linkedinJobsConsumed,
     piecesCreated,

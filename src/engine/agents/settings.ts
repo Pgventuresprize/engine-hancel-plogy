@@ -14,6 +14,7 @@ export const AGENTES = [
   "extraccion",
   "analisis",
   "angulo",
+  "recursos",
   "instagram",
   "linkedin",
   "criterio",

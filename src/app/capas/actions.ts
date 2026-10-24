@@ -48,6 +48,8 @@ export type CamposExtra = {
   tipo?: (typeof TIPOS_CTA)[number]
   requiere_recurso?: boolean
   recurso_listo?: boolean
+  /** El recurso lo escribe Hancel para cada pieza (agente de recursos). */
+  recurso_por_pieza?: boolean
   activo?: boolean
 }
 
@@ -63,7 +65,7 @@ function extrasDe(tabla: Tabla, campos: CamposExtra): Record<string, unknown> | 
       if (!TIPOS_CTA.includes(campos.tipo)) return "Ese tipo de CTA no existe."
       fila.tipo = campos.tipo
     }
-    for (const clave of ["requiere_recurso", "recurso_listo", "activo"] as const) {
+    for (const clave of ["requiere_recurso", "recurso_listo", "recurso_por_pieza", "activo"] as const) {
       if (typeof campos[clave] === "boolean") fila[clave] = campos[clave]
     }
   }

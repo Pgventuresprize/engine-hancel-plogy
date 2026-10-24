@@ -18,15 +18,21 @@ import { TIPOS_CTA, type TipoCta } from "./editorial-modelo"
  * lectura y el guardado estan en ejemplos.ts.
  */
 
-export const REDES_EJEMPLO = ["instagram", "linkedin"] as const
+export const REDES_EJEMPLO = ["instagram", "linkedin", "recurso"] as const
 export type RedEjemplo = (typeof REDES_EJEMPLO)[number]
 
-export const NOMBRE_RED_EJEMPLO: Record<RedEjemplo, string> = { instagram: "Instagram", linkedin: "LinkedIn" }
+export const NOMBRE_RED_EJEMPLO: Record<RedEjemplo, string> = { instagram: "Instagram", linkedin: "LinkedIn", recurso: "Reporte o guía" }
 
-export const TOPES_EJEMPLO = { nombre: 120, texto: 12_000, por_que: 600, origen: 120 } as const
+export const TOPES_EJEMPLO = { nombre: 120, texto: 40_000, por_que: 600, origen: 120 } as const
+
+/** Un post o un carrusel cabe de sobra en 12.000; un reporte entero, no. */
+export const topeDeTexto = (red: RedEjemplo) => (red === "recurso" ? TOPES_EJEMPLO.texto : 12_000)
 
 /** Cuantos ejemplos entran en una pieza. Dos: con mas, el agente copia la mezcla. */
 export const EJEMPLOS_POR_PIEZA = 2
+
+/** Un recurso es largo: con uno basta para ver como suena y como se ordena. */
+export const ejemplosPorPieza = (red: RedEjemplo) => (red === "recurso" ? 1 : EJEMPLOS_POR_PIEZA)
 
 export type Ejemplo = {
   id: string
@@ -55,7 +61,7 @@ export function parseEjemplo(fila: Record<string, unknown>): Ejemplo {
     id: String(fila.id),
     red: de(fila.red, REDES_EJEMPLO) ?? "instagram",
     nombre: texto(fila.nombre, TOPES_EJEMPLO.nombre),
-    texto: texto(fila.texto, TOPES_EJEMPLO.texto),
+    texto: texto(fila.texto, topeDeTexto(de(fila.red, REDES_EJEMPLO) ?? "instagram")),
     por_que: texto(fila.por_que, TOPES_EJEMPLO.por_que),
     pilar_id: typeof fila.pilar_id === "string" && fila.pilar_id ? fila.pilar_id : null,
     cta_tipo: de(fila.cta_tipo, TIPOS_CTA),
@@ -68,11 +74,11 @@ export function parseEjemplo(fila: Record<string, unknown>): Ejemplo {
 
 /** Mensaje para el usuario, o null si todo vale. */
 export function validarEjemplo(c: CamposEjemplo): string | null {
-  if (!(REDES_EJEMPLO as readonly string[]).includes(c.red)) return "El ejemplo tiene que ser de Instagram o de LinkedIn."
+  if (!(REDES_EJEMPLO as readonly string[]).includes(c.red)) return "El ejemplo tiene que ser de Instagram, de LinkedIn o un reporte o guía."
   if (!c.nombre.trim()) return "El ejemplo necesita un nombre."
   if (c.nombre.trim().length > TOPES_EJEMPLO.nombre) return `El nombre no puede pasar de ${TOPES_EJEMPLO.nombre} caracteres.`
   if (!c.texto.trim()) return "Falta la pieza: es lo que lee el agente."
-  if (c.texto.trim().length > TOPES_EJEMPLO.texto) return `La pieza no puede pasar de ${TOPES_EJEMPLO.texto} caracteres.`
+  if (c.texto.trim().length > topeDeTexto(c.red)) return `La pieza no puede pasar de ${topeDeTexto(c.red)} caracteres.`
   // Sin el porque, el agente ve una pieza y no sabe que mirar de ella: copia.
   if (!c.por_que.trim()) return "Escribe por qué es buena: es lo que el agente tiene que aprender de ella."
   if (c.por_que.trim().length > TOPES_EJEMPLO.por_que) return `El porqué no puede pasar de ${TOPES_EJEMPLO.por_que} caracteres.`
@@ -145,6 +151,13 @@ export function elegirEjemplos(
 /** La capa de ejemplos del prompt. Vacia si no entra ninguno. */
 export function bloqueEjemplos(entran: Ejemplo[]): string {
   if (entran.length === 0) return ""
+  if (entran.every((e) => e.red === "recurso")) {
+    return [
+      `# EJEMPLOS DE LA MARCA
+${entran.length === 1 ? "Un recurso" : `${entran.length} recursos`} de la marca que salieron bien. Sirven para la voz, la profundidad, cómo separa lo que se sabe de lo que no y qué tan concreto es lo que se puede usar. No son plantilla: no copies sus frases, sus datos ni sus títulos. Los datos de este recurso salen solo de sus fuentes.`,
+      ...entran.map((e) => `## Ejemplo: ${e.nombre}\nPor qué es bueno: ${e.por_que.trim()}\n\n${e.texto.trim()}`),
+    ].join("\n\n")
+  }
   return [
     `# EJEMPLOS DE LA MARCA
 ${entran.length === 1 ? "Una pieza" : `${entran.length} piezas`} de la marca que salieron bien. Sirven para el tono, la densidad y cómo avanza una pieza. No son plantilla: no copies sus frases, sus datos, su número de láminas ni su estructura. Los datos de esta pieza salen solo de su contenido.

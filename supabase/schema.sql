@@ -1456,3 +1456,8 @@ create table if not exists public.brand_skills (
 );
 create index if not exists brand_skills_account_idx on public.brand_skills (account_id, position);
 alter table public.brand_skills enable row level security;
+-- ================================================== recursos (reportes y guias)
+-- El reporte o la guia que promete el cierre de una pieza, su buzon y el CTA
+-- que lo pide (content_ctas.recurso_por_pieza). Tambien amplia las listas de
+-- agentes, los ejemplos (red 'recurso') y web_entregas. La definicion completa
+-- esta en migraciones/2026-10-24-recursos.sql.

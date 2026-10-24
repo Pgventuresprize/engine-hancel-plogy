@@ -145,8 +145,8 @@ export type Pagina = {
  * principal (og:image), el medio, el titulo y la fecha. Si no se puede leer
  * (PDF, bloqueo, caida) devuelve null y la fuente se queda con su extracto.
  */
-export async function leerPagina(url: string): Promise<Pagina | null> {
-  return (await leerPaginaConMotivo(url)).pagina
+export async function leerPagina(url: string, tope = MAX_CONTENIDO): Promise<Pagina | null> {
+  return (await leerPaginaConMotivo(url, tope)).pagina
 }
 
 /**
@@ -154,7 +154,7 @@ export async function leerPagina(url: string): Promise<Pagina | null> {
  * escondia que el medio bloquea los lectores (HTTP 429 o 403), y eso cambia lo
  * que hay que hacer: no es una noticia pobre, es una puerta cerrada.
  */
-export async function leerPaginaConMotivo(url: string): Promise<{ pagina: Pagina | null; motivo: string | null }> {
+export async function leerPaginaConMotivo(url: string, tope = MAX_CONTENIDO): Promise<{ pagina: Pagina | null; motivo: string | null }> {
   try {
     const res = await fetch(url, {
       headers: {
@@ -229,7 +229,7 @@ export async function leerPaginaConMotivo(url: string): Promise<{ pagina: Pagina
       const bloquesTexto = lineas.filter((l) => (vistas.has(l) ? false : (vistas.add(l), true)))
       if (largo(bloquesTexto) > largo(mejor)) mejor = bloquesTexto
     }
-    const texto = mejor.join("\n\n").slice(0, MAX_CONTENIDO)
+    const texto = mejor.join("\n\n").slice(0, tope)
 
     let imagenAbs = imagen
     if (imagen) {

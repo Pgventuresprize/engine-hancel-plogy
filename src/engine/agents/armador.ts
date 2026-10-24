@@ -1,7 +1,7 @@
 import type { DatosParaPrompt } from "../marca/armado"
 import { bloqueMarca, TOPE_PROMPT, type AgenteConMarca } from "../marca/bloque"
 import { describirSituacion, esSiempre, porQueNoEntra, type Cuando, type Situacion } from "../marca/cuando"
-import { bloqueEjemplos, elegirEjemplos, type RedEjemplo } from "../marca/ejemplos-modelo"
+import { bloqueEjemplos, ejemplosPorPieza, elegirEjemplos, type RedEjemplo } from "../marca/ejemplos-modelo"
 import { bloqueDeSkills, skillsDeAgente, type Skill } from "../marca/skills-modelo"
 
 /**
@@ -120,7 +120,7 @@ export function armarPorPiezas(o: OpcionesArmado): PromptPorPiezas {
   }
 
   const eleccion = o.redEjemplos
-    ? elegirEjemplos(o.datos.ejemplos ?? [], o.redEjemplos, o.situacion, o.semilla)
+    ? elegirEjemplos(o.datos.ejemplos ?? [], o.redEjemplos, o.situacion, o.semilla, ejemplosPorPieza(o.redEjemplos))
     : { entran: [], fuera: [] }
   for (const f of eleccion.fuera) fuera.push({ capa: "ejemplo", nombre: f.ejemplo.nombre, porque: f.porque })
   let conEjemplos = eleccion.entran

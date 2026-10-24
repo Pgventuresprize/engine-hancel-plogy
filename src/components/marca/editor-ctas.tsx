@@ -82,6 +82,7 @@ function camposDe(c: Cta): Campos {
     tipo: c.tipo,
     requiere_recurso: c.requiere_recurso,
     recurso_listo: c.recurso_listo,
+    recurso_por_pieza: c.recurso_por_pieza,
     activo: c.activo,
   }
 }
@@ -117,7 +118,9 @@ function TarjetaCta({
     guardar(siguiente)
   }
 
-  const pendiente = v.requiere_recurso && !v.recurso_listo
+  const pendiente = v.requiere_recurso && !v.recurso_listo && !v.recurso_por_pieza
+  // Solo un cierre que pide comentar una palabra o escribir por DM entrega un recurso por mensaje.
+  const porMensaje = v.tipo === "palabra" || v.tipo === "dm"
 
   return (
     <Card className={v.activo ? undefined : "opacity-60"}>
@@ -161,6 +164,12 @@ function TarjetaCta({
             ))}
           </div>
 
+          {v.recurso_por_pieza ? (
+            <p className="text-muted-foreground text-xs">
+              Cada pieza con este CTA lleva su propio reporte o guía, con su palabra y los dos mensajes del DM. El agente de recursos lo escribe
+              antes que el carrusel, y la pieza no se publica hasta que el recurso esté aprobado y en la web.
+            </p>
+          ) : null}
           <Textarea
             value={v.description ?? ""}
             disabled={disabled}
@@ -177,9 +186,20 @@ function TarjetaCta({
               label="Promete un recurso"
               checked={v.requiere_recurso}
               disabled={disabled}
-              onChange={(x) => cambiar({ requiere_recurso: x, recurso_listo: x ? v.recurso_listo : false })}
+              onChange={(x) =>
+                cambiar({ requiere_recurso: x, recurso_listo: x ? v.recurso_listo : false, recurso_por_pieza: x ? v.recurso_por_pieza : false })
+              }
             />
-            {v.requiere_recurso ? (
+            {v.requiere_recurso && porMensaje ? (
+              <Interruptor
+                id={`porpieza-${cta.id}`}
+                label="Hancel escribe el recurso de cada pieza"
+                checked={v.recurso_por_pieza}
+                disabled={disabled}
+                onChange={(x) => cambiar({ recurso_por_pieza: x })}
+              />
+            ) : null}
+            {v.requiere_recurso && !v.recurso_por_pieza ? (
               <Interruptor
                 id={`listo-${cta.id}`}
                 label="Recurso listo"

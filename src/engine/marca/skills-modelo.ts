@@ -20,6 +20,7 @@ export const TOPES_SKILL = { nombre: 80, descripcion: 300, texto: 8000, original
 export const NOMBRE_AGENTE: Record<AgenteConMarca, string> = {
   analisis: "Análisis",
   angulo: "Ángulo",
+  recursos: "Reportes y guías",
   instagram: "Instagram / Facebook",
   linkedin: "LinkedIn",
   criterio: "Criterio",

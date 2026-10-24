@@ -9,6 +9,7 @@ import {
   textoDeCarrusel,
   TIPOS_LAMINA,
   TOPES_EJEMPLO,
+  topeDeTexto,
   type CamposEjemplo,
   type LaminaDeEjemplo,
   type RedEjemplo,
@@ -242,7 +243,7 @@ export async function extraerEjemplos(
     const campos: CamposEjemplo = {
       red: x.red,
       nombre: (x.nombre || p.nombre).slice(0, TOPES_EJEMPLO.nombre),
-      texto: textoEjemplo.slice(0, TOPES_EJEMPLO.texto),
+      texto: textoEjemplo.slice(0, topeDeTexto(x.red)),
       por_que: x.por_que.slice(0, TOPES_EJEMPLO.por_que),
       pilar_id: x.pilar,
       cta_tipo: x.cta_tipo,
@@ -254,7 +255,7 @@ export async function extraerEjemplos(
     const otros: string[] = []
     if (!trozo) otros.push("No se encontró dónde empieza en el archivo: se buscó en el archivo entero.")
     if (!campos.pilar_id && editorial.pilares.length) otros.push("Sin pilar: elige uno, es lo que más pesa para que entre en una pieza.")
-    if (textoEjemplo.length > TOPES_EJEMPLO.texto) otros.push(`El texto pasa de ${TOPES_EJEMPLO.texto} caracteres y se cortó.`)
+    if (textoEjemplo.length > topeDeTexto(x.red)) otros.push(`El texto pasa de ${topeDeTexto(x.red)} caracteres y se cortó.`)
     const duplicado = esDuplicado(campos, existentes)
     if (duplicado) otros.push("Ya tienes un ejemplo con este nombre o este texto.")
 

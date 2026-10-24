@@ -1,5 +1,8 @@
 import type { RawNews } from "@/lib/types"
 
+import { ajustesDe } from "../agents/settings"
+import { identidadEditorial } from "../marca/editorial"
+import { recursoParaPieza, type Recurso, type RecursoParaPieza } from "../recursos/modelo"
 import { supabaseAdmin } from "../supabase-admin"
 import { mergeVariables, parseVariables } from "./variables"
 import { REDES, type DestinoCarrusel } from "./types"
@@ -98,19 +101,149 @@ export function buildAngleInput(news: RawNews, variables: Variables): AngleJobIn
 export function buildLinkedinInput(
   angle: ContentAngle,
   news: RawNews,
-  variables: Variables
+  variables: Variables,
+  recurso?: EstadoRecurso
 ): LinkedinJobInput {
+  // Sin recurso que prometer (no se pudo escribir), el cierre no ofrece la
+  // palabra: se escribe como si el angulo no trajera CTA.
+  const sinRecurso = recurso?.estado === "fallido"
   return {
     angle: {
       id: angle.id,
       angle: angle.angle,
       thesis: angle.thesis,
       playbook_format: angle.playbook_format,
-      clasificacion: angle.clasificacion ?? null,
+      clasificacion: angle.clasificacion ? { ...angle.clasificacion, cta: sinRecurso ? null : angle.clasificacion.cta } : null,
     },
     raw_news: newsInput(news),
     variables,
+    ...(recurso?.estado === "listo" ? { recurso: recurso.recurso } : {}),
+    ...(sinRecurso ? { sin_recurso: true } : {}),
   }
+}
+
+// ------------------------------------------------------------------ recursos
+
+/**
+ * Lo que una pieza necesita saber de su recurso antes de encolarse:
+ *   - "no_aplica": su CTA no promete un recurso por pieza (o el agente esta apagado);
+ *   - "falta": lo promete y aun no esta escrito: se encola el recurso primero;
+ *   - "listo": esta escrito, y viaja en el input para que el cierre lo pida;
+ *   - "fallido": no se pudo escribir: la pieza sale sin prometerlo.
+ */
+export type EstadoRecurso =
+  | { estado: "no_aplica" }
+  | { estado: "falta" }
+  | { estado: "listo"; recurso: RecursoParaPieza }
+  | { estado: "fallido" }
+
+export async function estadoDelRecurso(angle: ContentAngle): Promise<EstadoRecurso> {
+  const ctaId = angle.clasificacion?.cta?.id
+  if (!ctaId) return { estado: "no_aplica" }
+  const supabase = supabaseAdmin()
+  const { data: escrito } = await supabase
+    .from("content_recursos")
+    .select("id, payload, web_url, status")
+    .eq("content_angle_id", angle.id)
+    .maybeSingle()
+  const fila = escrito as { id: string; payload: Recurso; web_url: string | null; status: string } | null
+  if (fila && fila.status !== "descartado") return { estado: "listo", recurso: recursoParaPieza(fila.id, fila.payload, fila.web_url) }
+
+  const [editorial, ajustes] = await Promise.all([identidadEditorial(angle.account_id), ajustesDe(angle.account_id, "recursos")])
+  const cta = editorial.ctas.find((c) => c.id === ctaId)
+  if (!cta?.recurso_por_pieza || !cta.activo || !ajustes.enabled) return { estado: "no_aplica" }
+  // Un recurso descartado a mano, o un trabajo que fallo, no se reintenta solo.
+  if (fila?.status === "descartado") return { estado: "fallido" }
+  const { data: fallo } = await supabase
+    .from("jobs_recurso")
+    .select("id")
+    .eq("content_angle_id", angle.id)
+    .eq("status", "failed")
+    .not("consumed_at", "is", null)
+    .limit(1)
+    .maybeSingle()
+  return fallo ? { estado: "fallido" } : { estado: "falta" }
+}
+
+/** Quien espera el recurso para escribirse. */
+export type Esperan = { instagram: DestinoCarrusel[] | null; linkedin: boolean }
+
+/**
+ * Encola el recurso de un angulo con las piezas que lo esperan. Un angulo
+ * tiene un solo recurso: si ya hay un trabajo abierto, se le suman las piezas.
+ */
+export async function enqueueRecursoJob(
+  angle: ContentAngle,
+  news: RawNews,
+  variables: Variables,
+  override: Partial<Variables> | null | undefined,
+  esperan: Esperan
+): Promise<string> {
+  const supabase = supabaseAdmin()
+  const { data: abierto } = await supabase
+    .from("jobs_recurso")
+    .select("id, input")
+    .eq("content_angle_id", angle.id)
+    .is("consumed_at", null)
+    .maybeSingle()
+
+  if (abierto) {
+    const fila = abierto as { id: string; input: { esperan?: Esperan } }
+    const antes = fila.input?.esperan ?? { instagram: null, linkedin: false }
+    const unidos: Esperan = {
+      instagram: antes.instagram || esperan.instagram ? [...new Set([...(antes.instagram ?? []), ...(esperan.instagram ?? [])])] : null,
+      linkedin: antes.linkedin || esperan.linkedin,
+    }
+    await supabase.from("jobs_recurso").update({ input: { ...fila.input, esperan: unidos } }).eq("id", fila.id)
+    return fila.id
+  }
+
+  const { data, error } = await supabase
+    .from("jobs_recurso")
+    .insert({
+      account_id: angle.account_id,
+      content_angle_id: angle.id,
+      input: { ...buildLinkedinInput(angle, news, mergeVariables(variables, override)), esperan },
+    })
+    .select("id")
+    .single()
+  if (error) throw new Error(`No se pudo encolar el recurso: ${error.message}`)
+  return (data as { id: string }).id
+}
+
+/** Un trabajo de recurso tal como esta en `jobs_recurso`. */
+export type JobRecurso = {
+  id: string
+  account_id: string
+  content_angle_id: string
+  input: LinkedinJobInput & { esperan?: Esperan }
+  status: "pending" | "processing" | "done" | "failed"
+  respuesta: unknown
+  error: string | null
+  created_at: string
+}
+
+export async function claimRecursoJobs(limite = MAX_DRENAJE_POR_TICK): Promise<JobRecurso[]> {
+  const supabase = supabaseAdmin()
+  const { data: candidatos, error: errorLectura } = await supabase
+    .from("jobs_recurso")
+    .select("id")
+    .is("consumed_at", null)
+    .in("status", ["done", "failed"])
+    .order("created_at")
+    .limit(limite)
+  if (errorLectura) throw new Error(`No se pudieron leer los recursos: ${errorLectura.message}`)
+  const ids = (candidatos ?? []).map((row) => (row as { id: string }).id)
+  if (ids.length === 0) return []
+
+  const { data, error } = await supabase
+    .from("jobs_recurso")
+    .update({ consumed_at: new Date().toISOString() })
+    .in("id", ids)
+    .is("consumed_at", null)
+    .select("*")
+  if (error) throw new Error(`No se pudieron tomar los recursos: ${error.message}`)
+  return (data ?? []) as JobRecurso[]
 }
 
 /** Devuelve el id del job creado. */
@@ -152,12 +285,17 @@ export async function enqueueLinkedinJob(
   variables: Variables,
   override?: Partial<Variables> | null
 ): Promise<string> {
+  // Si su CTA promete un recurso que aun no esta escrito, va primero el recurso
+  // y el post se encola cuando termine (tick.ts, drenaje de recursos).
+  const recurso = await estadoDelRecurso(angle)
+  if (recurso.estado === "falta") return enqueueRecursoJob(angle, news, variables, override, { instagram: null, linkedin: true })
+
   const { data, error } = await supabaseAdmin()
     .from("jobs_linkedin")
     .insert({
       account_id: angle.account_id,
       content_angle_id: angle.id,
-      input: buildLinkedinInput(angle, news, mergeVariables(variables, override)),
+      input: buildLinkedinInput(angle, news, mergeVariables(variables, override), recurso),
     })
     .select("id")
     .single()
@@ -265,6 +403,10 @@ export async function enqueueInstagramJob(
 ): Promise<string> {
   const supabase = supabaseAdmin()
 
+  // Como el post: con un recurso prometido y sin escribir, primero el recurso.
+  const recurso = await estadoDelRecurso(angle)
+  if (recurso.estado === "falta") return enqueueRecursoJob(angle, news, variables, override, { instagram: destinos, linkedin: false })
+
   // Un angulo produce un solo guion, aunque se pidan sus dos redes por separado
   // o se arrastre dos veces. Sin esto salian varios buzones del mismo angulo
   // —llegue a ver tres— y cada uno es una generacion pagada para escribir lo
@@ -295,7 +437,7 @@ export async function enqueueInstagramJob(
     .insert({
       account_id: angle.account_id,
       content_angle_id: angle.id,
-      input: { ...buildLinkedinInput(angle, news, mergeVariables(variables, override)), destinos },
+      input: { ...buildLinkedinInput(angle, news, mergeVariables(variables, override), recurso), destinos },
     })
     .select("id")
     .single()
@@ -310,7 +452,7 @@ export async function enqueueInstagramJob(
  * La `respuesta` cruda se conserva: es la unica pista para arreglar el prompt.
  */
 export async function markJobUnreadable(
-  tabla: "jobs_angle" | "jobs_linkedin" | "jobs_instagram",
+  tabla: "jobs_angle" | "jobs_recurso" | "jobs_linkedin" | "jobs_instagram",
   jobId: string,
   motivo: string
 ): Promise<void> {
@@ -322,7 +464,7 @@ export async function markJobUnreadable(
 
 /** Cuantos trabajos esperan a que su agente los recoja. */
 export async function countPending(
-  tabla: "jobs_angle" | "jobs_linkedin" | "jobs_instagram"
+  tabla: "jobs_angle" | "jobs_recurso" | "jobs_linkedin" | "jobs_instagram"
 ): Promise<number> {
   const { count, error } = await supabaseAdmin()
     .from(tabla)

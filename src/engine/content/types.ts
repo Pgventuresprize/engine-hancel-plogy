@@ -1,4 +1,5 @@
 import type { Clasificacion } from "../marca/clasificacion"
+import type { RecursoParaPieza } from "../recursos/modelo"
 
 /**
  * Tipos de la etapa 2: de una noticia analizada a una pieza de LinkedIn.
@@ -219,6 +220,13 @@ export type LinkedinJobInput = {
   }
   raw_news: AngleJobInput["raw_news"]
   variables: Variables
+  /**
+   * El recurso que promete el cierre, ya escrito (recursos/). Solo si el CTA
+   * del angulo promete un recurso por pieza.
+   */
+  recurso?: RecursoParaPieza | null
+  /** El recurso prometido no se pudo escribir: el cierre no lo ofrece. */
+  sin_recurso?: boolean
 }
 
 /**

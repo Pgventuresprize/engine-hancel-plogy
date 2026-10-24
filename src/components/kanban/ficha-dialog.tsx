@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RecetaDelPrompt } from "@/components/agentes/simulador-prompt"
+import { PanelRecurso } from "@/components/kanban/panel-recurso"
 import { Textarea } from "@/components/ui/textarea"
 import { guardarPiezaComoEjemploMarca } from "@/app/marca/ejemplos-actions"
 import { conPocoMaterial, nombreMaterial } from "@/engine/content/material"
@@ -88,6 +89,8 @@ function pestanaInicial(f: Ficha): string {
     const publicada = f.piezas.find((p) => p.status === "published")
     return `pieza:${(publicada ?? f.piezas[0]).id}`
   }
+  // Un recurso esperando aprobacion es lo siguiente que hay que mirar.
+  if (f.angulo && f.recurso && f.recurso.estado !== "descartado") return "recurso"
   if (f.angulo) return "angulo"
   if (f.analizada) return "analisis"
   return "noticia"
@@ -161,6 +164,11 @@ export function FichaDialog({
             <TabsTrigger value="noticia">Noticia</TabsTrigger>
             {ficha.analizada ? <TabsTrigger value="analisis">Analisis</TabsTrigger> : null}
             {ficha.angulo ? <TabsTrigger value="angulo">Angulo</TabsTrigger> : null}
+            {ficha.angulo && ficha.recurso ? (
+              <TabsTrigger value="recurso">
+                {ficha.recurso.estado === "escribiendo" ? "Recurso (escribiendo)" : ficha.recurso.palabra ? `Recurso · ${ficha.recurso.palabra}` : "Recurso"}
+              </TabsTrigger>
+            ) : null}
             {ficha.piezas.map((p) => (
               <TabsTrigger key={p.id} value={`pieza:${p.id}`}>
                 {NOMBRE_RED[p.network] ?? p.network}
@@ -181,6 +189,12 @@ export function FichaDialog({
           {ficha.angulo ? (
             <TabsContent value="angulo" className={PANEL}>
               <PanelAngulo ficha={ficha} redesHechas={redesHechas} />
+            </TabsContent>
+          ) : null}
+
+          {ficha.angulo && ficha.recurso ? (
+            <TabsContent value="recurso" className={PANEL}>
+              <PanelRecurso angleId={ficha.angulo.id} />
             </TabsContent>
           ) : null}
 

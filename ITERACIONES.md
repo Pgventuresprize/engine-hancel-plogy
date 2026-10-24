@@ -256,7 +256,26 @@ Al retomar uno, se detalla como bloque antes de construir.
 
 Revisión del 2026-10-22 de cómo hace el kit los reportes (`plogy carruseles\
 PLOGY_Carousel_Agent_Kit`, piezas 003 a 018) y de qué tiene Hancel para hacerlos.
-Nada construido. Al retomarlo, cada punto se detalla como bloque.
+
+**Estado (2026-10-24): R1, R2, R3 y la parte de R5 que es de Hancel, construidos.**
+- **Dónde vive.** El agente "recursos" está en `src/engine/recursos/`; la migración
+  es `2026-10-24-recursos.sql`.
+- **Cuándo actúa.** Entra cuando el CTA del ángulo tiene "Hancel escribe el recurso
+  de cada pieza" (`content_ctas.recurso_por_pieza`). Va antes del carrusel y del post.
+- **Etapas:** registro de verificación con Sonnet, reporte o guía en bloques
+  rotulados con Opus, revisor con rúbrica y hasta 2 vueltas.
+- **Qué produce:** la palabra, la promesa y los dos DM.
+- **Dónde se revisa:** en la ficha, pestaña Recurso.
+- **Cómo sale a la web:** al aprobarlo va al portal por el webhook
+  (`recurso.publicado`, `recurso.actualizado`, `recurso.retirado`) y el portal
+  devuelve la URL para el DM.
+- **Puerta de publicación:** ninguna pieza se publica antes que su recurso.
+
+Sigue pendiente:
+- R4 (figuras);
+- el receptor de `recurso.*` en la web de Plogy;
+- el envío real del DM (ManyChat u otra);
+- R6.
 
 ### Cómo los hace el kit
 - **Orden:** clasificar → planear y decidir si la pieza lleva reporte → **escribir
@@ -449,9 +468,13 @@ que costo.
 ### Flujo de CTA con reporte por DM
 - **Qué es:** "Comenta PALABRA", DM en dos mensajes y un reporte web, como en
   las piezas 003 a 005 del kit. Documentado, sin construir.
-- **Cuándo:** solo si Luciano lo pide. El plan para generar los reportes dentro
-  de Hancel está en "Reportes y guías como los del kit" (R1 a R6); la parte del
-  DM es R5.
+- **Cuándo:** Luciano lo pidió el 2026-10-24.
+- **Qué hace ya Hancel:** escribe el reporte y los textos de los dos DM.
+- **Qué falta:**
+  - **Web de Plogy:** que reciba `recurso.*` y devuelva la URL;
+  - **Envío del DM:** elegir la herramienta y configurar la palabra de cada pieza.
+
+  Ver "Reportes y guías como los del kit".
 
 ### Futuro local
 - **Qué es:** que el análisis y la generación usen el CLI de Claude y corran en

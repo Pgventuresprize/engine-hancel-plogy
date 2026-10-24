@@ -46,8 +46,6 @@ export const REGLAS_CLAUDE = {
 
 export type ReglaClaude = keyof typeof REGLAS_CLAUDE
 
-const esRegla = (v: unknown): v is ReglaClaude => typeof v === "string" && v in REGLAS_CLAUDE
-
 export const REVISOR_OFICIO = `Eres el revisor editorial de la marca. Lees una pieza ya escrita (un carrusel de Instagram o un post de LinkedIn) junto con la noticia de la que sale, y dices qué falla. No reescribes la pieza: señalas el fallo, citas el texto exacto y dices qué hay que hacer. Lo que digas vuelve a quien la escribió para que la corrija.
 
 Un revisor de código ya comprobó lo mecánico: guiones, frases prohibidas, cifras que no están en el material, largos, hashtags, emojis y copias de los ejemplos. No repitas eso. Tú revisas lo que solo se ve leyendo y entendiendo.
@@ -151,7 +149,12 @@ const recorta = (t: string, tope: number) => (t.length > tope ? `${t.slice(0, to
  * citado esta en la pieza y el donde sale de ahi. Lo que no se puede citar no
  * se queda: un fallo que no esta en la pieza no se puede corregir.
  */
-export function hallazgosDeRespuesta(bruto: unknown, campos: Campo[]): { hallazgos: Hallazgo[]; descartados: number } {
+export function hallazgosDeRespuesta(
+  bruto: unknown,
+  campos: Campo[],
+  /** Las reglas que vale y su nivel: las del carrusel, o las del recurso (recursos/revisor.ts). */
+  reglas: Partial<Record<Regla, Nivel>> = REGLAS_CLAUDE
+): { hallazgos: Hallazgo[]; descartados: number } {
   const lista = Array.isArray((bruto as { hallazgos?: unknown } | null)?.hallazgos)
     ? ((bruto as { hallazgos: unknown[] }).hallazgos)
     : null
@@ -166,7 +169,8 @@ export function hallazgosDeRespuesta(bruto: unknown, campos: Campo[]): { hallazg
     const detalle = typeof r.detalle === "string" ? r.detalle.trim() : ""
     const pide = typeof r.pide === "string" ? r.pide.trim() : ""
     const buscada = plano(cita)
-    if (!esRegla(r.regla) || !buscada || !detalle || !pide) {
+    const regla = typeof r.regla === "string" && r.regla in reglas ? (r.regla as Regla) : null
+    if (!regla || !buscada || !detalle || !pide) {
       descartados++
       continue
     }
@@ -180,8 +184,8 @@ export function hallazgosDeRespuesta(bruto: unknown, campos: Campo[]): { hallazg
       continue
     }
     hallazgos.push({
-      regla: r.regla,
-      nivel: REGLAS_CLAUDE[r.regla],
+      regla,
+      nivel: reglas[regla] ?? "aviso",
       donde: campo?.donde ?? (dicho || "pieza"),
       detalle: `${detalle} Texto: «${recorta(cita, 160)}»`,
       pide,

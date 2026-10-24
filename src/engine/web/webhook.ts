@@ -24,13 +24,21 @@ import { supabaseAdmin } from "../supabase-admin"
  */
 
 export const VERSION_ESQUEMA = "1"
-const MAX_INTENTOS = 8
+export const MAX_INTENTOS = 8
 /** Espera antes del intento n+1, en minutos. */
-const ESPERAS_MIN = [1, 5, 30, 120, 360, 720, 1440]
-const PERMANENTES = new Set([400, 401, 403, 404, 410, 422])
+export const ESPERAS_MIN = [1, 5, 30, 120, 360, 720, 1440]
+export const PERMANENTES = new Set([400, 401, 403, 404, 410, 422])
 const TIMEOUT_MS = 15_000
 
-export type TipoEvento = "noticia.publicada" | "noticia.actualizada" | "noticia.retirada" | "ping"
+export type TipoEvento =
+  | "noticia.publicada"
+  | "noticia.actualizada"
+  | "noticia.retirada"
+  // Los reportes y guias de las piezas (web/recursos.ts).
+  | "recurso.publicado"
+  | "recurso.actualizado"
+  | "recurso.retirado"
+  | "ping"
 
 // ----------------------------------------------------------------- conexion
 
@@ -52,9 +60,9 @@ export function firmar(secreto: string, t: number, cuerpo: string): string {
   return crypto.createHmac("sha256", secreto).update(`${t}.${cuerpo}`).digest("hex")
 }
 
-type Respuesta = { ok: boolean; status: number | null; cuerpo: string; error: string | null; ms: number; retryAfter: number | null }
+export type Respuesta = { ok: boolean; status: number | null; cuerpo: string; error: string | null; ms: number; retryAfter: number | null }
 
-async function enviar(conexion: ConexionWeb, tipo: TipoEvento, eventoId: string, intento: number, evento: unknown): Promise<Respuesta> {
+export async function enviar(conexion: ConexionWeb, tipo: TipoEvento, eventoId: string, intento: number, evento: unknown): Promise<Respuesta> {
   const cuerpo = JSON.stringify(evento)
   const t = Math.floor(Date.now() / 1000)
   const inicio = Date.now()
@@ -81,7 +89,7 @@ async function enviar(conexion: ConexionWeb, tipo: TipoEvento, eventoId: string,
   }
 }
 
-function idEvento(redaccionId: string, tipo: TipoEvento, version: number): string {
+export function idEvento(redaccionId: string, tipo: TipoEvento, version: number): string {
   return `evt_${crypto.createHash("sha1").update(`${redaccionId}:${tipo}:${version}`).digest("hex").slice(0, 20)}`
 }
 
@@ -116,11 +124,11 @@ type FilaRedaccion = {
 const COLUMNAS =
   "id, account_id, raw_news_id, status, titular, payload, fuentes, imagen_url, imagen_credito, imagen_ancho, imagen_alto, word_count, redactada_at, nicho_slug, nicho_nombre, version, slug, web_status, web_version, web_intentos, web_publicada_at"
 
-function escapar(t: string): string {
+export function escapar(t: string): string {
   return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
 }
 
-function medioLegible(medio: string | null, url: string): string {
+export function medioLegible(medio: string | null, url: string): string {
   const m = (medio ?? "").trim()
   if (m && !/^(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(m)) return m
   try {
@@ -130,7 +138,7 @@ function medioLegible(medio: string | null, url: string): string {
   }
 }
 
-function slugDe(titular: string): string {
+export function slugDe(titular: string): string {
   const base = titular
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
@@ -223,7 +231,7 @@ async function noticiaParaEnviar(fila: FilaRedaccion, publicadaAt: string) {
   }
 }
 
-async function empresaDe(accountId: string): Promise<Empresa> {
+export async function empresaDe(accountId: string): Promise<Empresa> {
   const { data } = await supabaseAdmin().from("accounts").select("id, slug, name").eq("id", accountId).single()
   const a = data as { id: string; slug: string; name: string }
   return { id: a.id, slug: a.slug, nombre: a.name }

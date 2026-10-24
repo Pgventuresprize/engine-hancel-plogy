@@ -22,7 +22,9 @@ export async function identidadEditorial(accountId: string): Promise<IdentidadEd
     filas<Pilar>("content_pillars", `${BASE}, pregunta`, accountId),
     filas<Capa>("content_audiences", BASE, accountId),
     filas<Capa>("content_verticals", BASE, accountId),
-    filas<Cta>("content_ctas", `${BASE}, tipo, requiere_recurso, recurso_listo, activo`, accountId),
+    // Con "*": recurso_por_pieza llega con la migracion de recursos, y antes
+    // de correrla un CTA simplemente no lo trae.
+    filas<Cta>("content_ctas", "*", accountId),
   ])
-  return { pilares, audiencias, verticales, ctas }
+  return { pilares, audiencias, verticales, ctas: ctas.map((c) => ({ ...c, recurso_por_pieza: c.recurso_por_pieza === true })) }
 }

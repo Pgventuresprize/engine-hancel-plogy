@@ -69,6 +69,13 @@ export type PiezaDelTablero = {
   receta: Receta | null
 }
 
+export type ResumenRecurso = {
+  estado: "escribiendo" | "listo" | "aprobado" | "descartado"
+  palabra: string | null
+  /** Ya esta en el portal de la marca, con su URL. */
+  enLaWeb: boolean
+}
+
 export type Ficha = {
   newsId: string
   /**
@@ -98,6 +105,11 @@ export type Ficha = {
   estadoContenido: string | null
 
   angulo: Pick<ContentAngle, "id" | "angle" | "thesis" | "playbook_format" | "clasificacion" | "criterio" | "status"> | null
+  /**
+   * El reporte o la guia que promete el cierre de sus piezas, en resumen: el
+   * contenido entero se lee al abrir su pestaña (estudio/recurso-actions.ts).
+   */
+  recurso: ResumenRecurso | null
   piezas: PiezaDelTablero[]
 
   /** La primera imagen ya generada, para verla en la tarjeta sin abrirla. */
@@ -233,13 +245,24 @@ export async function getTablero(): Promise<Tablero> {
   // `in()` hace una URL de decenas de kB que PostgREST rechaza, y el fallo era
   // mudo —las piezas no llegaban y todo parecia estar en "analizada"—. Ademas
   // las dos tablas ya llevan `account_id`, asi que el filtro es el mismo.
-  const [angulos, piezas, recetasIg, recetasLi] = await Promise.all([
+  const [angulos, piezas, recetasIg, recetasLi, recursos, recursosEnCurso] = await Promise.all([
     supabase.from("content_angles").select("*").eq("account_id", accountId),
     supabase.from("content_pieces").select("*").eq("account_id", accountId),
     // Solo la receta: el guion entero no hace falta para pintar el tablero.
     supabase.from("jobs_instagram").select("id, receta").eq("account_id", accountId).not("receta", "is", null),
     supabase.from("jobs_linkedin").select("id, receta").eq("account_id", accountId).not("receta", "is", null),
+    // Sin la migracion de recursos estas dos fallan y la ficha sale sin recurso.
+    supabase.from("content_recursos").select("content_angle_id, status, palabra, web_url").eq("account_id", accountId),
+    supabase.from("jobs_recurso").select("content_angle_id").eq("account_id", accountId).is("consumed_at", null),
   ])
+  const recursoPorAngulo = new Map<string, ResumenRecurso>()
+  for (const r of (recursos.data ?? []) as { content_angle_id: string; status: ResumenRecurso["estado"]; palabra: string; web_url: string | null }[]) {
+    recursoPorAngulo.set(r.content_angle_id, { estado: r.status, palabra: r.palabra, enLaWeb: Boolean(r.web_url) })
+  }
+  for (const j of (recursosEnCurso.data ?? []) as { content_angle_id: string }[]) {
+    const ya = recursoPorAngulo.get(j.content_angle_id)
+    recursoPorAngulo.set(j.content_angle_id, { estado: "escribiendo", palabra: ya?.palabra ?? null, enLaWeb: ya?.enLaWeb ?? false })
+  }
   const recetas = new Map<string, Receta>()
   for (const j of [...(recetasIg.data ?? []), ...(recetasLi.data ?? [])] as { id: string; receta: unknown }[]) {
     const r = parseReceta(j.receta)
@@ -315,6 +338,7 @@ export async function getTablero(): Promise<Tablero> {
       contenido: null,
       estadoContenido: n.content_fetch_status,
       angulo,
+      recurso: a ? (recursoPorAngulo.get(a.id) ?? null) : null,
       piezas: misPiezas,
       miniatura: miniaturaDe(misPiezas),
       promovidaAMano: n.promoted_by_hand === true,

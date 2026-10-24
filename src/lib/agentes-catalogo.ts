@@ -13,6 +13,7 @@ export type ClaveAgente =
   | "extraccion"
   | "analisis"
   | "angulo"
+  | "recursos"
   | "instagram"
   | "facebook"
   | "linkedin"
@@ -81,6 +82,16 @@ export const AGENTES: FichaAgente[] = [
     resumen: "Decide la lectura no obvia de las noticias que pasan el umbral.",
     usaIA: true,
     modos: ["manual", "programado", "automatico"],
+    conexiones: [CLAUDE],
+    etapa: "Angulo",
+  },
+  {
+    clave: "recursos",
+    nombre: "Reportes y guias",
+    resumen:
+      "Cuando el CTA de un ángulo promete un recurso por comentar una palabra, escribe ese reporte o esa guía antes que la pieza: lee las fuentes a fondo, separa lo que se sabe de lo que no, firma la lectura de la marca y deja la palabra y los dos mensajes del DM. El carrusel y el post se escriben después con lo que trae.",
+    usaIA: true,
+    modos: ["manual", "automatico"],
     conexiones: [CLAUDE],
     etapa: "Angulo",
   },

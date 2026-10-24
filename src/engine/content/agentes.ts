@@ -31,6 +31,7 @@ import {
 import { revisarConClaude, type Red } from "./revisor-claude"
 import { bloqueCriterioEscritor, conCriterio } from "./criterio"
 import { conPocoMaterial, estadoDelMaterial } from "./material"
+import { bloqueRecursoEscritor } from "../recursos/modelo"
 import type { AngleJobInput, LinkedinJobInput, Variables } from "./types"
 
 /**
@@ -67,6 +68,19 @@ function conClasificacion(input: LinkedinJobInput): string {
   return `${bloque ? `\n${bloque}\n` : ""}${bloqueCriterioEscritor(input.angle.criterio)}`
 }
 
+/**
+ * El recurso que promete el cierre, si la pieza lo trae: la palabra, la promesa
+ * y lo que contiene. Si se prometia y no se pudo escribir, el aviso de que el
+ * cierre no lo ofrece.
+ */
+function conRecurso(input: LinkedinJobInput, red: "instagram" | "linkedin"): string {
+  if (input.sin_recurso) {
+    return `\nEL RECURSO: el CTA de este ángulo prometía un recurso que no se pudo escribir. El cierre no ofrece ningún recurso ni pide comentar una palabra: invita a seguir a la marca, con una razón ligada a esta pieza.\n`
+  }
+  const bloque = bloqueRecursoEscritor(input.recurso, red)
+  return bloque ? `\n${bloque}\n` : ""
+}
+
 // ------------------------------------------------------------------ revision
 
 /**
@@ -86,6 +100,7 @@ export async function contextoDeRevision(accountId: string, input: LinkedinJobIn
     material: materialDe(input.raw_news),
     ejemplos: ejemplos.filter((e) => e.activo).map((e) => ({ nombre: e.nombre, texto: e.texto })),
     textoCtas: ctas.map((c) => `${c.name}. ${c.description ?? ""}`).join("\n"),
+    palabra: input.recurso?.palabra ?? null,
   }
 }
 
@@ -375,7 +390,7 @@ function promptLinkedin(input: LinkedinJobInput): string {
 - angulo: ${input.angle.angle}
 - tesis: ${input.angle.thesis ?? "(sin tesis)"}
 - formato: ${input.angle.playbook_format ?? "(sin formato)"}
-${conClasificacion(input)}
+${conClasificacion(input)}${conRecurso(input, "linkedin")}
 NOTICIA
 - titulo: ${n.title}
 - fuente: ${n.source ?? "desconocida"}
@@ -644,7 +659,7 @@ export const PIEZAS_INSTAGRAM: PiezaDeOficio[] = [
     id: "cierre:palabra",
     nombre: "El cierre pide comentar una palabra",
     cuando: { ...SIEMPRE, cta_tipos: ["palabra"] },
-    texto: `El cierre pide comentar una sola palabra, en mayúsculas, a cambio de algo que la marca envía. La palabra y lo que se recibe salen del CTA de la clasificación: no inventes otra palabra ni otro recurso. El título lleva la palabra ("Comenta PROCESO"); el cuerpo dice qué recibe quien la comenta y cómo le llega, sin prometer plazos ni nada que el CTA no diga. El caption repite la misma palabra en mayúsculas y la misma promesa.`,
+    texto: `El cierre pide comentar una sola palabra, en mayúsculas, a cambio de algo que la marca envía. Si la pieza trae su recurso ya escrito, la palabra y lo que se recibe salen de ahí; si no, del CTA de la clasificación. No inventes otra palabra ni otro recurso. El título lleva la palabra ("Comenta PROCESO"); el cuerpo dice qué recibe quien la comenta y cómo le llega, sin prometer plazos ni nada que el CTA no diga. El caption repite la misma palabra en mayúsculas y la misma promesa.`,
   },
   {
     id: "cierre:dm",
@@ -797,7 +812,7 @@ function promptInstagram(input: LinkedinJobInput): string {
 - angulo: ${input.angle.angle}
 - tesis: ${input.angle.thesis ?? "(sin tesis)"}
 - formato: ${input.angle.playbook_format ?? "(sin formato)"}
-${conClasificacion(input)}
+${conClasificacion(input)}${conRecurso(input, "instagram")}
 NOTICIA
 - titulo: ${n.title}
 - fuente: ${n.source ?? "desconocida"}

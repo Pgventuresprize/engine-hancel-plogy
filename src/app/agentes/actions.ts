@@ -267,6 +267,8 @@ export async function ejecutarAgente(
           ? `${r.anglesQueued} noticias enviadas a angulo.`
           : agent === "publicacion"
             ? `${r.piecesPublished} piezas publicadas.`
+            : agent === "recursos"
+              ? `${r.recursosCreated} recursos escritos; los que van por etapas siguen en las próximas pasadas.`
             : `${r.piecesCreated + r.carouselsCreated + r.facebookCreated} piezas generadas.`
 
     return { ok: true, resumen }
