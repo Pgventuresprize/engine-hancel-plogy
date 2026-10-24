@@ -47,7 +47,7 @@ export async function moverEnRedaccion(newsId: string, destino: "analizada" | "r
     if (destino === "redaccion") {
       if (noticia.status === "vetada") return { ok: false, error: "Es un tema vetado: no se redacta." }
       if (noticia.status === "discarded_date") return { ok: false, error: "Es una noticia vieja: no se redacta." }
-      if (noticia.status === "pending_analysis") return { ok: false, error: "Primero hay que analizarla." }
+      if (noticia.status === "pending_analysis" || noticia.status === "analyzing") return { ok: false, error: "Primero hay que analizarla." }
       await pedirRedaccion(cuenta.id, newsId)
       await despertarRedaccion(cuenta.slug)
       refrescar()

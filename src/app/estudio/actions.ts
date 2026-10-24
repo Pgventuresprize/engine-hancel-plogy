@@ -209,10 +209,17 @@ async function hechoYaCubierto(news: RawNews): Promise<string | null> {
 async function noticiaLista(news: RawNews): Promise<{ news: RawNews } | { alto: ActionResult }> {
   let n = news
   let recien = false
+  if (n.status === "analyzing") {
+    return { alto: { ok: false, error: "La noticia se está analizando ahora mismo. Prueba en un minuto." } }
+  }
   if (n.status === "pending_analysis") {
     const { errores } = await analizarPendientes(n.account_id, 1, [n.id])
     n = await loadNews(n.id)
     recien = true
+    // Otra pasada la reservo justo antes: la esta analizando ella.
+    if (n.status === "analyzing") {
+      return { alto: { ok: false, error: "La noticia se está analizando ahora mismo. Prueba en un minuto." } }
+    }
     if (n.status === "pending_analysis") {
       return { alto: { ok: false, error: `No se pudo analizar la noticia: ${errores[0] ?? "el análisis no devolvió nada"}.` } }
     }
@@ -1109,6 +1116,7 @@ export async function moverFicha(
 
     switch (destino) {
       case "analizada": {
+        if (news.status === "analyzing") return { ok: false, error: "La noticia se está analizando ahora mismo." }
         if (news.status !== "pending_analysis") {
           return { ok: false, error: "Esta noticia ya paso por el analisis." }
         }

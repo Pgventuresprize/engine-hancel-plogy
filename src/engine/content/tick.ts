@@ -281,7 +281,7 @@ export async function runContentTick(
   // un carrusel de un angulo ya hecho) quede materializado en la misma pasada.
   if (esManual) {
     try {
-      await procesarBuzones(disparoBuzones, presupuesto)
+      await procesarBuzones(disparoBuzones, presupuesto, started.getTime() + LIMITE_PASADA_MS)
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error))
     }
@@ -958,7 +958,7 @@ export async function runContentTick(
     const res =
       gastado > MARGEN_PARA_GENERAR
         ? { procesadas: 0, fallidas: 0, errores: [] as string[] }
-        : await procesarBuzones(disparoBuzones, presupuesto)
+        : await procesarBuzones(disparoBuzones, presupuesto, started.getTime() + LIMITE_PASADA_MS)
     if (res.procesadas > 0 || res.fallidas > 0) {
       log.emit("content.jobs.procesados", `${res.procesadas} trabajos procesados`, {
         procesadas: res.procesadas,

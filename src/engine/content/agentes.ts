@@ -118,7 +118,35 @@ ${pedidoDeCorreccion(hallazgos)}`
  */
 const MAX_VUELTAS = 2
 
-type Revisado<V> = { version: V; hallazgos: Hallazgo[]; arreglos: Arreglo[]; correcciones: Correccion[]; claude?: EstadoClaude }
+/**
+ * Lo que tarda escribir y revisar una version, con margen: Opus escribiendo y
+ * el revisor con Claude leyendola. Una etapa solo empieza si le queda esto a la
+ * pasada; si no, la pieza sigue en la siguiente con lo que ya tenia.
+ */
+export const DURACION_VERSION_MS = 150_000
+
+/**
+ * El tiempo de la pasada que escribe una pieza. Sin `hasta` (el boton de la
+ * ficha), no hay limite. `pendiente` es la pieza a medio corregir que dejo una
+ * pasada anterior: se sigue desde ahi en vez de escribirla otra vez.
+ */
+export type Plazo = { hasta?: number; pendiente?: Revisado<unknown> | null }
+
+/** Una pieza que no se termino en esta pasada: vuelve a la cola con lo que lleva. */
+export type Aplazada = { aplazada: true; pendiente: Revisado<unknown> | null; uso: UsoClaude | null }
+
+const alcanza = (hasta: number | undefined) => !hasta || Date.now() + DURACION_VERSION_MS <= hasta
+
+/** La pieza a medio corregir, tal como se guarda para la pasada siguiente. */
+const sinUso = <V>(r: Revisado<V>): Revisado<unknown> => ({
+  version: r.version,
+  hallazgos: r.hallazgos,
+  arreglos: r.arreglos,
+  correcciones: r.correcciones,
+  claude: r.claude,
+})
+
+export type Revisado<V> = { version: V; hallazgos: Hallazgo[]; arreglos: Arreglo[]; correcciones: Correccion[]; claude?: EstadoClaude }
 type Escritor<V> = (
   pedido: Hallazgo[],
   version: V
@@ -148,22 +176,28 @@ const masUso = (a: UsoClaude, b: UsoClaude | null) => (b ? sumarUso(a, b) : a)
  * Corrige una pieza con lo que encontro el revisor, frenos y avisos: vuelve al
  * agente con el pedido exacto hasta que no quede nada o hasta MAX_VUELTAS. Para
  * en cuanto una vuelta no mejora. Cada vuelta queda anotada.
+ *
+ * Con `hasta`, una vuelta solo empieza si le cabe a la pasada; si no, sale con
+ * `aplazada` y la pieza como va, para que la siguiente pasada siga. `hechas`
+ * son las vueltas que ya dieron pasadas anteriores.
  */
 async function corregirEnVueltas<V>(
   anterior: Revisado<V>,
   origen: Correccion["origen"],
-  escribir: Escritor<V>
-): Promise<Revisado<V> & { uso: UsoClaude | null }> {
+  escribir: Escritor<V>,
+  plazo: { hasta?: number; hechas?: number } = {}
+): Promise<Revisado<V> & { uso: UsoClaude | null; aplazada: boolean }> {
   let actual = anterior
   let uso: UsoClaude | null = null
-  for (let i = 0; i < MAX_VUELTAS && actual.hallazgos.length > 0; i++) {
+  for (let i = plazo.hechas ?? 0; i < MAX_VUELTAS && actual.hallazgos.length > 0; i++) {
+    if (!alcanza(plazo.hasta)) return { ...actual, uso, aplazada: true }
     const r = await vueltaDeCorreccion({ anterior: actual, origen, escribir })
     if (r.uso) uso = uso ? sumarUso(uso, r.uso) : r.uso
     const mejoro = r.version !== actual.version
     actual = { version: r.version, hallazgos: r.hallazgos, arreglos: r.arreglos, correcciones: r.correcciones, claude: r.claude }
     if (!mejoro) break
   }
-  return { ...actual, uso }
+  return { ...actual, uso, aplazada: false }
 }
 
 /**
@@ -409,12 +443,21 @@ export async function generarLinkedin(
   accountId: string,
   input: LinkedinJobInput,
   model: string,
-  system: Sistema
-): Promise<{ respuesta: unknown; uso: UsoClaude }> {
+  system: Sistema,
+  plazo: Plazo = {}
+): Promise<{ respuesta: unknown; uso: UsoClaude } | Aplazada> {
+  // El criterio se guarda en el angulo al decidirlo: al repetir esta etapa en
+  // otra pasada no vuelve a llamar a Claude.
   const decidido = await conCriterio(accountId, input)
   input = decidido.input
-  const prompt = promptLinkedin(input)
   const ctx = await contextoDeRevision(accountId, input)
+  if (plazo.pendiente) {
+    const pendiente = plazo.pendiente as Revisado<PostEscrito>
+    const final = await corregirPost(accountId, input, model, system, pendiente, "automatica", ctx, plazo.hasta, pendiente.correcciones.length)
+    return "pendiente" in final ? final : { respuesta: final.respuesta, uso: masUso(decidido.uso ?? { entrada: 0, salida: 0 }, final.uso) }
+  }
+  if (!alcanza(plazo.hasta)) return { aplazada: true, pendiente: null, uso: decidido.uso }
+  const prompt = promptLinkedin(input)
   const escrita = await escribirLinkedin(accountId, model, system, prompt, ctx, input.variables.longitud)
   const rc = await conRevisorClaude(accountId, "linkedin", input, escrita)
   const primera = { ...escrita, hallazgos: rc.hallazgos, claude: rc.claude, uso: masUso(masUso(escrita.uso, rc.uso), decidido.uso) }
@@ -424,8 +467,8 @@ export async function generarLinkedin(
       uso: primera.uso,
     }
   }
-  const final = await corregirPost(accountId, input, model, system, { ...primera, correcciones: [] }, "automatica", ctx)
-  return { respuesta: final.respuesta, uso: masUso(primera.uso, final.uso) }
+  const final = await corregirPost(accountId, input, model, system, { ...primera, correcciones: [] }, "automatica", ctx, plazo.hasta)
+  return "pendiente" in final ? final : { respuesta: final.respuesta, uso: masUso(primera.uso, final.uso) }
 }
 
 /** Una vuelta de correccion sobre un post ya escrito. La usa tambien el boton de la ficha. */
@@ -436,8 +479,10 @@ export async function corregirPost(
   system: Sistema,
   anterior: Revisado<PostEscrito>,
   origen: Correccion["origen"],
-  ctx?: ContextoRevision
-): Promise<{ respuesta: ReturnType<typeof respuestaLinkedin>; uso: UsoClaude | null }> {
+  ctx?: ContextoRevision,
+  hasta?: number,
+  hechas = 0
+): Promise<{ respuesta: ReturnType<typeof respuestaLinkedin>; uso: UsoClaude | null } | Aplazada> {
   const contexto = ctx ?? (await contextoDeRevision(accountId, input))
   const prompt = promptLinkedin(input)
   const r = await corregirEnVueltas(anterior, origen, async (pedido, version) => {
@@ -452,7 +497,8 @@ export async function corregirPost(
     const rc = await conRevisorClaude(accountId, "linkedin", input, nueva)
     if (sinRevisar(rc.claude)) return null
     return { ...nueva, hallazgos: rc.hallazgos, claude: rc.claude, uso: masUso(nueva.uso, rc.uso) }
-  })
+  }, { hasta, hechas })
+  if (r.aplazada) return { aplazada: true, pendiente: sinUso(r), uso: r.uso }
   return {
     respuesta: respuestaLinkedin(r.version, armarRevision(r.hallazgos, r.arreglos, r.correcciones, r.claude)),
     uso: r.uso,
@@ -796,15 +842,23 @@ export async function generarInstagram(
   accountId: string,
   input: LinkedinJobInput,
   model: string,
-  system: Sistema
-): Promise<{ respuesta: unknown; uso: UsoClaude }> {
+  system: Sistema,
+  plazo: Plazo = {}
+): Promise<{ respuesta: unknown; uso: UsoClaude } | Aplazada> {
+  // El criterio se guarda en el angulo al decidirlo: al repetir esta etapa en
+  // otra pasada no vuelve a llamar a Claude.
   const decidido = await conCriterio(accountId, input)
   input = decidido.input
+  const ctx = await contextoDeRevision(accountId, input)
+  if (plazo.pendiente) {
+    const final = await corregirCarrusel(accountId, input, model, system, plazo.pendiente, "automatica", ctx, plazo.hasta, plazo.pendiente.correcciones.length)
+    return "pendiente" in final ? final : { respuesta: final.respuesta, uso: masUso(decidido.uso ?? { entrada: 0, salida: 0 }, final.uso) }
+  }
+  if (!alcanza(plazo.hasta)) return { aplazada: true, pendiente: null, uso: decidido.uso }
   const prompt = promptInstagram(input)
   const r = await llamarClaude({ paso: "instagram", accountId, model, system, prompt, maxTokens: MAX_TOKENS_INSTAGRAM })
   if (!r.ok) throw new Error(r.error)
 
-  const ctx = await contextoDeRevision(accountId, input)
   const escrita = guionRevisado(parsearJSONDeClaude(r.texto), input, ctx)
   const rc = await conRevisorClaude(accountId, "instagram", input, escrita)
   const primera = { ...escrita, hallazgos: rc.hallazgos, claude: rc.claude }
@@ -812,8 +866,8 @@ export async function generarInstagram(
   if (primera.hallazgos.length === 0) {
     return { respuesta: conRevision(primera.version, armarRevision(primera.hallazgos, primera.arreglos, [], primera.claude)), uso }
   }
-  const final = await corregirCarrusel(accountId, input, model, system, { ...primera, correcciones: [] }, "automatica", ctx)
-  return { respuesta: final.respuesta, uso: masUso(uso, final.uso) }
+  const final = await corregirCarrusel(accountId, input, model, system, { ...primera, correcciones: [] }, "automatica", ctx, plazo.hasta)
+  return "pendiente" in final ? final : { respuesta: final.respuesta, uso: masUso(uso, final.uso) }
 }
 
 /** Una vuelta de correccion sobre un guion ya escrito. La usa tambien el boton de la ficha. */
@@ -824,8 +878,10 @@ export async function corregirCarrusel(
   system: Sistema,
   anterior: Revisado<unknown>,
   origen: Correccion["origen"],
-  ctx?: ContextoRevision
-): Promise<{ respuesta: unknown; uso: UsoClaude | null }> {
+  ctx?: ContextoRevision,
+  hasta?: number,
+  hechas = 0
+): Promise<{ respuesta: unknown; uso: UsoClaude | null } | Aplazada> {
   const contexto = ctx ?? (await contextoDeRevision(accountId, input))
   const prompt = promptInstagram(input)
   const r = await corregirEnVueltas(anterior, origen, async (pedido, version) => {
@@ -842,7 +898,8 @@ export async function corregirCarrusel(
     const rc = await conRevisorClaude(accountId, "instagram", input, nueva)
     if (sinRevisar(rc.claude)) return null
     return { ...nueva, hallazgos: rc.hallazgos, claude: rc.claude, uso: masUso(respuesta.uso, rc.uso) }
-  })
+  }, { hasta, hechas })
+  if (r.aplazada) return { aplazada: true, pendiente: sinUso(r), uso: r.uso }
   return { respuesta: conRevision(r.version, armarRevision(r.hallazgos, r.arreglos, r.correcciones, r.claude)), uso: r.uso }
 }
 

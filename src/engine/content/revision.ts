@@ -221,6 +221,8 @@ export async function corregirPieza(accountId: string, pieceId: string): Promise
     if (actual.hallazgos.length === 0) throw new Error("El revisor no encuentra nada que corregir.")
     const [model, system] = await Promise.all([modeloDe(accountId, "instagram"), promptPara(accountId, "instagram", situacionDe(trabajo.input), trabajo.input.raw_news.id)])
     const r = await corregirCarrusel(accountId, trabajo.input, model, system, actual, "manual", ctx)
+    // Sin plazo (el boton de la ficha) nunca se aplaza.
+    if ("aplazada" in r) throw new Error("La corrección no terminó.")
     const revision = parseRevision((r.respuesta as Record<string, unknown>).revision)!
     return { revision, redibujar: await guardarCarrusel(accountId, trabajo, r.respuesta, revision) }
   }
@@ -231,6 +233,7 @@ export async function corregirPieza(accountId: string, pieceId: string): Promise
   if (actual.hallazgos.length === 0) throw new Error("El revisor no encuentra nada que corregir.")
   const [model, system] = await Promise.all([modeloDe(accountId, "linkedin"), promptPara(accountId, "linkedin", situacionDe(trabajo.input), trabajo.input.raw_news.id)])
   const r = await corregirPost(accountId, trabajo.input, model, system, actual, "manual", ctx)
+  if ("aplazada" in r) throw new Error("La corrección no terminó.")
   await guardarPost(trabajo, pieza, r.respuesta, r.respuesta.revision)
   return { revision: r.respuesta.revision, redibujar: null }
 }

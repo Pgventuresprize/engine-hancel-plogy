@@ -360,6 +360,9 @@ ${bloqueMaterial(articulo, busqueda.ok ? busqueda.texto : null, citadas)}`
   return { cambios, busqueda, uso: r.uso }
 }
 
+/** La noticia que una pasada esta analizando ahora mismo: las demas la saltan. */
+const ANALIZANDO = "analyzing"
+
 /**
  * Analiza hasta `limite` noticias pendientes de una cuenta.
  *
@@ -377,6 +380,15 @@ export async function analizarPendientes(
   soloIds?: string[]
 ): Promise<{ analizadas: number; fallidas: number; errores: string[]; uso: { entrada: number; salida: number } }> {
   const supabase = supabaseAdmin()
+
+  // Las que una pasada dejo a medias ('analizando' de hace mas de seis minutos:
+  // la pasada ya no existe) vuelven a la cola.
+  await supabase
+    .from("raw_news")
+    .update({ status: "pending_analysis" })
+    .eq("account_id", accountId)
+    .eq("status", ANALIZANDO)
+    .lt("analyzed_at", new Date(Date.now() - 6 * 60 * 1000).toISOString())
 
   let consulta = supabase
     .from("raw_news")
@@ -415,6 +427,18 @@ export async function analizarPendientes(
     const grupo = pendientes.slice(i, i + TANDA)
     await Promise.all(
       grupo.map(async (noticia) => {
+        // Reserva antes de gastar: cada noticia analizada dispara otra pasada, y
+        // las que corren a la vez leian las mismas pendientes y pagaban tres
+        // veces cada analisis. Mientras dura, analyzed_at dice desde cuando.
+        const { data: reservada } = await supabase
+          .from("raw_news")
+          .update({ status: ANALIZANDO, analyzed_at: new Date().toISOString() })
+          .eq("id", noticia.id)
+          .eq("status", "pending_analysis")
+          .select("id")
+          .maybeSingle()
+        if (!reservada) return
+
         try {
           // Una noticia vieja no se analiza: se aparta como en la extraccion.
           // Llega aqui si se trajo antes de que se entendiera su fecha.
@@ -423,7 +447,7 @@ export async function analizarPendientes(
               .from("raw_news")
               .update({ status: "discarded_date", analysis_notes: `Vieja: el buscador la fecha "${noticia.date_serper}".` })
               .eq("id", noticia.id)
-              .eq("status", "pending_analysis")
+              .eq("status", ANALIZANDO)
             return
           }
 
@@ -434,7 +458,7 @@ export async function analizarPendientes(
             .from("raw_news")
             .update(a.cambios)
             .eq("id", noticia.id)
-            .eq("status", "pending_analysis")
+            .eq("status", ANALIZANDO)
 
           if (errUpdate) throw new Error(errUpdate.message)
 
@@ -449,6 +473,12 @@ export async function analizarPendientes(
           }
           analizadas++
         } catch (e) {
+          // La que falla vuelve a la cola y se reintenta, como antes.
+          await supabase
+            .from("raw_news")
+            .update({ status: "pending_analysis", analyzed_at: null })
+            .eq("id", noticia.id)
+            .eq("status", ANALIZANDO)
           fallidas++
           errores.push(`[${noticia.id.slice(0, 8)}] ${e instanceof Error ? e.message : String(e)}`)
         }

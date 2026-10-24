@@ -44,6 +44,7 @@ export function formatNumber(value: number): string {
 /** Etiquetas legibles para los valores de `status` que usa el pipeline. */
 export const STATUS_LABELS: Record<string, string> = {
   pending_analysis: "Pendiente de analisis",
+  analyzing: "Analizando",
   analyzed: "Analizada",
   pending: "Pendiente",
   success: "Completado",
