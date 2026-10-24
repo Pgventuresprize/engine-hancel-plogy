@@ -99,10 +99,10 @@ export function ConsumoGrafico({ dias }: { dias: ConsumoDia[] }) {
 
           {sel && activo !== null && (
             <div
-              className="pointer-events-none absolute -top-2 z-10 w-44 rounded-lg border bg-popover p-2.5 text-xs shadow-md"
+              className="pointer-events-none absolute top-0 z-10 w-44 rounded-lg border bg-popover p-2.5 text-xs shadow-md"
               style={{
                 left: `${((activo + 0.5) / dias.length) * 100}%`,
-                transform: `translate(${activo > dias.length / 2 ? "-100%" : "0"}, -100%)`,
+                transform: `translateX(${activo > dias.length / 2 ? "calc(-100% - 8px)" : "8px"})`,
               }}
             >
               <div className="mb-1.5 font-medium text-foreground">{fechaCorta(sel.dia)}</div>

@@ -76,7 +76,7 @@ export default async function ConsumoPage() {
                     <TableRow>
                       <TableHead>Pieza</TableHead>
                       {GRUPOS.map((g) => (
-                        <TableHead key={g.clave} className="text-right">{g.etiqueta}</TableHead>
+                        <TableHead key={g.clave} className="hidden text-right lg:table-cell">{g.etiqueta}</TableHead>
                       ))}
                       <TableHead className="text-right">Compartido</TableHead>
                       <TableHead className="text-right">Propio</TableHead>
@@ -86,7 +86,7 @@ export default async function ConsumoPage() {
                   <TableBody>
                     {c.piezas.map((p) => (
                       <TableRow key={p.id}>
-                        <TableCell className="max-w-72">
+                        <TableCell className="max-w-40 sm:max-w-72">
                           <div className="truncate font-medium" title={p.titulo}>{p.titulo}</div>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <Badge variant="secondary">{RED[p.red] ?? p.red}</Badge>
@@ -94,7 +94,7 @@ export default async function ConsumoPage() {
                           </div>
                         </TableCell>
                         {GRUPOS.map((g) => (
-                          <TableCell key={g.clave} className="text-right tabular-nums text-muted-foreground">
+                          <TableCell key={g.clave} className="hidden text-right tabular-nums text-muted-foreground lg:table-cell">
                             {p.porGrupo[g.clave] ? formatTokens(p.porGrupo[g.clave]) : "—"}
                           </TableCell>
                         ))}
@@ -126,26 +126,26 @@ export default async function ConsumoPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Paso</TableHead>
-                      <TableHead>Modelo</TableHead>
-                      <TableHead className="text-right">Llamadas</TableHead>
+                      <TableHead className="hidden sm:table-cell">Modelo</TableHead>
+                      <TableHead className="hidden text-right sm:table-cell">Llamadas</TableHead>
                       <TableHead className="text-right">Entrada</TableHead>
-                      <TableHead className="text-right">De caché</TableHead>
+                      <TableHead className="hidden text-right md:table-cell">De caché</TableHead>
                       <TableHead className="text-right">Salida</TableHead>
                       <TableHead className="text-right">Total</TableHead>
-                      <TableHead className="text-right">Tiempo</TableHead>
+                      <TableHead className="hidden text-right md:table-cell">Tiempo</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {c.pasos.map((p) => (
                       <TableRow key={`${p.paso}|${p.modelo}`}>
-                        <TableCell className="font-medium">{p.etiqueta}</TableCell>
-                        <TableCell className="text-muted-foreground">{p.modelo}</TableCell>
-                        <TableCell className="text-right tabular-nums">{p.llamadas}</TableCell>
+                        <TableCell className="whitespace-normal font-medium">{p.etiqueta}</TableCell>
+                        <TableCell className="hidden text-muted-foreground sm:table-cell">{p.modelo}</TableCell>
+                        <TableCell className="hidden text-right tabular-nums sm:table-cell">{p.llamadas}</TableCell>
                         <TableCell className="text-right tabular-nums">{formatTokens(p.entrada)}</TableCell>
-                        <TableCell className="text-right tabular-nums text-muted-foreground">{formatTokens(p.cache)}</TableCell>
+                        <TableCell className="hidden text-right tabular-nums text-muted-foreground md:table-cell">{formatTokens(p.cache)}</TableCell>
                         <TableCell className="text-right tabular-nums">{formatTokens(p.salida)}</TableCell>
                         <TableCell className="text-right font-medium tabular-nums">{formatTokens(p.entrada + p.salida)}</TableCell>
-                        <TableCell className="text-right tabular-nums text-muted-foreground">
+                        <TableCell className="hidden text-right tabular-nums text-muted-foreground md:table-cell">
                           {p.segundos >= 60 ? `${Math.round(p.segundos / 60)} min` : `${Math.round(p.segundos)} s`}
                         </TableCell>
                       </TableRow>

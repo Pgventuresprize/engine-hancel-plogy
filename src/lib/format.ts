@@ -58,7 +58,10 @@ export function statusLabel(value: string | null): string {
   return STATUS_LABELS[value] ?? value
 }
 
-/** Tokens en corto: 850, 12,4 mil, 1,2 M. */
+/** Tokens en corto y parejos: 850, 12,4 k, 1,2 M. El compacto de Intl mezclaba "k" y "K". */
 export function formatTokens(value: number): string {
-  return new Intl.NumberFormat("es-CO", { notation: "compact", maximumFractionDigits: 1 }).format(value)
+  const corto = (n: number) => n.toLocaleString("es-CO", { maximumFractionDigits: n < 10 ? 1 : 0 })
+  if (value >= 1_000_000) return `${corto(value / 1_000_000)} M`
+  if (value >= 1_000) return `${corto(value / 1_000)} k`
+  return String(Math.round(value))
 }
