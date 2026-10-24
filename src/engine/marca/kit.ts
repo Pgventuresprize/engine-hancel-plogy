@@ -205,6 +205,8 @@ const EXTENSION: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
   "image/webp": "webp",
+  // Solo para las piezas de ejemplo (referencias): nunca se dibujan.
+  "text/html": "html",
 }
 
 /** Sube un archivo al kit (o lo reemplaza si ya habia uno con ese papel). */
@@ -212,6 +214,7 @@ export async function subirArchivoKit(accountId: string, kitId: string, a: Archi
   if (!/^[a-z0-9_]{2,60}$/.test(a.papel)) throw new Error(`Papel de archivo no valido: ${a.papel}`)
   const ext = EXTENSION[a.mime]
   if (!ext) throw new Error(`Tipo de archivo no permitido: ${a.mime}`)
+  if (a.mime === "text/html" && a.tipo !== "referencia") throw new Error("Un HTML solo entra al kit como referencia.")
   if (a.mime === "image/svg+xml" && /<\s*script|\son[a-z]+\s*=|javascript:/i.test(a.contenido.toString("utf8")))
     throw new Error(`El SVG ${a.papel} trae codigo: no se sube.`)
   const ruta = `${accountId}/${kitId}/${a.papel}.${ext}`

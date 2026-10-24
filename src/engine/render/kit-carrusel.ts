@@ -2,12 +2,14 @@ import type { RawNews } from "@/lib/types"
 
 import { cifrasInventadas, figurasDelKit, type TipoFigura } from "../marca/figuras"
 import { elegirDeBiblioteca, hayFotosEnBiblioteca, type FotoElegida, type HuecoDeFoto } from "../marca/imagenes"
-import { armarLamina, medidasDe, type DatosLamina, type KitCargado } from "../marca/kit"
+import { archivosComoDatos, armarLamina, CSS_SIN_PAGINACION, FORMATOS, medidasDe, type DatosLamina, type KitCargado } from "../marca/kit"
 import type { CarouselPayload, parseInstagramResponse } from "./carousel"
 import { terminosDeBusqueda } from "./keywords"
 import { maquetar } from "./kit-maqueta"
 import { repartirKit, type LaminaKit, type LaminaRepartida } from "./kit-reparto"
-import { cerrarNavegador, dibujarLaminas, type LaminaDibujada, type Problema } from "./navegador"
+import { paginasDeFuente } from "./kit-libre"
+import { cargarFotosLibre, claveKit, guionLibreDe, parseEstadoLibre, type EstadoLibre } from "./kit-libre-pasos"
+import { cerrarNavegador, dibujarLaminas, type LaminaDibujada, type OpcionesDibujo, type Problema } from "./navegador"
 import { BancoDeFotos, descargarFotoPexels, pexelsConfigurado } from "./pexels"
 import { MAX_SLIDES } from "./render"
 import { subirCarrusel, subirImagenSuelta } from "./storage"
@@ -74,8 +76,58 @@ export function figurasComprobadas(
   return { slides: limpias, avisos }
 }
 
+/**
+ * El carrusel de diseño libre, dibujado de la fuente que dejo el diseñador
+ * (kit-libre-pasos.ts) con sus fotos, y subido. La portada de Facebook es la
+ * misma lamina sin su paginacion.
+ */
+async function carruselLibre(
+  pieceKey: string,
+  accountId: string,
+  kc: KitCargado,
+  guion: ReturnType<typeof parseInstagramResponse>,
+  libre: EstadoLibre,
+  conPortadaFacebook: boolean
+): Promise<CarouselPayload & { kit: KitDelCarrusel }> {
+  const g = guionLibreDe(guion)
+  const total = g.slides.length + (g.cierre ? 1 : 0)
+  const fotos = await cargarFotosLibre(accountId, libre.fotos)
+  const paginas = paginasDeFuente({ kc, fotos, archivos: await archivosComoDatos(kc), total }, libre.fuente ?? "")
+  const { ancho, alto } = FORMATOS.carrusel_4x5
+  const dibujadas = await dibujarConReintento(paginas, { ancho, alto, libre: { letraMinima: kc.kit.sistema.reglas.letra_minima } })
+  const images = await subirCarrusel(
+    pieceKey,
+    dibujadas.map((d) => d.png)
+  )
+  let portadaFacebook: string | undefined
+  if (conPortadaFacebook) {
+    const [portada] = await dibujarConReintento([paginas[0].replace("</style>", `${CSS_SIN_PAGINACION}</style>`)], { ancho, alto })
+    portadaFacebook = await subirImagenSuelta(pieceKey, "facebook", portada.png)
+  }
+  const problemasDibujo = dibujadas.flatMap((d, i) => d.problemas.map((p) => ({ ...p, lamina: i + 1 })))
+  const fotosBiblioteca = libre.fotos.flatMap((f) =>
+    f.origen.tipo === "biblioteca" ? [{ lamina: f.lamina, imagenId: f.origen.imagenId, motivo: f.origen.motivo }] : []
+  )
+  return {
+    caption: guion.caption,
+    hashtags: guion.hashtags,
+    images,
+    ...(portadaFacebook ? { portadaFacebook } : {}),
+    slideCount: total,
+    portadaSinFoto: !fotos.some((f) => f.lamina === 1),
+    terminosFoto: guion.fotos.slice(0, 6),
+    creditos: libre.fotos.flatMap((f) => (f.origen.tipo === "pexels" ? [{ autor: f.origen.foto.autor, url: f.origen.foto.autorUrl }] : [])),
+    ...(guion.plan.length ? { plan: guion.plan } : {}),
+    ...(fotosBiblioteca.length ? { fotosBiblioteca } : {}),
+    kit: { id: kc.kit.id, version: kc.kit.version, nombre: kc.kit.nombre, plantillas: [] },
+    ...(problemasDibujo.length ? { problemasDibujo } : {}),
+    ...(libre.avisos.length ? { avisosKit: libre.avisos } : {}),
+    disenoLibre: { rondas: libre.rondas, puntaje: libre.puntaje, piezas: libre.piezas },
+  }
+}
+
 /** Un fallo del navegador (se cayo, tardo demasiado) merece otro intento con uno nuevo. */
-async function dibujarConReintento(htmls: string[], medidas: { ancho: number; alto: number }) {
+async function dibujarConReintento(htmls: string[], medidas: OpcionesDibujo) {
   try {
     return await dibujarLaminas(htmls, medidas)
   } catch {
@@ -96,6 +148,21 @@ export async function generarCarruselKit(
   evitarImagenes: string[]
 ): Promise<CarouselPayload & { kit: KitDelCarrusel }> {
   const { caption, hashtags, fotos, antetitulo, plan } = guion
+  // Con diseño libre ya hecho (por pasos, en pasadas anteriores), se dibuja de
+  // su fuente. Si no salio, va con las plantillas y la ficha dice por que.
+  const libre = parseEstadoLibre(guion.disenoLibre)
+  const avisosLibre: string[] = []
+  if (libre?.paso === "listo" && libre.fuente && libre.kit === claveKit(kc)) {
+    try {
+      return await carruselLibre(pieceKey, accountId, kc, guion, libre, conPortadaFacebook)
+    } catch (error) {
+      avisosLibre.push(
+        `El diseño libre no se pudo dibujar (${error instanceof Error ? error.message : String(error)}): va con las plantillas del kit.`
+      )
+    }
+  } else if (libre?.paso === "fallo") {
+    avisosLibre.push(`El diseño libre no salió (${libre.error ?? "sin motivo"}): va con las plantillas del kit.`)
+  }
   // Hasta el tope de Instagram, contando el cierre.
   const { slides, avisos: avisosFiguras } = figurasComprobadas(
     guion.slides.slice(0, MAX_SLIDES - (guion.cierre ? 1 : 0)),
@@ -115,6 +182,7 @@ export async function generarCarruselKit(
   }
   const laminas = maqueta.laminas
   const avisosKit = [
+    ...avisosLibre,
     ...avisosFiguras,
     ...(maqueta.error ? [`El maquetador no respondió (${maqueta.error}): láminas repartidas automáticamente.`] : []),
     ...(maqueta.descartadas.length

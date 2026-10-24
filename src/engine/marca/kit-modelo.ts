@@ -462,6 +462,21 @@ export function revisarPlantilla(
   return [...new Set(errores)]
 }
 
+/**
+ * Los problemas de un carrusel de diseño libre (render/kit-libre.ts): lo
+ * prohibido y las marcas {{a:...}} que no son un archivo del kit ni una foto
+ * de la pieza. Vacio si esta bien.
+ */
+export function revisarHtmlLibre(html: string, papeles: string[]): string[] {
+  const errores = PROHIBIDO.filter(([re]) => re.test(html)).map(([, motivo]) => `El diseño ${motivo}.`)
+  const validos = new Set(papeles)
+  for (const [, marca] of html.matchAll(/\{\{([^}]*)\}\}/g)) {
+    const m = /^a:(\w+)$/.exec(marca.trim())
+    if (!m || !validos.has(m[1])) errores.push(`{{${marca}}} no es un archivo del kit ni una foto de la pieza.`)
+  }
+  return [...new Set(errores)]
+}
+
 /** Los problemas del CSS comun o de un trozo comun. */
 export function revisarCss(css: string): string[] {
   return PROHIBIDO.filter(([re]) => re.test(css)).map(([, motivo]) => `El CSS del kit ${motivo}.`)

@@ -81,10 +81,17 @@ export type LaminaDibujada = {
   problemas: Problema[]
   /** Tamano de letra final de los huecos que se encogieron para caber. */
   encogidos: Record<string, number>
+  /** En diseño libre: el texto que se lee en la lamina, sin la paginacion. */
+  texto?: string
   ms: number
 }
 
-export type OpcionesDibujo = { ancho: number; alto: number }
+export type OpcionesDibujo = {
+  ancho: number
+  alto: number
+  /** Diseño libre: se mide todo texto visible, no los huecos de una plantilla. */
+  libre?: { letraMinima: number }
+}
 
 /**
  * Mide y ajusta la lamina dentro de la pagina. Se pasa como texto para que no
@@ -214,17 +221,86 @@ const MEDIR = `(() => {
   return { problemas, encogidos }
 })()`
 
+/**
+ * Mide una lamina de diseño libre (render/kit-libre.ts), que no marca huecos:
+ * cuenta como texto todo elemento visible con texto propio. Comprueba que no se
+ * salga del area segura, que no choque con otro texto, que su letra no baje de
+ * `minimo` y que no desborde su caja. Lo marcado con data-adorno (una palabra
+ * gigante de fondo) no se mide; data-paginacion no cuenta como texto de la pieza.
+ * Devuelve tambien el texto que se lee, para compararlo con el guion.
+ */
+const medirLibre = (minimo: number) => `(() => {
+  const lamina = document.querySelector('[data-lamina]') || document.body
+  const [sx1, sy1, sx2, sy2] = (lamina.dataset.seguro || '48,48,' + (innerWidth - 48) + ',' + (innerHeight - 48)).split(',').map(Number)
+  const visible = (el) => {
+    for (let n = el; n && n !== document.body; n = n.parentElement) {
+      const e = getComputedStyle(n)
+      if (e.display === 'none' || e.visibility === 'hidden' || Number(e.opacity) < 0.15) return false
+    }
+    return true
+  }
+  const propio = (el) => [...el.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim())
+  const fuera = (el) => el.closest('[data-adorno],[data-paginacion]')
+  const textos = [...lamina.querySelectorAll('*')].filter((el) => propio(el) && !fuera(el) && visible(el))
+  const zoom = (el) => { let z = 1; for (let n = el; n && n !== document.body; n = n.parentElement) { const v = parseFloat(getComputedStyle(n).zoom); if (v && v !== 1) z *= v } return z }
+  const lineas = (el) => {
+    const rango = document.createRange()
+    const salida = []
+    for (const c of el.childNodes) {
+      if (c.nodeType !== 3 || !c.textContent.trim()) continue
+      rango.selectNodeContents(c)
+      const alto = parseFloat(getComputedStyle(el).fontSize) * zoom(el) * 0.9
+      for (const r of rango.getClientRects()) {
+        if (!(r.width > 0 && r.height > 0)) continue
+        const medio = (r.top + r.bottom) / 2, h = Math.min(r.height, alto)
+        salida.push({ left: r.left, right: r.right, top: medio - h / 2, bottom: medio + h / 2 })
+      }
+    }
+    return salida
+  }
+  const chocan = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1
+  const nombre = (el) => (el.tagName.toLowerCase() + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\\s+/)[0] : '')) + ' «' + el.textContent.trim().replace(/\\s+/g, ' ').slice(0, 40) + '»'
+  const todas = textos.map((el) => ({ el, rs: lineas(el) }))
+  const problemas = []
+  for (const [i, { el, rs }] of todas.entries()) {
+    if (!rs.length) continue
+    const caja = { left: Math.min(...rs.map((r) => r.left)), top: Math.min(...rs.map((r) => r.top)), right: Math.max(...rs.map((r) => r.right)), bottom: Math.max(...rs.map((r) => r.bottom)) }
+    if (caja.left < sx1 - 1 || caja.top < sy1 - 1 || caja.right > sx2 + 1 || caja.bottom > sy2 + 1)
+      problemas.push({ tipo: 'se_sale', hueco: nombre(el), detalle: 'ocupa ' + Math.round(caja.left) + ',' + Math.round(caja.top) + ' a ' + Math.round(caja.right) + ',' + Math.round(caja.bottom) })
+    for (let n = el; n && n !== lamina; n = n.parentElement) {
+      const e = getComputedStyle(n)
+      if ((e.overflow !== 'visible' || e.overflowY !== 'visible') && n.scrollHeight > n.clientHeight + 2) { problemas.push({ tipo: 'desborda', hueco: nombre(el), detalle: 'el texto no entra en su caja' }); break }
+    }
+    for (const otro of todas.slice(i + 1)) {
+      if (otro.el.contains(el) || el.contains(otro.el)) continue
+      if (rs.some((a) => otro.rs.some((b) => chocan(a, b)))) problemas.push({ tipo: 'choca', hueco: nombre(el), detalle: 'con ' + nombre(otro.el) })
+    }
+    const letra = parseFloat(getComputedStyle(el).fontSize) * zoom(el)
+    if (letra < ${minimo} - 0.5) problemas.push({ tipo: 'letra_pequena', hueco: nombre(el), detalle: Math.round(letra) + ' px, el minimo es ${minimo}' })
+  }
+  const copia = lamina.cloneNode(true)
+  for (const n of copia.querySelectorAll('[data-paginacion],style,script')) n.remove()
+  document.body.append(copia)
+  copia.style.position = 'absolute'; copia.style.left = '-99999px'
+  const texto = copia.innerText.replace(/\\s+/g, ' ').trim()
+  copia.remove()
+  return { problemas, encogidos: {}, texto }
+})()`
+
 async function dibujarEn(
   pagina: Page,
   html: string,
-  { ancho, alto }: OpcionesDibujo
+  { ancho, alto, libre }: OpcionesDibujo
 ): Promise<Omit<LaminaDibujada, "ms">> {
   await pagina.setViewport({ width: ancho, height: alto, deviceScaleFactor: 1 })
   await pagina.setContent(html, { waitUntil: "load", timeout: 20_000 })
   await pagina.evaluate("document.fonts.ready.then(() => true)")
-  const { problemas, encogidos } = (await pagina.evaluate(MEDIR)) as Pick<LaminaDibujada, "problemas" | "encogidos">
+  const { problemas, encogidos, texto } = (await pagina.evaluate(libre ? medirLibre(libre.letraMinima) : MEDIR)) as Pick<
+    LaminaDibujada,
+    "problemas" | "encogidos" | "texto"
+  >
   const png = Buffer.from(await pagina.screenshot({ type: "png", clip: { x: 0, y: 0, width: ancho, height: alto } }))
-  return { png, problemas, encogidos }
+  return { png, problemas, encogidos, ...(texto !== undefined ? { texto } : {}) }
 }
 
 /**

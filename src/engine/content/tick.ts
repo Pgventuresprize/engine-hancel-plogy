@@ -12,6 +12,7 @@ import { publishPiece, pendingToPublish } from "../publish/publish-piece"
 import { getPublishSchedules, marcarTanda } from "../publish/schedule"
 import { generarCarrusel, nichosConocidos, noticiaDelAngulo, parseInstagramResponse } from "../render/carousel"
 import { armarPublicacionFacebook } from "../render/facebook"
+import { disenoLibrePendiente } from "../render/kit-libre-pasos"
 import { estiloDesdeConfig } from "../render/theme"
 import { etiquetarPendientes, registrarUsos } from "../marca/imagenes"
 import { supabaseAdmin } from "../supabase-admin"
@@ -56,6 +57,12 @@ import type { ContentAngle, DestinoCarrusel, JobAngle, JobLinkedin, Variables } 
  * trigger y cada cinco minutos por cron, lo que no entra ahora entra despues.
  */
 export const MAX_AUTO_POR_TICK = 5
+
+/**
+ * Hasta donde puede trabajar una pasada desde que empieza: la funcion tiene
+ * 300 s. El diseño libre de un carrusel decide con esto que pasos le caben.
+ */
+const LIMITE_PASADA_MS = 285_000
 
 /**
  * Cuantos dias atras se miran los hechos ya publicados al buscar repeticiones.
@@ -626,14 +633,27 @@ export async function runContentTick(
       const configCuenta = await configDe(job.account_id)
       // Un trabajo viejo no trae destinos: era solo Instagram.
       const destinos = job.input?.destinos ?? ["instagram"]
+      const estilo = estiloDesdeConfig(configCuenta.carousel)
+      const nichos = await nichosDe(job.account_id)
+
+      // Con diseño libre (kit activo con piezas de ejemplo) el carrusel se
+      // diseña por pasos que no caben en una pasada: aqui avanza, y si aun no
+      // esta, el trabajo queda para la siguiente.
+      if (await disenoLibrePendiente(job, news, estilo, nichos, started.getTime() + LIMITE_PASADA_MS)) {
+        log.emit("content.carousel.disenando", "Carrusel con diseño libre a medias: sigue en la próxima pasada", {
+          accountId: job.account_id,
+          jobId: job.id,
+        })
+        continue
+      }
 
       const carrusel = await generarCarrusel(
         job.id,
         job.account_id,
         job.respuesta,
         news,
-        estiloDesdeConfig(configCuenta.carousel),
-        await nichosDe(job.account_id),
+        estilo,
+        nichos,
         destinos.includes("facebook")
       )
       // La misma para Instagram y Facebook: las dos salen del mismo guion.

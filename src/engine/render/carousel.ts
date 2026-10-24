@@ -61,6 +61,8 @@ export type CarouselPayload = {
   problemasDibujo?: ProblemaDibujo[]
   /** Lo que no salio como debia al maquetar con el kit, sin llegar a impedirlo. */
   avisosKit?: string[]
+  /** Salio con diseño libre (sin plantillas): cuantas correcciones, que puntaje le dio el critico y que piezas miro. */
+  disenoLibre?: { rondas: number; puntaje: number | null; piezas: string[] }
 }
 
 /** Lo que el agente deja en `jobs_instagram.respuesta`. */
@@ -243,6 +245,8 @@ export function parseInstagramResponse(respuesta: unknown): {
   plan: PlanLamina[]
   /** Lo que va encima del titular de la portada. Vacio en un guion de antes. */
   antetitulo: string
+  /** El diseño libre de la pieza, si la marca lo usa (render/kit-libre-pasos.ts), tal cual se guardo. */
+  disenoLibre: unknown
 } {
   const raiz = (respuesta ?? {}) as Record<string, unknown>
 
@@ -300,6 +304,7 @@ export function parseInstagramResponse(respuesta: unknown): {
     cierre: cierreDelGuion(raiz.cierre),
     plan: planDelGuion(raiz.slides),
     antetitulo,
+    disenoLibre: raiz.diseno_libre ?? null,
   }
 }
 
@@ -421,7 +426,7 @@ async function generarCarruselSatori(
 
   // Plogy tiene su propia estructura de laminas, no la clasica recoloreada.
   if (estilo.plantilla === "plogy") {
-    return generarCarruselPlogy(pieceKey, { caption, hashtags, slides, fotos, elemento, cierre, plan, antetitulo }, news, estilo, nichos, conPortadaFacebook, evitarImagenes)
+    return generarCarruselPlogy(pieceKey, { ...guion, cierre }, news, estilo, nichos, conPortadaFacebook, evitarImagenes)
   }
 
   // El cierre lo escribe siempre el agente, con el CTA de la pieza y lo que

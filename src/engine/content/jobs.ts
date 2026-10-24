@@ -228,11 +228,15 @@ export async function claimLinkedinJobs(limite = MAX_DRENAJE_POR_TICK): Promise<
 export async function claimInstagramJobs(limite = MAX_DRENAJE_POR_TICK): Promise<JobInstagram[]> {
   const supabase = supabaseAdmin()
 
+  // Un carrusel con diseño libre a medias queda sin consumir entre pasadas; el
+  // que una pasada esta diseñando ahora lleva ocupado_hasta (render/kit-libre-pasos.ts).
+  const ahora = new Date().toISOString()
   const { data: candidatos, error: errorLectura } = await supabase
     .from("jobs_instagram")
     .select("id")
     .is("consumed_at", null)
     .in("status", ["done", "failed"])
+    .or(`respuesta->diseno_libre->>ocupado_hasta.is.null,respuesta->diseno_libre->>ocupado_hasta.lt.${ahora}`)
     .order("created_at")
     .limit(limite)
 

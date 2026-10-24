@@ -28,6 +28,7 @@ import {
   type TipoFigura,
 } from "./figuras"
 import { cssDeFuentesCargadas, fuentesDePagina, pedidosAGoogle, type Fuente } from "./kit-fuentes"
+import { guardarPiezaDeEjemplo, hojaDePieza } from "./kit-piezas"
 import {
   carpetaDe,
   extension,
@@ -100,6 +101,8 @@ const MAX_TIPOS = 18
 /** Cuantas figuras se escriben a la vez en una llamada, y rondas para corregir cada una. */
 const FIGURAS_A_LA_VEZ = 3
 const MAX_RONDAS_FIGURA = 2
+/** Cuantas piezas enteras del kit se guardan como ejemplo para el diseñador libre. */
+const MAX_PIEZAS = 24
 const SEGUNDOS_URL = 60 * 60
 
 const FORMATOS_LAMINA = [
@@ -494,16 +497,18 @@ async function guardarFuentes(accountId: string, kitId: string, imp: Importacion
   }
 }
 
+/** 0 si la ruta parece una pieza publicada (un carrusel), 1 si una pagina de apoyo. */
+const noEsPieza = (ruta: string) => (/carrusel|carousel|slides?|lamina|post|pieza/i.test(ruta) ? 0 : 1)
+
 async function pasoReferencias(accountId: string, kitId: string, imp: Importacion, inicio: number): Promise<void> {
   const sharp = (await import("sharp")).default
   imp.paginas_hechas ??= []
   const temporal = carpetaTemporal(accountId, kitId)
   // Las piezas publicadas primero: si el kit pasa del tope de laminas, que
   // sobren las paginas de apoyo (briefs, reportes), no los carruseles.
-  const pieza = (ruta: string) => (/carrusel|carousel|slides?|lamina|post|pieza/i.test(ruta) ? 0 : 1)
   const pendientes = imp.archivos
     .filter((a) => a.clase === "html" && !imp.paginas_hechas!.includes(a.ruta))
-    .sort((a, b) => pieza(a.ruta) - pieza(b.ruta))
+    .sort((a, b) => noEsPieza(a.ruta) - noEsPieza(b.ruta))
 
   for (const html of pendientes) {
     if (Date.now() - inicio > PRESUPUESTO_MS) return
@@ -1734,9 +1739,49 @@ async function borrarTemporal(accountId: string, kitId: string): Promise<number>
   return borrados
 }
 
+/**
+ * Las piezas del kit, enteras (su HTML y una hoja con sus laminas), para que el
+ * diseñador libre aprenda de ellas: las paginas que dieron al menos 4 laminas
+ * de 1080x1350, las publicadas primero. Lo que falle se anota y sigue.
+ */
+async function guardarPiezas(accountId: string, kitId: string, imp: Importacion): Promise<number> {
+  const porPagina = new Map<string, Referencia[]>()
+  for (const r of imp.referencias) {
+    if (!r.html || Math.abs(r.ancho / Math.max(1, r.alto) - 0.8) > 0.02) continue
+    const ruta = r.origen.split("#")[0]
+    porPagina.set(ruta, [...(porPagina.get(ruta) ?? []), r])
+  }
+  const candidatas = [...porPagina]
+    .filter(([, refs]) => refs.length >= 4)
+    .sort((a, b) => noEsPieza(a[0]) - noEsPieza(b[0]) || b[1].length - a[1].length)
+    .slice(0, MAX_PIEZAS)
+  let n = 0
+  for (const [ruta, refs] of candidatas) {
+    const archivo = imp.archivos.find((a) => a.ruta === ruta)
+    if (!archivo?.storage) continue
+    try {
+      const html = (await bajar(archivo.storage)).toString("utf8")
+      const laminas = await enTandas(refs, 8, (r) => bajar(r.imagen))
+      await guardarPiezaDeEjemplo(accountId, kitId, n + 1, {
+        titulo: /<title[^>]*>([^<]+)/i.exec(html)?.[1]?.trim() || ruta,
+        origen: ruta,
+        html,
+        hoja: await hojaDePieza(laminas),
+        laminas: refs.length,
+      })
+      n++
+    } catch (error) {
+      anotar(imp, `${ruta}: no se guardó como pieza de ejemplo (${error instanceof Error ? error.message : String(error)}).`)
+    }
+  }
+  return n
+}
+
 async function pasoCerrar(accountId: string, kitId: string, imp: Importacion): Promise<void> {
   const hechas = imp.tareas.filter((t) => t.etapa === "hecha").length
   if (!hechas) throw new Error("Ninguna plantilla salió bien. Revisa el registro y reintenta.")
+  const piezas = await guardarPiezas(accountId, kitId, imp)
+  anotar(imp, `${piezas} piezas de ejemplo guardadas para el diseñador.`)
   const borrados = await borrarTemporal(accountId, kitId)
   const origen = [
     `Importado el ${new Date().toISOString().slice(0, 10)} desde ${imp.archivos.length} archivos (${imp.referencias.length} láminas de referencia).`,
