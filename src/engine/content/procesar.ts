@@ -1,4 +1,5 @@
 import { ajustesDe, type Agente } from "../agents/settings"
+import { conContexto } from "../claude/contexto"
 import { modeloDe } from "../agents/modelos"
 import type { Receta } from "../agents/armador"
 import { promptPara } from "../agents/prompts"
@@ -30,6 +31,12 @@ import type { AngleJobInput, LinkedinJobInput } from "./types"
 const MAX_POR_TICK = 10
 
 type Buzon = "jobs_angle" | "jobs_linkedin" | "jobs_instagram"
+
+const RED_DEL_BUZON: Record<Buzon, string | undefined> = {
+  jobs_angle: undefined,
+  jobs_linkedin: "linkedin",
+  jobs_instagram: "instagram",
+}
 
 /**
  * Lo que devuelve un agente: la respuesta terminada, o la pieza aplazada con lo
@@ -101,7 +108,12 @@ async function procesarBuzon(
 
     try {
       const pendiente = (job.respuesta as { pendiente?: Plazo["pendiente"] } | null)?.pendiente ?? null
-      const r = await agente(job.input, job.account_id, { hasta, pendiente })
+      // El gasto de Claude de este trabajo queda anotado con su noticia; el
+      // angulo es compartido entre las piezas, los otros son de su red.
+      const noticia = (job.input as { raw_news?: { id?: string } } | null)?.raw_news?.id
+      const r = await conContexto({ noticia, red: RED_DEL_BUZON[tabla] }, () =>
+        agente(job.input, job.account_id, { hasta, pendiente })
+      )
       // Aplazada: vuelve a la cola con lo que lleva, y la siguiente pasada
       // sigue desde ahi en vez de escribirla otra vez.
       const { error: errDone } = await supabase

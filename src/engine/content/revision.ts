@@ -2,6 +2,7 @@ import { modeloDe } from "../agents/modelos"
 import { promptPara } from "../agents/prompts"
 import { armarPublicacionFacebook } from "../render/facebook"
 import { supabaseAdmin } from "../supabase-admin"
+import { conContexto } from "../claude/contexto"
 import {
   conRevisorClaude,
   contextoDeRevision,
@@ -171,35 +172,41 @@ async function hallazgosDeClaude(
 /** `redibujar` es el carrusel cuyas imagenes ya no dicen lo que dice el guion, si lo hay. */
 type Resultado = { revision: Revision; redibujar: string | null }
 
+/** El gasto de Claude que se haga dentro queda anotado con la noticia y la red de la pieza. */
+const deLaPieza = <T>(pieza: { network: string }, trabajo: { input: LinkedinJobInput }, hacer: () => Promise<T>) =>
+  conContexto({ noticia: trabajo.input.raw_news.id, red: esCarrusel(pieza.network) ? "instagram" : "linkedin" }, hacer)
+
 export async function revisarPieza(accountId: string, pieceId: string): Promise<Resultado> {
   const { pieza, trabajo } = await piezaYTrabajo(accountId, pieceId)
-  const ctx = await contextoDeRevision(accountId, trabajo.input)
-  const previa = parseRevision((trabajo.respuesta as Record<string, unknown> | null)?.revision)
-  const yaEstaban = new Set((previa?.arreglos ?? []).map(claveArreglo))
+  return deLaPieza(pieza, trabajo, async () => {
+    const ctx = await contextoDeRevision(accountId, trabajo.input)
+    const previa = parseRevision((trabajo.respuesta as Record<string, unknown> | null)?.revision)
+    const yaEstaban = new Set((previa?.arreglos ?? []).map(claveArreglo))
 
-  if (esCarrusel(pieza.network)) {
-    const codigo = revisarCarruselGuardado(trabajo.respuesta, trabajo.input, ctx)
-    const rc = await conRevisorClaude(accountId, "instagram", trabajo.input, codigo)
-    const r = { ...codigo, hallazgos: rc.hallazgos }
-    const nuevos = r.arreglos.filter((a) => !yaEstaban.has(claveArreglo(a)))
-    const revision = armarRevision(r.hallazgos, r.arreglos, r.correcciones, rc.claude)
-    const carrusel = await guardarCarrusel(
-      accountId,
-      trabajo,
-      { ...(r.version as Record<string, unknown>), revision },
-      revision,
-      nuevos.length > 0
-    )
-    const enLasLaminas = nuevos.some((a) => a.donde.startsWith("lámina") || a.donde.startsWith("cierre"))
-    return { revision, redibujar: enLasLaminas ? carrusel : null }
-  }
+    if (esCarrusel(pieza.network)) {
+      const codigo = revisarCarruselGuardado(trabajo.respuesta, trabajo.input, ctx)
+      const rc = await conRevisorClaude(accountId, "instagram", trabajo.input, codigo)
+      const r = { ...codigo, hallazgos: rc.hallazgos }
+      const nuevos = r.arreglos.filter((a) => !yaEstaban.has(claveArreglo(a)))
+      const revision = armarRevision(r.hallazgos, r.arreglos, r.correcciones, rc.claude)
+      const carrusel = await guardarCarrusel(
+        accountId,
+        trabajo,
+        { ...(r.version as Record<string, unknown>), revision },
+        revision,
+        nuevos.length > 0
+      )
+      const enLasLaminas = nuevos.some((a) => a.donde.startsWith("lámina") || a.donde.startsWith("cierre"))
+      return { revision, redibujar: enLasLaminas ? carrusel : null }
+    }
 
-  const respuesta = postDeLaPieza(pieza, trabajo)
-  const codigo = revisarPostGuardado(respuesta, ctx, trabajo.input.variables.longitud)
-  const rc = await conRevisorClaude(accountId, "linkedin", trabajo.input, codigo)
-  const revision = armarRevision(rc.hallazgos, codigo.arreglos, codigo.correcciones, rc.claude)
-  await guardarPost(trabajo, pieza, { ...respuesta, post: codigo.version.post, revision }, revision)
-  return { revision, redibujar: null }
+    const respuesta = postDeLaPieza(pieza, trabajo)
+    const codigo = revisarPostGuardado(respuesta, ctx, trabajo.input.variables.longitud)
+    const rc = await conRevisorClaude(accountId, "linkedin", trabajo.input, codigo)
+    const revision = armarRevision(rc.hallazgos, codigo.arreglos, codigo.correcciones, rc.claude)
+    await guardarPost(trabajo, pieza, { ...respuesta, post: codigo.version.post, revision }, revision)
+    return { revision, redibujar: null }
+  })
 }
 
 /**
@@ -209,31 +216,33 @@ export async function revisarPieza(accountId: string, pieceId: string): Promise<
  */
 export async function corregirPieza(accountId: string, pieceId: string): Promise<Resultado> {
   const { pieza, trabajo } = await piezaYTrabajo(accountId, pieceId)
-  if (pieza.published_at) throw new Error("La pieza ya está publicada: lo publicado no se corrige.")
-  const ctx = await contextoDeRevision(accountId, trabajo.input)
+  return deLaPieza(pieza, trabajo, async () => {
+    if (pieza.published_at) throw new Error("La pieza ya está publicada: lo publicado no se corrige.")
+    const ctx = await contextoDeRevision(accountId, trabajo.input)
 
-  const previa = parseRevision((trabajo.respuesta as Record<string, unknown> | null)?.revision)
+    const previa = parseRevision((trabajo.respuesta as Record<string, unknown> | null)?.revision)
 
-  if (esCarrusel(pieza.network)) {
-    const codigo = revisarCarruselGuardado(trabajo.respuesta, trabajo.input, ctx)
-    const rc = await hallazgosDeClaude(accountId, "instagram", trabajo.input, codigo.version, previa)
+    if (esCarrusel(pieza.network)) {
+      const codigo = revisarCarruselGuardado(trabajo.respuesta, trabajo.input, ctx)
+      const rc = await hallazgosDeClaude(accountId, "instagram", trabajo.input, codigo.version, previa)
+      const actual = { ...codigo, hallazgos: [...codigo.hallazgos, ...rc.hallazgos], claude: rc.claude }
+      if (actual.hallazgos.length === 0) throw new Error("El revisor no encuentra nada que corregir.")
+      const [model, system] = await Promise.all([modeloDe(accountId, "instagram"), promptPara(accountId, "instagram", situacionDe(trabajo.input), trabajo.input.raw_news.id)])
+      const r = await corregirCarrusel(accountId, trabajo.input, model, system, actual, "manual", ctx)
+      // Sin plazo (el boton de la ficha) nunca se aplaza.
+      if ("aplazada" in r) throw new Error("La corrección no terminó.")
+      const revision = parseRevision((r.respuesta as Record<string, unknown>).revision)!
+      return { revision, redibujar: await guardarCarrusel(accountId, trabajo, r.respuesta, revision) }
+    }
+
+    const codigo = revisarPostGuardado(postDeLaPieza(pieza, trabajo), ctx, trabajo.input.variables.longitud)
+    const rc = await hallazgosDeClaude(accountId, "linkedin", trabajo.input, codigo.version, previa)
     const actual = { ...codigo, hallazgos: [...codigo.hallazgos, ...rc.hallazgos], claude: rc.claude }
     if (actual.hallazgos.length === 0) throw new Error("El revisor no encuentra nada que corregir.")
-    const [model, system] = await Promise.all([modeloDe(accountId, "instagram"), promptPara(accountId, "instagram", situacionDe(trabajo.input), trabajo.input.raw_news.id)])
-    const r = await corregirCarrusel(accountId, trabajo.input, model, system, actual, "manual", ctx)
-    // Sin plazo (el boton de la ficha) nunca se aplaza.
+    const [model, system] = await Promise.all([modeloDe(accountId, "linkedin"), promptPara(accountId, "linkedin", situacionDe(trabajo.input), trabajo.input.raw_news.id)])
+    const r = await corregirPost(accountId, trabajo.input, model, system, actual, "manual", ctx)
     if ("aplazada" in r) throw new Error("La corrección no terminó.")
-    const revision = parseRevision((r.respuesta as Record<string, unknown>).revision)!
-    return { revision, redibujar: await guardarCarrusel(accountId, trabajo, r.respuesta, revision) }
-  }
-
-  const codigo = revisarPostGuardado(postDeLaPieza(pieza, trabajo), ctx, trabajo.input.variables.longitud)
-  const rc = await hallazgosDeClaude(accountId, "linkedin", trabajo.input, codigo.version, previa)
-  const actual = { ...codigo, hallazgos: [...codigo.hallazgos, ...rc.hallazgos], claude: rc.claude }
-  if (actual.hallazgos.length === 0) throw new Error("El revisor no encuentra nada que corregir.")
-  const [model, system] = await Promise.all([modeloDe(accountId, "linkedin"), promptPara(accountId, "linkedin", situacionDe(trabajo.input), trabajo.input.raw_news.id)])
-  const r = await corregirPost(accountId, trabajo.input, model, system, actual, "manual", ctx)
-  if ("aplazada" in r) throw new Error("La corrección no terminó.")
-  await guardarPost(trabajo, pieza, r.respuesta, r.respuesta.revision)
-  return { revision: r.respuesta.revision, redibujar: null }
+    await guardarPost(trabajo, pieza, r.respuesta, r.respuesta.revision)
+    return { revision: r.respuesta.revision, redibujar: null }
+  })
 }

@@ -137,6 +137,11 @@ export function AppSidebar({
           url: "/configuracion/empresa",
           isActive: pathname === "/configuracion/empresa",
         },
+        {
+          title: "Consumo",
+          url: "/configuracion/consumo",
+          isActive: pathname === "/configuracion/consumo",
+        },
       ],
     },
   ]

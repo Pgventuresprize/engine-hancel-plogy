@@ -1,5 +1,6 @@
 import { secretosDe } from "../secretos"
 import { supabaseAdmin } from "../supabase-admin"
+import { contextoUso } from "./contexto"
 
 /**
  * Llamada directa a Claude con el token de tu cuenta.
@@ -133,7 +134,7 @@ async function anotarUso(
         run_id: null,
         kind: "claude.uso",
         label: opciones.paso ?? "sin paso",
-        detail: { paso: opciones.paso ?? null, modelo: opciones.model, ...uso, ...extra },
+        detail: { paso: opciones.paso ?? null, modelo: opciones.model, ...uso, ...extra, ...contextoUso() },
       })
   } catch {
     // Silencio deliberado.

@@ -6,6 +6,7 @@ import { DIAS_DE_FRESCURA, diasDeAntiguedad, esVieja } from "./frescura"
 import { investigarEnLaWeb, type Busqueda } from "./composio"
 import { cifrasPerdidas } from "./revisor"
 import { estadoDelMaterial, nombreMaterial } from "./material"
+import { conContexto } from "../claude/contexto"
 
 /**
  * El analisis: puntua la noticia con el material que le traen.
@@ -451,7 +452,7 @@ export async function analizarPendientes(
             return
           }
 
-          const a = await analizarUna(accountId, noticia, { model, system, hoy })
+          const a = await conContexto({ noticia: noticia.id }, () => analizarUna(accountId, noticia, { model, system, hoy }))
           uso.entrada += a.uso.entrada
           uso.salida += a.uso.salida
           const { error: errUpdate } = await supabase

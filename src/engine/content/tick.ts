@@ -13,6 +13,7 @@ import { getPublishSchedules, marcarTanda } from "../publish/schedule"
 import { generarCarrusel, nichosConocidos, noticiaDelAngulo, parseInstagramResponse } from "../render/carousel"
 import { armarPublicacionFacebook } from "../render/facebook"
 import { disenoLibrePendiente } from "../render/kit-libre-pasos"
+import { conContexto } from "../claude/contexto"
 import { estiloDesdeConfig } from "../render/theme"
 import { etiquetarPendientes, registrarUsos } from "../marca/imagenes"
 import { supabaseAdmin } from "../supabase-admin"
@@ -639,7 +640,9 @@ export async function runContentTick(
       // Con diseño libre (kit activo con piezas de ejemplo) el carrusel se
       // diseña por pasos que no caben en una pasada: aqui avanza, y si aun no
       // esta, el trabajo queda para la siguiente.
-      if (await disenoLibrePendiente(job, news, estilo, nichos, started.getTime() + LIMITE_PASADA_MS)) {
+      // El gasto de Claude de aqui (diseño, maquetador) es de esta pieza.
+      const dePieza = <T,>(trabajo: () => Promise<T>) => conContexto({ noticia: news?.id, red: "instagram" }, trabajo)
+      if (await dePieza(() => disenoLibrePendiente(job, news, estilo, nichos, started.getTime() + LIMITE_PASADA_MS))) {
         log.emit("content.carousel.disenando", "Carrusel con diseño libre a medias: sigue en la próxima pasada", {
           accountId: job.account_id,
           jobId: job.id,
@@ -647,14 +650,8 @@ export async function runContentTick(
         continue
       }
 
-      const carrusel = await generarCarrusel(
-        job.id,
-        job.account_id,
-        job.respuesta,
-        news,
-        estilo,
-        nichos,
-        destinos.includes("facebook")
+      const carrusel = await dePieza(() =>
+        generarCarrusel(job.id, job.account_id, job.respuesta, news, estilo, nichos, destinos.includes("facebook"))
       )
       // La misma para Instagram y Facebook: las dos salen del mismo guion.
       const revision = await revisionDeRespuesta(job.account_id, "instagram", job.respuesta, job.input)

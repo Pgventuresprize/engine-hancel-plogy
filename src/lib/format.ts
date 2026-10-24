@@ -57,3 +57,8 @@ export function statusLabel(value: string | null): string {
   if (!value) return "—"
   return STATUS_LABELS[value] ?? value
 }
+
+/** Tokens en corto: 850, 12,4 mil, 1,2 M. */
+export function formatTokens(value: number): string {
+  return new Intl.NumberFormat("es-CO", { notation: "compact", maximumFractionDigits: 1 }).format(value)
+}
