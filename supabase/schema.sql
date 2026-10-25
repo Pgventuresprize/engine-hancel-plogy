@@ -1460,4 +1460,5 @@ alter table public.brand_skills enable row level security;
 -- El reporte o la guia que promete el cierre de una pieza, su buzon y el CTA
 -- que lo pide (content_ctas.recurso_por_pieza). Tambien amplia las listas de
 -- agentes, los ejemplos (red 'recurso') y web_entregas. La definicion completa
--- esta en migraciones/2026-10-24-recursos.sql.
+-- esta en migraciones/2026-10-24-recursos.sql. Las figuras de cada recurso
+-- (content_recursos.figuras) se suman en migraciones/2026-10-25-recursos-figuras.sql.

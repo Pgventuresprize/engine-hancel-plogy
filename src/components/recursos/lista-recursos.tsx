@@ -136,8 +136,13 @@ function Fila({ fila: f, onAbrir }: { fila: FilaRecurso; onAbrir: () => void }) 
     <button
       type="button"
       onClick={onAbrir}
-      className="hover:bg-accent/50 flex w-full flex-col gap-1.5 rounded-lg border p-3 text-left transition-colors"
+      className="hover:bg-accent/50 flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors"
     >
+      {f.portada ? (
+        // eslint-disable-next-line @next/next/no-img-element -- portada publica del bucket
+        <img src={f.portada} alt="" width={160} height={90} loading="lazy" className="hidden aspect-video w-40 shrink-0 rounded-md border object-cover sm:block" />
+      ) : null}
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
       <div className="flex flex-wrap items-center gap-1.5">
         <EstadoBadge estado={f.estado} />
         {f.tipo ? <Badge variant="secondary">{NOMBRE_TIPO_RECURSO[f.tipo]}</Badge> : null}
@@ -157,6 +162,7 @@ function Fila({ fila: f, onAbrir }: { fila: FilaRecurso; onAbrir: () => void }) 
       <p className="text-sm leading-snug font-medium">{f.titular}</p>
       {f.noticia && f.noticia !== f.titular ? <p className="text-muted-foreground line-clamp-1 text-xs">Noticia: {f.noticia}</p> : null}
       <Detalle fila={f} />
+      </div>
     </button>
   )
 }

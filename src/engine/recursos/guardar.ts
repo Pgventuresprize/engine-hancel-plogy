@@ -5,6 +5,7 @@ import type { ContentLog } from "../content/log"
 import type { ContentAngle } from "../content/types"
 import { supabaseAdmin } from "../supabase-admin"
 import type { RespuestaRecurso } from "./agente"
+import { SIN_FIGURAS } from "./figuras-modelo"
 import { contarPalabrasRecurso, DIAS_DE_PALABRA, limpiarPalabra } from "./modelo"
 
 /**
@@ -72,13 +73,22 @@ async function guardarRecurso(job: JobRecurso, angle: ContentAngle, r: Respuesta
     revision: r.revision,
     fuentes: { leidas: r.fuentes, pendientes: r.pendientes, imagen: r.imagen },
     word_count: contarPalabrasRecurso(r.recurso),
+    figuras: r.figuras ?? SIN_FIGURAS,
     aprobado_at: null,
     updated_at: ahora.toISOString(),
   }
   const previa = previo as { id: string; version: number } | null
-  const { error } = previa
-    ? await supabase.from("content_recursos").update({ ...fila, version: previa.version + 1 }).eq("id", previa.id)
-    : await supabase.from("content_recursos").insert(fila)
+  const escribir = (f: Record<string, unknown>) =>
+    previa
+      ? supabase.from("content_recursos").update({ ...f, version: previa.version + 1 }).eq("id", previa.id)
+      : supabase.from("content_recursos").insert(f)
+  let { error } = await escribir(fila)
+  // Sin la migracion de figuras (2026-10-25) la columna no existe: el recurso se guarda igual, sin ellas.
+  if (error && /figuras/.test(error.message)) {
+    const { figuras: _figuras, ...sinFiguras } = fila
+    void _figuras
+    ;({ error } = await escribir(sinFiguras))
+  }
   if (error) throw new Error(`No se pudo guardar el recurso: ${error.message}`)
 }
 

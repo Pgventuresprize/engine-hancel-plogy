@@ -582,7 +582,7 @@ async function vecesUsada(accountId: string, ids: string[]): Promise<Map<string,
 
 export type Candidata = Imagen & { puntos: number }
 
-async function candidatas(accountId: string, palabras: string[], evitar: Set<string>): Promise<Candidata[]> {
+async function candidatas(accountId: string, palabras: string[], evitar: Set<string>, apaisada = false): Promise<Candidata[]> {
   const supabase = supabaseAdmin()
   const base = () =>
     supabase
@@ -615,8 +615,10 @@ async function candidatas(accountId: string, palabras: string[], evitar: Set<str
     .map((i) => {
       const suyo = new Set(palabrasDe(textoDeBusqueda(i)))
       const coincide = palabras.filter((p) => suyo.has(p)).length
-      // La lamina es vertical: una apaisada recortada pierde los lados.
-      const forma = i.orientacion === "apaisada" ? -1.5 : 0 // ya es la del recorte, si lo hay
+      // La lamina es vertical: una apaisada recortada pierde los lados. Una
+      // figura apaisada (la de un reporte) pide lo contrario, y usa la foto
+      // entera: cuenta su forma original, no la del recorte.
+      const forma = apaisada ? (i.ancho >= i.alto ? 0 : -1.5) : i.orientacion === "apaisada" ? -1.5 : 0 // ya es la del recorte, si lo hay
       const puntos = coincide * 2 + (i.calidad ?? 3) + forma - Math.min(3, (veces.get(i.id) ?? 0) * 0.5)
       return { ...i, puntos }
     })
@@ -650,6 +652,8 @@ export async function elegirDeBiblioteca(opciones: {
   terminos: string[]
   /** Imagenes que esta pieza no debe repetir (las que tenia antes de redibujarla). */
   evitar?: string[]
+  /** Para una figura apaisada: prefiere fotos horizontales y la carga entera, sin el recorte vertical. */
+  apaisada?: boolean
 }): Promise<Map<number, FotoElegida>> {
   const elegidas = new Map<number, FotoElegida>()
   const { accountId, huecos } = opciones
@@ -658,7 +662,7 @@ export async function elegirDeBiblioteca(opciones: {
     const dias = await diasSinRepetir(accountId)
     const evitar = new Set([...(await usadasHace(accountId, dias)), ...(opciones.evitar ?? [])])
     const palabras = palabrasDe([...opciones.terminos, ...huecos.map((h) => h.texto)].join(" "))
-    const pool = (await candidatas(accountId, palabras, evitar)).slice(0, CANDIDATAS_PARA_ELEGIR)
+    const pool = (await candidatas(accountId, palabras, evitar, opciones.apaisada)).slice(0, CANDIDATAS_PARA_ELEGIR)
     if (pool.length === 0) return elegidas
     if (huecos.some((h) => h.tono && h.tono !== "cualquiera")) await completarLuminosidad(pool)
 
@@ -670,7 +674,7 @@ export async function elegirDeBiblioteca(opciones: {
       ?? asignarPorPuntos(huecos, vistas)
 
     for (const [indice, a] of asignadas) {
-      const foto = await cargarFoto(a.imagen.ruta, a.imagen.recorte)
+      const foto = await cargarFoto(a.imagen.ruta, opciones.apaisada ? null : a.imagen.recorte)
       if (foto) elegidas.set(indice, { foto, imagenId: a.imagen.id, motivo: a.motivo })
     }
   } catch (error) {

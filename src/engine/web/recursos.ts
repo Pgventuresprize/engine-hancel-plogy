@@ -1,11 +1,12 @@
-import { NOMBRE_LECTURA, NOMBRE_ROTULO, type Bloque, type Item, type Lectura, type Recurso } from "../recursos/modelo"
+import { parseFigurasGuardadas, SIN_FIGURAS, type FigurasGuardadas } from "../recursos/figuras-modelo"
+import type { Recurso } from "../recursos/modelo"
+import { armarPagina, cuerpoConFiguras, nombreDeMarca, temaDeMarca, type FuentePagina, type TemaPagina } from "../recursos/pagina"
 import type { FuenteGuardada } from "../recursos/agente"
 import { supabaseAdmin } from "../supabase-admin"
 import {
   conexionWeb,
   empresaDe,
   enviar,
-  escapar,
   ESPERAS_MIN,
   idEvento,
   MAX_INTENTOS,
@@ -30,9 +31,13 @@ import {
  * El portal responde `{"url": "..."}` con la direccion publica del recurso; con
  * ella sale el enlace del mensaje 2 del DM y la pieza ya se puede publicar.
  *
- * El cuerpo trae los bloques tal cual (con su rotulo y sus fuentes) para el
- * portal que quiera pintarlos a su manera, y `cuerpo_html` ya armado para el
- * que no.
+ * Lo que trae cada recurso, de mas hecho a mas crudo:
+ * - `pagina_html`: la pagina entera, con el estilo de la marca, la portada, las
+ *   figuras y la foto en su sitio. El portal puede publicarla tal cual.
+ * - `cuerpo_html`: el mismo cuerpo con sus figuras, sin estilo ni cabecera.
+ * - `secciones` (los bloques con su rotulo y sus fuentes), `portada` y
+ *   `figuras` ({clave, url, alt, pie, ancho, alto, seccion, despues_de}), para
+ *   el portal que lo pinte a su manera. Las imagenes son URL publicas.
  */
 
 type FilaRecurso = {
@@ -49,7 +54,9 @@ type FilaRecurso = {
   registro: { no_se_sabe?: string[] } | null
   word_count: number | null
   version: number
+  figuras?: unknown
   created_at: string
+  updated_at: string
   slug: string | null
   web_status: string | null
   web_version: number
@@ -57,49 +64,37 @@ type FilaRecurso = {
   web_publicada_at: string | null
 }
 
-const COLUMNAS =
-  "id, account_id, content_angle_id, raw_news_id, status, tipo, titular, palabra, payload, fuentes, registro, word_count, version, created_at, slug, web_status, web_version, web_intentos, web_publicada_at"
+// Todas: la columna de figuras puede no estar todavia (migracion 2026-10-25).
+const COLUMNAS = "*"
 
 // --------------------------------------------------------------- el html
 
-const sup = (fuentes: string[]) =>
-  fuentes.map((f) => `<sup><a href="#fuente-${escapar(f)}">${escapar(f.replace(/^f/, ""))}</a></sup>`).join("")
-
-/** El rotulo se ve cuando no es un hecho ni la lectura de la marca: hipotesis, calculo, ejemplo... */
-const etiqueta = (i: Pick<Item, "rotulo">) =>
-  i.rotulo && i.rotulo !== "hecho" && i.rotulo !== "lectura" ? `<span class="rotulo">${escapar(NOMBRE_ROTULO[i.rotulo])}</span> ` : ""
-
-const atributo = (i: Pick<Item, "rotulo">) => (i.rotulo ? ` data-rotulo="${i.rotulo}"` : "")
-
-function bloqueHtml(b: Bloque): string {
-  switch (b.tipo) {
-    case "parrafo":
-      return `<p${atributo(b)}>${etiqueta(b)}${escapar(b.texto)}${sup(b.fuentes)}</p>`
-    case "lista":
-      return `<ul>${b.items.map((i) => `<li${atributo(i)}>${etiqueta(i)}${escapar(i.texto)}${sup(i.fuentes)}</li>`).join("")}</ul>`
-    case "checklist":
-      return `<ul class="checklist">${b.items.map((i) => `<li${atributo(i)}><input type="checkbox" disabled> ${escapar(i.texto)}${sup(i.fuentes)}</li>`).join("")}</ul>`
-    case "tabla":
-      return `<figure${atributo(b)}><table>${b.titulo ? `<caption>${escapar(b.titulo)}</caption>` : ""}<thead><tr>${b.columnas.map((c) => `<th>${escapar(c)}</th>`).join("")}</tr></thead><tbody>${b.filas.map((f) => `<tr>${f.map((c) => `<td>${escapar(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>${b.fuentes.length ? `<figcaption>${etiqueta(b)}Fuente: ${sup(b.fuentes)}</figcaption>` : ""}</figure>`
-    case "plantilla":
-      return `<figure class="plantilla">${b.titulo ? `<figcaption>${escapar(b.titulo)}</figcaption>` : ""}<pre>${escapar(b.contenido)}</pre></figure>`
-  }
+/** Las fuentes citadas, como las pinta la pagina. */
+function fuentesDePagina(fuentes: FuenteGuardada[]): FuentePagina[] {
+  return fuentes.map((f) => ({ id: f.id, url: f.url, medio: medioLegible(f.medio, f.url), titulo: f.titulo, fecha: f.fecha, lectura: f.lectura }))
 }
 
-export function cuerpoHtml(r: Recurso, fuentes: FuenteGuardada[]): string {
-  return [
-    `<ul class="resumen">${r.resumen.map((t) => `<li>${escapar(t)}</li>`).join("")}</ul>`,
-    ...r.secciones.flatMap((s) => [`<h2>${escapar(s.titulo)}</h2>`, ...s.bloques.map(bloqueHtml)]),
-    r.siguiente_paso ? `<h2>Siguiente paso</h2><p>${escapar(r.siguiente_paso)}</p>` : "",
-    fuentes.length
-      ? `<h2>Fuentes</h2><ol class="fuentes">${fuentes
-          .map(
-            (f) =>
-              `<li id="fuente-${escapar(f.id)}"><a href="${escapar(f.url)}" rel="noopener">${escapar(f.titulo || medioLegible(f.medio, f.url))}</a>, ${escapar(medioLegible(f.medio, f.url))}${f.fecha ? `, ${escapar(f.fecha)}` : ""}. ${escapar(NOMBRE_LECTURA[f.lectura as Lectura] ?? "")}.</li>`
-          )
-          .join("")}</ol>`
-      : "",
-  ].join("")
+/** El cuerpo del recurso con sus figuras, sin estilo: para el portal que lo pinte a su manera. */
+export function cuerpoHtml(r: Recurso, fuentes: FuenteGuardada[], figuras: FigurasGuardadas = SIN_FIGURAS): string {
+  return cuerpoConFiguras(r, figuras, fuentesDePagina(fuentes))
+}
+
+/** La fila del recurso como pagina web completa, con el estilo de la marca (pagina.ts). */
+export function paginaDeFila(fila: Pick<FilaRecurso, "payload" | "fuentes" | "figuras" | "version" | "updated_at" | "word_count">, tema: TemaPagina | null, marca: string, url?: string | null): string {
+  const r = fila.payload
+  const usadas = new Set(r.fuentes_usadas)
+  const citadas = (fila.fuentes?.leidas ?? []).filter((f) => usadas.size === 0 || usadas.has(f.id))
+  return armarPagina({
+    recurso: r,
+    figuras: parseFigurasGuardadas(fila.figuras),
+    fuentes: fuentesDePagina(citadas),
+    tema,
+    marca,
+    version: fila.version,
+    fecha: fila.updated_at,
+    palabras: fila.word_count ?? 0,
+    url,
+  })
 }
 
 // ------------------------------------------------------------- el envio
@@ -125,8 +120,10 @@ async function asegurarSlug(fila: FilaRecurso): Promise<string> {
   return slug
 }
 
-async function recursoParaEnviar(fila: FilaRecurso, publicadoAt: string) {
+async function recursoParaEnviar(fila: FilaRecurso, publicadoAt: string, tema: TemaPagina | null, marca: string) {
   const r = fila.payload
+  const figuras = parseFigurasGuardadas(fila.figuras)
+  const portada = figuras.lista.find((f) => f.tipo === "portada") ?? null
   const fuentes = fila.fuentes?.leidas ?? []
   const usadas = new Set(r.fuentes_usadas)
   const citadas = fuentes.filter((f) => usadas.size === 0 || usadas.has(f.id))
@@ -147,7 +144,20 @@ async function recursoParaEnviar(fila: FilaRecurso, publicadoAt: string) {
     palabra: fila.palabra,
     secciones: r.secciones,
     siguiente_paso: r.siguiente_paso,
-    cuerpo_html: cuerpoHtml(r, citadas),
+    pagina_html: paginaDeFila(fila, tema, marca),
+    cuerpo_html: cuerpoHtml(r, citadas, figuras),
+    portada: portada ? { url: portada.url, alt: portada.alt, ancho: portada.ancho, alto: portada.alto } : null,
+    figuras: [...figuras.lista.filter((f) => f.tipo !== "portada"), ...(figuras.foto ? [{ ...figuras.foto, clave: "foto", tipo: "foto" as const }] : [])].map((f) => ({
+      clave: f.clave,
+      tipo: f.tipo,
+      url: f.url,
+      alt: f.alt,
+      pie: f.pie,
+      ancho: f.ancho,
+      alto: f.alto,
+      seccion: f.seccion,
+      despues_de: f.despues_de,
+    })),
     fuentes: citadas.map((f) => ({ id: f.id, medio: medioLegible(f.medio, f.url), titulo: f.titulo || null, url: f.url, fecha: f.fecha || null, tipo: f.tipo, lectura: f.lectura })),
     no_se_sabe: fila.registro?.no_se_sabe ?? [],
     imagen: imagen ? { url: imagen, alt: r.titular, credito: { medio: noticia?.source ?? null, url_origen: noticia?.link ?? null } } : null,
@@ -193,6 +203,7 @@ export async function procesarWebRecursos(
   const filas = (data ?? []) as FilaRecurso[]
   if (filas.length === 0) return resumen
   const empresa = await empresaDe(accountId)
+  const [tema, marca] = await Promise.all([temaDeMarca(accountId), nombreDeMarca(accountId)])
 
   for (const fila of filas) {
     let tipo: TipoEvento
@@ -227,7 +238,7 @@ export async function procesarWebRecursos(
       recurso:
         tipo === "recurso.retirado"
           ? { id: fila.id, version: fila.version, slug: fila.slug, motivo: "Retirado desde el estudio." }
-          : await recursoParaEnviar(fila, publicadoAt),
+          : await recursoParaEnviar(fila, publicadoAt, tema, marca),
     }
 
     const r = await enviar(conexion, tipo, eventoId, intento, evento)

@@ -1,7 +1,8 @@
 import "server-only"
 
 import type { EnCurso } from "@/engine/recursos/agente"
-import { NOMBRE_ETAPA_RECURSO, type TipoRecurso, type Veredicto } from "@/engine/recursos/modelo"
+import { etapaLegible, parseFigurasGuardadas } from "@/engine/recursos/figuras-modelo"
+import type { TipoRecurso, Veredicto } from "@/engine/recursos/modelo"
 import { supabaseAdmin } from "@/engine/supabase-admin"
 import { idDeCuentaActual } from "@/lib/accounts"
 
@@ -32,6 +33,8 @@ export type FilaRecurso = {
   version: number | null
   webError: string | null
   error: string | null
+  /** La URL de la portada, si el recurso tiene figuras. */
+  portada: string | null
   fecha: string
 }
 
@@ -70,7 +73,7 @@ export async function getRecursos(): Promise<FilaRecurso[]> {
   const accountId = await idDeCuentaActual()
   const supabase = supabaseAdmin()
   // Sin la migracion de recursos las dos primeras fallan y la lista sale vacia.
-  const [recursos, jobs, angulos] = await Promise.all([
+  const [recursos, jobs, angulos, figuras] = await Promise.all([
     supabase
       .from("content_recursos")
       .select("id, content_angle_id, raw_news_id, tipo, titular, palabra, status, web_url, web_error, word_count, version, veredicto:revision->>veredicto, updated_at")
@@ -81,15 +84,21 @@ export async function getRecursos(): Promise<FilaRecurso[]> {
       .eq("account_id", accountId)
       .order("created_at", { ascending: false }),
     supabase.from("content_angles").select("id, raw_news_id").eq("account_id", accountId),
+    // Aparte: sin la migracion de figuras esta falla y la lista sale sin portadas.
+    supabase.from("content_recursos").select("id, figuras").eq("account_id", accountId),
   ])
+  const portadaDe = new Map<string, string>()
+  for (const f of (figuras.data ?? []) as { id: string; figuras: unknown }[]) {
+    const p = parseFigurasGuardadas(f.figuras).lista.find((x) => x.tipo === "portada")
+    if (p) portadaDe.set(f.id, p.url)
+  }
 
   // El ultimo trabajo de cada angulo es lo que cuenta: abierto, o fallido sin consumir.
   const ultimoJob = new Map<string, JobDb>()
   for (const j of (jobs.data ?? []) as JobDb[]) if (!ultimoJob.has(j.content_angle_id)) ultimoJob.set(j.content_angle_id, j)
   const etapaDe = (j: JobDb | undefined): string | null => {
     if (!j || j.consumed_at || j.status === "failed") return null
-    const etapa = j.respuesta?.pendiente?.etapa
-    return etapa ? (NOMBRE_ETAPA_RECURSO[etapa] ?? etapa) : j.status === "processing" ? "trabajando" : "en cola"
+    return etapaLegible(j.respuesta?.pendiente, j.status)
   }
 
   const noticiaDeAngulo = new Map<string, string>()
@@ -122,6 +131,7 @@ export async function getRecursos(): Promise<FilaRecurso[]> {
     version: f.version,
     webError: f.status === "aprobado" && !f.web_url ? f.web_error : null,
     error: null,
+    portada: portadaDe.get(f.id) ?? null,
     fecha: f.updated_at,
   }))
   for (const j of sinRecurso) {
@@ -140,6 +150,7 @@ export async function getRecursos(): Promise<FilaRecurso[]> {
       version: null,
       webError: null,
       error: enCurso ? null : j.error,
+      portada: null,
       fecha: j.created_at,
     })
   }

@@ -147,10 +147,10 @@ export function laminasConFoto(g: GuionLibre, fotosPorCarrusel: number): number[
   return [1, ...elegidas, ...(g.cierre ? [total] : [])]
 }
 
-type Partes = { estilo: string; laminas: Map<number, string> }
+export type Partes = { estilo: string; laminas: Map<number, string> }
 
 /** El documento del diseñador en su estilo y sus laminas, por numero. */
-function partes(texto: string): Partes {
+export function partes(texto: string): Partes {
   const limpio = texto.replace(/^```(?:html)?\s*|```\s*$/g, "")
   const estilo = [...limpio.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join("\n")
   const laminas = new Map<number, string>()
@@ -159,11 +159,11 @@ function partes(texto: string): Partes {
   return { estilo, laminas }
 }
 
-const unir = (p: Partes) =>
+export const unir = (p: Partes) =>
   `<style>\n${p.estilo}\n</style>\n${[...p.laminas.entries()].sort((a, b) => a[0] - b[0]).map(([, html]) => html).join("\n")}`
 
 /** Una imagen reducida para el prompt. */
-async function reducida(datos: Buffer, ancho: number): Promise<Buffer> {
+export async function reducida(datos: Buffer, ancho: number): Promise<Buffer> {
   const sharp = (await import("sharp")).default
   return sharp(datos).resize({ width: ancho, withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer()
 }
@@ -194,7 +194,7 @@ export async function tira(dibujadas: LaminaDibujada[]): Promise<Buffer> {
 /** Cache de las piezas de ejemplo por kit: son las mismas para todos sus carruseles. */
 const piezasEnMemoria = new Map<string, Promise<(PiezaDeEjemplo & { html: string; hoja: Buffer | null })[]>>()
 
-function piezasConHtml(kc: KitCargado) {
+export function piezasConHtml(kc: KitCargado) {
   const clave = `${kc.kit.id}:${kc.kit.updated_at}`
   let p = piezasEnMemoria.get(clave)
   if (!p) {

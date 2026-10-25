@@ -70,6 +70,7 @@ export const NOMBRE_ETAPA_RECURSO: Record<string, string> = {
   escribir: "escribiendo",
   revisar: "en revisión",
   corregir: "corrigiendo",
+  figuras: "diseñando las figuras",
 }
 
 export type Nota = { criterio: string; nota: number; por_que: string }

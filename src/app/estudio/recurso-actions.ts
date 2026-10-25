@@ -8,10 +8,12 @@ import type { Correccion, Hallazgo } from "@/engine/content/revisor"
 import type { ContentAngle } from "@/engine/content/types"
 import type { EnCurso, FuenteGuardada, RespuestaRecurso } from "@/engine/recursos/agente"
 import type { Registro } from "@/engine/recursos/investigacion"
-import { mensajeConEnlace, NOMBRE_ETAPA_RECURSO, type Dm, type Recurso } from "@/engine/recursos/modelo"
+import { etapaLegible, parseFigurasGuardadas, type FigurasGuardadas } from "@/engine/recursos/figuras-modelo"
+import { mensajeConEnlace, type Dm, type Recurso } from "@/engine/recursos/modelo"
+import { nombreDeMarca, temaDeMarca } from "@/engine/recursos/pagina"
 import { supabaseAdmin } from "@/engine/supabase-admin"
 import { conexionWeb } from "@/engine/web/webhook"
-import { procesarWebRecursos } from "@/engine/web/recursos"
+import { paginaDeFila, procesarWebRecursos } from "@/engine/web/recursos"
 import { idDeCuentaActual } from "@/lib/accounts"
 import type { RawNews } from "@/lib/types"
 
@@ -42,6 +44,7 @@ export type RecursoDeLaFicha = {
   revision: RespuestaRecurso["revision"] | null
   fuentes: FuenteGuardada[]
   pendientes: { url: string; medio: string }[]
+  figuras: FigurasGuardadas
   web: { status: string | null; url: string | null; error: string | null; publicadaAt: string | null }
   aprobadoAt: string | null
   creado: string
@@ -74,7 +77,6 @@ export async function leerRecurso(angleId: string): Promise<{ ok: true; estado: 
     ])
     const ultimo = ((jobs ?? []) as { status: string; respuesta: { pendiente?: EnCurso } | null; error: string | null; created_at: string; consumed_at: string | null }[])[0]
     const abierto = ultimo && !ultimo.consumed_at && ultimo.status !== "failed" ? ultimo : null
-    const etapa = abierto?.respuesta?.pendiente?.etapa
     const f = fila as Record<string, unknown> | null
 
     let recurso: RecursoDeLaFicha | null = null
@@ -97,6 +99,7 @@ export async function leerRecurso(angleId: string): Promise<{ ok: true; estado: 
         revision: (f.revision as RespuestaRecurso["revision"] | null) ?? null,
         fuentes: fuentes.leidas ?? [],
         pendientes: fuentes.pendientes ?? [],
+        figuras: parseFigurasGuardadas(f.figuras),
         web: {
           status: (f.web_status as string | null) ?? null,
           url: webUrl,
@@ -113,7 +116,7 @@ export async function leerRecurso(angleId: string): Promise<{ ok: true; estado: 
       ok: true,
       estado: {
         recurso,
-        enCurso: abierto ? { etapa: etapa ? NOMBRE_ETAPA_RECURSO[etapa] ?? etapa : abierto.status === "processing" ? "trabajando" : "en cola", desde: abierto.created_at } : null,
+        enCurso: abierto ? { etapa: etapaLegible(abierto.respuesta?.pendiente, abierto.status), desde: abierto.created_at } : null,
         error: ultimo?.status === "failed" ? (ultimo.error ?? "El agente falló sin decir por qué.") : null,
         portalConectado: conexion !== null,
       },
@@ -247,5 +250,73 @@ export async function rehacerRecurso(angleId: string, modo: "rehacer" | "corregi
     return { ok: true, warning: "El agente lo está escribiendo por etapas: tarda unos minutos. Vuelve a abrir la pestaña para ver cómo va." }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "No se pudo encolar el recurso." }
+  }
+}
+
+/** La pagina web del recurso tal como sale al portal: con el estilo, la portada y las figuras. */
+export async function paginaDelRecurso(recursoId: string): Promise<{ ok: true; html: string } | { ok: false; error: string }> {
+  try {
+    const accountId = await idDeCuentaActual()
+    const { data } = await supabaseAdmin().from("content_recursos").select("*").eq("id", recursoId).eq("account_id", accountId).maybeSingle()
+    if (!data) return { ok: false, error: "Ese recurso no existe." }
+    const [tema, marca] = await Promise.all([temaDeMarca(accountId), nombreDeMarca(accountId)])
+    const fila = data as Parameters<typeof paginaDeFila>[0] & { web_url: string | null }
+    return { ok: true, html: paginaDeFila(fila, tema, marca, fila.web_url) }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "No se pudo armar la página." }
+  }
+}
+
+/**
+ * Rehace solo la portada, las figuras y la foto, con el mismo texto. Sale una
+ * version nueva que hay que volver a aprobar: lo que se aprueba es el recurso
+ * entero, imagenes incluidas.
+ */
+export async function rehacerFiguras(angleId: string): Promise<Resultado> {
+  try {
+    const accountId = await idDeCuentaActual()
+    const supabase = supabaseAdmin()
+    const [{ data: angulo }, { data: fila }, { data: abierto }] = await Promise.all([
+      supabase.from("content_angles").select("*").eq("id", angleId).eq("account_id", accountId).maybeSingle(),
+      supabase.from("content_recursos").select("palabra, payload, registro, revision, fuentes").eq("content_angle_id", angleId).maybeSingle(),
+      supabase.from("jobs_recurso").select("id").eq("content_angle_id", angleId).is("consumed_at", null).maybeSingle(),
+    ])
+    if (!angulo) return { ok: false, error: "Ese ángulo no existe." }
+    if (abierto) return { ok: false, error: "El agente ya está trabajando en este recurso." }
+    const previo = fila as {
+      palabra: string
+      payload: Recurso
+      registro: Registro | null
+      revision: RespuestaRecurso["revision"] | null
+      fuentes: { leidas?: FuenteGuardada[]; pendientes?: { url: string; medio: string }[]; imagen?: string | null } | null
+    } | null
+    if (!previo?.registro || !previo.payload || !previo.revision) return { ok: false, error: "No hay recurso al que hacerle figuras: rehazlo entero." }
+    const angle = angulo as ContentAngle
+    const { data: noticia } = await supabase.from("raw_news").select("*").eq("id", angle.raw_news_id).single()
+    const config = await getGenerationConfig(accountId)
+    const pendiente: EnCurso = {
+      etapa: "figuras",
+      registro: previo.registro,
+      version: previo.payload,
+      // Las fuentes guardadas no traen su texto: las figuras no lo necesitan.
+      fuentes: (previo.fuentes?.leidas ?? []).map((f) => ({ ...f, contenido: "" })),
+      pendientes: previo.fuentes?.pendientes ?? [],
+      imagen: previo.fuentes?.imagen ?? null,
+      revisionFija: previo.revision,
+      correcciones: [],
+    }
+    const { error } = await supabase.from("jobs_recurso").insert({
+      account_id: accountId,
+      content_angle_id: angleId,
+      input: { ...buildLinkedinInput(angle, noticia as RawNews, config.variables), esperan: { instagram: null, linkedin: false }, palabra_fija: previo.palabra },
+      respuesta: { pendiente },
+    })
+    if (error) throw new Error(error.message)
+    await runContentTick({ trigger: "manual", forzar: ["recursos"], presupuesto: 1 })
+    revalidatePath("/")
+    revalidatePath("/recursos")
+    return { ok: true, warning: "El agente está diseñando las figuras por pasos: tarda unos minutos. Vuelve a abrir la pestaña para ver cómo va." }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "No se pudo encolar las figuras." }
   }
 }

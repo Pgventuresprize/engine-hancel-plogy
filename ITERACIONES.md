@@ -270,9 +270,33 @@ PLOGY_Carousel_Agent_Kit`, piezas 003 a 018) y de qué tiene Hancel para hacerlo
   (`recurso.publicado`, `recurso.actualizado`, `recurso.retirado`) y el portal
   devuelve la URL para el DM.
 - **Puerta de publicación:** ninguna pieza se publica antes que su recurso.
+- **Lista:** la sección Recursos (`/recursos`) junta todos, con filtros.
+
+**R4 construido (2026-10-25).** Con el texto final, el agente pasa a la etapa
+"figuras" (`src/engine/recursos/figuras.ts`):
+- **Plan (Opus).** Una portada y de 2 a 6 figuras, cada una con datos rotulados,
+  fuente, pie y texto alternativo. Si encaja, también una foto de la biblioteca.
+- **Revisión por código** (`figuras-modelo.ts`): cifras que estén en el recurso,
+  fuente en el pie, rótulo visible en los cálculos y los ejemplos.
+- **Diseño.** Opus dibuja figuras de 1600x900 con el kit activo de la marca, de
+  dos en dos para que cada llamada quepa en una pasada.
+- **Medida y corrección.** El código mide; un crítico compara las figuras con las
+  piezas de la marca; hay hasta 2 correcciones.
+- **Imágenes.** Se suben al bucket público `carousels`, en `recursos/...`.
+
+Lo demás de R4:
+- **Página web.** `pagina.ts` arma la página completa con los colores, las fuentes
+  y los logos del kit, en modo claro y oscuro.
+- **Envío al portal.** Recibe `pagina_html`, `portada` y `figuras`, además de
+  `cuerpo_html` y `secciones`.
+- **Ficha.** Muestra la vista "Página web" y tiene "Rehacer figuras".
+- **Si algo falla.** Sin kit, o si las figuras fallan, el recurso sale sin ellas y
+  con un aviso.
+- **Base de datos.** La migración es `2026-10-25-recursos-figuras.sql`
+  (`content_recursos.figuras`).
 
 Sigue pendiente:
-- R4 (figuras);
+- registrar el uso de las fotos de la biblioteca por recurso;
 - el receptor de `recurso.*` en la web de Plogy;
 - el envío real del DM (ManyChat u otra);
 - R6.

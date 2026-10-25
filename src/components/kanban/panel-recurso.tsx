@@ -1,11 +1,13 @@
 "use client"
 
 import * as React from "react"
-import { CheckIcon, CopyIcon, ExternalLinkIcon, RefreshCwIcon, SendIcon, WandSparklesIcon, XIcon } from "lucide-react"
+import { CheckIcon, CopyIcon, ExternalLinkIcon, ImageIcon, RefreshCwIcon, SendIcon, WandSparklesIcon, XIcon } from "lucide-react"
 
 import {
   aprobarRecurso,
   leerRecurso,
+  paginaDelRecurso,
+  rehacerFiguras,
   rehacerRecurso,
   retirarRecurso,
   type EstadoRecursoFicha,
@@ -15,6 +17,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import type { Hallazgo } from "@/engine/content/revisor"
+import { figurasPorLugar, type FiguraHecha, type FigurasGuardadas, type FotoRecurso } from "@/engine/recursos/figuras-modelo"
 import {
   CRITERIOS_RECURSO,
   NOMBRE_LECTURA,
@@ -156,8 +159,11 @@ function Recurso({
 }) {
   const { pending, error, aviso, correr } = useAccion(alCambiar)
   const [pedido, setPedido] = React.useState("")
+  const [vista, setVista] = React.useState<"documento" | "web">("documento")
   const p = r.payload
   const revision = r.revision
+  const lugar = figurasPorLugar(r.figuras)
+  const figurasEn = (clave: string, i: number) => lugar.en(clave, i).map((f) => <FiguraVista key={f.url} figura={f} />)
 
   return (
     <div className="flex flex-col gap-4">
@@ -173,7 +179,31 @@ function Recurso({
 
       {revision ? <RevisionRecurso revision={revision} /> : null}
 
-      <section className="flex flex-col gap-2">
+      <Imagenes
+        figuras={r.figuras}
+        ocupado={pending || ocupado}
+        onRehacer={() => correr(() => rehacerFiguras(angleId))}
+      />
+
+      <div className="flex gap-1.5" role="group" aria-label="Vista">
+        {(["documento", "web"] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setVista(v)}
+            aria-pressed={vista === v}
+            className={`rounded-md border px-2 py-1 text-xs transition-colors ${vista === v ? "border-primary bg-primary text-primary-foreground" : "hover:bg-accent border-input"}`}
+          >
+            {v === "documento" ? "Documento" : "Página web"}
+          </button>
+        ))}
+      </div>
+
+      {/* key: una version nueva vuelve a armar la pagina desde cero. */}
+      {vista === "web" ? <VistaWeb key={r.version} recursoId={r.id} /> : null}
+
+      <section className={vista === "web" ? "hidden" : "flex flex-col gap-2"}>
+        {lugar.portada ? <FiguraVista figura={lugar.portada} /> : null}
         <h3 className="text-base font-semibold leading-snug">{p.titular}</h3>
         <ul className="list-disc space-y-1 pl-5">
           {p.resumen.map((t, i) => (
@@ -183,8 +213,12 @@ function Recurso({
         {p.secciones.map((s, i) => (
           <div key={i} className="flex flex-col gap-2 pt-2">
             <h4 className="font-semibold">{s.titulo}</h4>
+            {figurasEn(s.clave, -1)}
             {s.bloques.map((b, j) => (
-              <BloqueVista key={j} bloque={b} />
+              <React.Fragment key={j}>
+                <BloqueVista bloque={b} />
+                {figurasEn(s.clave, j)}
+              </React.Fragment>
             ))}
           </div>
         ))}
@@ -326,6 +360,75 @@ function Recurso({
         ) : null}
       </div>
     </div>
+  )
+}
+
+function FiguraVista({ figura: f }: { figura: FiguraHecha | FotoRecurso }) {
+  return (
+    <figure className="my-1 flex flex-col gap-1">
+      {/* eslint-disable-next-line @next/next/no-img-element -- imagen publica del bucket, ya dimensionada */}
+      <img src={f.url} alt={f.alt} width={f.ancho} height={f.alto} loading="lazy" className="h-auto w-full rounded-md border" />
+      {f.pie ? <figcaption className="text-muted-foreground text-xs">{f.pie}</figcaption> : null}
+    </figure>
+  )
+}
+
+/** Lo que salio de las imagenes: cuantas, el puntaje del critico, los avisos y el boton para rehacerlas. */
+function Imagenes({ figuras: g, ocupado, onRehacer }: { figuras: FigurasGuardadas; ocupado: boolean; onRehacer: () => void }) {
+  const total = g.lista.length + (g.foto ? 1 : 0)
+  return (
+    <div className="flex flex-col gap-1.5 rounded-lg border p-3 text-xs">
+      <div className="flex flex-wrap items-center gap-2">
+        <ImageIcon className="text-muted-foreground size-4" />
+        <span className="font-medium">
+          {total
+            ? `${g.lista.some((f) => f.tipo === "portada") ? "Portada, " : ""}${g.lista.filter((f) => f.tipo !== "portada").length} figura(s)${g.foto ? " y una foto de la biblioteca" : ""}`
+            : "Sin imágenes"}
+        </span>
+        {g.puntaje !== null ? <Badge variant="outline">Crítico de diseño: {g.puntaje}/10</Badge> : null}
+        {g.rondas ? <span className="text-muted-foreground">{g.rondas} ronda(s) de corrección</span> : null}
+        <Button size="sm" variant="outline" className="ml-auto" disabled={ocupado} onClick={onRehacer}>
+          <RefreshCwIcon />
+          {total ? "Rehacer figuras" : "Hacer figuras"}
+        </Button>
+      </div>
+      {g.avisos.length ? (
+        <ul className="list-disc pl-4 text-amber-700 dark:text-amber-400">
+          {g.avisos.map((a, i) => (
+            <li key={i}>{a}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  )
+}
+
+/** La pagina tal como sale al portal, en un marco aislado: sin scripts y con los enlaces en otra pestaña. */
+function VistaWeb({ recursoId }: { recursoId: string }) {
+  const [html, setHtml] = React.useState<string | null>(null)
+  const [error, setError] = React.useState<string | null>(null)
+  React.useEffect(() => {
+    let vivo = true
+    paginaDelRecurso(recursoId)
+      .then((r) => {
+        if (!vivo) return
+        if (r.ok) setHtml(r.html.replace("<head>", '<head><base target="_blank">'))
+        else setError(r.error)
+      })
+      .catch(() => vivo && setError("No se pudo armar la página."))
+    return () => {
+      vivo = false
+    }
+  }, [recursoId])
+  if (error) return <p className="text-destructive text-xs">{error}</p>
+  if (!html) return <p className="text-muted-foreground text-xs">Armando la página…</p>
+  return (
+    <iframe
+      title="Página web del recurso"
+      srcDoc={html}
+      sandbox="allow-popups allow-popups-to-escape-sandbox"
+      className="h-[70vh] w-full rounded-md border bg-white"
+    />
   )
 }
 

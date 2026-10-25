@@ -6,6 +6,8 @@ import { identidadEditorial } from "../marca/editorial"
 import { perfilDe } from "../marca/perfil"
 import { supabaseAdmin } from "../supabase-admin"
 import { escribirRecurso, promptRecurso } from "./escritor"
+import { avanzarFiguras, figurasDe, figurasTerminadas, nuevoEstadoFiguras, type EstadoFiguras } from "./figuras"
+import type { FigurasGuardadas } from "./figuras-modelo"
 import { armarRegistro, fuentesDelRecurso, type FuenteRecurso, type Registro } from "./investigacion"
 import { limpiarPalabra, revisarRecurso, type ContextoRecurso, type Nota, type Recurso, type Veredicto } from "./modelo"
 import { revisarRecursoConClaude } from "./revisor"
@@ -21,6 +23,8 @@ import { revisarRecursoConClaude } from "./revisor"
  *   escribir  → la primera version (Opus) y su revision de codigo
  *   revisar   → el revisor con Claude; si queda algo y hay vueltas, a corregir
  *   corregir  → una version nueva con el pedido exacto, y otra vez a revisar
+ *   figuras   → con el texto final, la portada, las figuras y la foto (figuras.ts),
+ *               por pasos propios; si fallan, el recurso sale sin ellas
  *
  * Cada etapa deja en `pendiente` lo que lleva; la pasada siguiente sigue desde
  * ahi. Se queda siempre la version que menos frena.
@@ -43,7 +47,7 @@ export type InputRecurso = LinkedinJobInput & {
   palabra_fija?: string | null
 }
 
-type Etapa = "registro" | "escribir" | "revisar" | "corregir"
+type Etapa = "registro" | "escribir" | "revisar" | "corregir" | "figuras"
 
 /** Lo que una etapa deja para la siguiente pasada. */
 export type EnCurso = {
@@ -62,6 +66,9 @@ export type EnCurso = {
   candidata?: Recurso
   hallazgosCandidata?: Hallazgo[]
   correcciones: Correccion[]
+  figuras?: EstadoFiguras
+  /** Al rehacer solo las figuras desde la ficha: la revision del texto, que no cambia. */
+  revisionFija?: RespuestaRecurso["revision"]
 }
 
 /** La fuente como queda guardada: sin el texto, que ya esta en news_sources. */
@@ -75,6 +82,7 @@ export type RespuestaRecurso = {
   pendientes: { url: string; medio: string }[]
   imagen: string | null
   revision: Revision & { notas: Nota[]; veredicto: Veredicto | null }
+  figuras: FigurasGuardadas
 }
 
 export type ResultadoRecurso = { respuesta: RespuestaRecurso; uso: UsoClaude } | { aplazada: true; pendiente: EnCurso; uso: UsoClaude | null }
@@ -158,8 +166,26 @@ export async function generarRecurso(
   uso = sumar(uso, decidido.uso)
 
   const aplazar = (): ResultadoRecurso => ({ aplazada: true, pendiente: e, uso })
+  // Con el texto final, siguen las figuras (que miden su propio tiempo por paso).
+  const aFiguras = (x: EnCurso): EnCurso => ({ ...x, etapa: "figuras", figuras: nuevoEstadoFiguras(accountId, input.angle.id) })
 
   while (true) {
+    if (e.etapa === "figuras") {
+      const r = await avanzarFiguras({
+        material: {
+          accountId,
+          recurso: e.version!,
+          registro: e.registro!,
+          fuentes: (e.fuentes ?? []).map((f) => ({ id: f.id, medio: f.medio, titulo: f.titulo, fecha: f.fecha })),
+        },
+        estado: e.figuras ?? nuevoEstadoFiguras(accountId, input.angle.id),
+        hasta: plazo.hasta,
+      })
+      uso = sumar(uso, r.uso)
+      e = { ...e, figuras: r.estado }
+      return figurasTerminadas(r.estado) ? terminar(e, uso) : aplazar()
+    }
+
     if (!cabe()) return aplazar()
 
     if (e.etapa === "registro") {
@@ -227,11 +253,17 @@ export async function generarRecurso(
           hallazgosCandidata: undefined,
           correcciones: [...e.correcciones, correccion],
         }
-        if (!gana) return terminar(e, uso)
+        if (!gana) {
+          e = aFiguras(e)
+          continue
+        }
       } else {
         e = { ...e, hallazgos, ...revisada }
       }
-      if ((e.hallazgos ?? []).length === 0 || e.correcciones.length >= MAX_VUELTAS) return terminar(e, uso)
+      if ((e.hallazgos ?? []).length === 0 || e.correcciones.length >= MAX_VUELTAS) {
+        e = aFiguras(e)
+        continue
+      }
       e = { ...e, etapa: "corregir" }
       continue
     }
@@ -245,7 +277,10 @@ ${JSON.stringify(e.version)}
 ${pedidoDeCorreccion(e.hallazgos ?? [])}`
     const r = await escribirRecurso({ accountId, model, system, prompt, paso: "recurso-correccion", hasta: plazo.hasta })
     uso = sumar(uso, r.uso)
-    if (r.recurso.status !== "ok") return terminar(e, uso)
+    if (r.recurso.status !== "ok") {
+      e = aFiguras(e)
+      continue
+    }
     const candidata = conPalabra(r.recurso)
     e = { ...e, etapa: "revisar", candidata, hallazgosCandidata: revisarRecurso(candidata, ctx) }
   }
@@ -263,7 +298,8 @@ function terminar(e: EnCurso, uso: UsoClaude | null): ResultadoRecurso {
       }),
       pendientes: e.pendientes ?? [],
       imagen: e.imagen ?? null,
-      revision: { ...revision, notas: e.notas ?? [], veredicto: e.veredicto ?? null },
+      revision: e.revisionFija ?? { ...revision, notas: e.notas ?? [], veredicto: e.veredicto ?? null },
+      figuras: figurasDe(e.figuras),
     },
     uso: uso ?? { entrada: 0, salida: 0 },
   }

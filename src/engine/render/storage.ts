@@ -71,6 +71,18 @@ export async function subirImagenSuelta(
 }
 
 /**
+ * Sube un archivo publico en cualquier ruta del bucket (las figuras y la foto
+ * de un recurso) y devuelve su URL con marca de version.
+ */
+export async function subirArchivoPublico(ruta: string, datos: Buffer, contentType: string): Promise<string> {
+  const supabase = supabaseAdmin()
+  const { error } = await supabase.storage.from(BUCKET).upload(ruta, datos, { contentType, upsert: true })
+  if (error) throw new Error(`No se pudo subir ${ruta}: ${error.message}`)
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(ruta)
+  return `${data.publicUrl}?v=${Date.now().toString(36)}`
+}
+
+/**
  * Guarda el logo de una cuenta y devuelve su URL publica.
  *
  * Vive en el mismo bucket que los carruseles, que ya es publico, pero en su
