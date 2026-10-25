@@ -8,7 +8,7 @@ import type { Correccion, Hallazgo } from "@/engine/content/revisor"
 import type { ContentAngle } from "@/engine/content/types"
 import type { EnCurso, FuenteGuardada, RespuestaRecurso } from "@/engine/recursos/agente"
 import type { Registro } from "@/engine/recursos/investigacion"
-import { mensajeConEnlace, type Dm, type Recurso } from "@/engine/recursos/modelo"
+import { mensajeConEnlace, NOMBRE_ETAPA_RECURSO, type Dm, type Recurso } from "@/engine/recursos/modelo"
 import { supabaseAdmin } from "@/engine/supabase-admin"
 import { conexionWeb } from "@/engine/web/webhook"
 import { procesarWebRecursos } from "@/engine/web/recursos"
@@ -55,13 +55,6 @@ export type EstadoRecursoFicha = {
   /** El ultimo trabajo fallido, si es lo ultimo que paso. */
   error: string | null
   portalConectado: boolean
-}
-
-const NOMBRE_ETAPA: Record<string, string> = {
-  registro: "leyendo las fuentes",
-  escribir: "escribiendo",
-  revisar: "en revisión",
-  corregir: "corrigiendo",
 }
 
 export async function leerRecurso(angleId: string): Promise<{ ok: true; estado: EstadoRecursoFicha } | { ok: false; error: string }> {
@@ -120,7 +113,7 @@ export async function leerRecurso(angleId: string): Promise<{ ok: true; estado: 
       ok: true,
       estado: {
         recurso,
-        enCurso: abierto ? { etapa: etapa ? NOMBRE_ETAPA[etapa] ?? etapa : abierto.status === "processing" ? "trabajando" : "en cola", desde: abierto.created_at } : null,
+        enCurso: abierto ? { etapa: etapa ? NOMBRE_ETAPA_RECURSO[etapa] ?? etapa : abierto.status === "processing" ? "trabajando" : "en cola", desde: abierto.created_at } : null,
         error: ultimo?.status === "failed" ? (ultimo.error ?? "El agente falló sin decir por qué.") : null,
         portalConectado: conexion !== null,
       },
@@ -156,6 +149,7 @@ export async function aprobarRecurso(recursoId: string): Promise<Resultado> {
       })
       .eq("id", r.id)
     revalidatePath("/")
+    revalidatePath("/recursos")
     if (!conectado) {
       return { ok: true, warning: "Aprobado, pero la marca no tiene portal conectado: conéctalo en Configuración > Conexiones para que salga a la web y el DM tenga enlace." }
     }
@@ -181,6 +175,7 @@ export async function retirarRecurso(recursoId: string): Promise<Resultado> {
       .eq("id", r.id)
     if (r.web_version > 0) await procesarWebRecursos(r.account_id)
     revalidatePath("/")
+    revalidatePath("/recursos")
     return { ok: true }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "No se pudo retirar el recurso." }
@@ -248,6 +243,7 @@ export async function rehacerRecurso(angleId: string, modo: "rehacer" | "corregi
 
     await runContentTick({ trigger: "manual", forzar: ["recursos"], presupuesto: 1 })
     revalidatePath("/")
+    revalidatePath("/recursos")
     return { ok: true, warning: "El agente lo está escribiendo por etapas: tarda unos minutos. Vuelve a abrir la pestaña para ver cómo va." }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "No se pudo encolar el recurso." }

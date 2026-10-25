@@ -17,7 +17,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { BotIcon, ChefHatIcon, ClapperboardIcon, FingerprintIcon, GalleryHorizontalEndIcon, KanbanIcon, LayersIcon, LightbulbIcon, SendIcon, SettingsIcon } from "lucide-react"
+import { BotIcon, ChefHatIcon, ClapperboardIcon, FileTextIcon, FingerprintIcon, GalleryHorizontalEndIcon, KanbanIcon, LayersIcon, LightbulbIcon, SendIcon, SettingsIcon } from "lucide-react"
 
 import { AGENTES } from "@/lib/agentes-catalogo"
 
@@ -92,6 +92,16 @@ export function AppSidebar({
       url: "/publicacion",
       icon: <SendIcon />,
       isActive: pathname.startsWith("/publicacion"),
+      items: [],
+    },
+    {
+      // Los reportes y guias que prometen las piezas, todos juntos. Cada uno
+      // vive tambien en la ficha de su noticia; aqui se revisan sin ir una por
+      // una. No es del plan advance: sale del tablero de noticias.
+      title: "Recursos",
+      url: "/recursos",
+      icon: <FileTextIcon />,
+      isActive: pathname.startsWith("/recursos"),
       items: [],
     },
     {

@@ -64,6 +64,14 @@ export const VEREDICTOS = {
 } as const
 export type Veredicto = keyof typeof VEREDICTOS
 
+/** Como se lee cada etapa del agente mientras trabaja (agente.ts, EnCurso). */
+export const NOMBRE_ETAPA_RECURSO: Record<string, string> = {
+  registro: "leyendo las fuentes",
+  escribir: "escribiendo",
+  revisar: "en revisión",
+  corregir: "corrigiendo",
+}
+
 export type Nota = { criterio: string; nota: number; por_que: string }
 
 export type Item = { texto: string; rotulo: Rotulo | null; fuentes: string[] }
