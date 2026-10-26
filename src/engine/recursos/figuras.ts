@@ -144,7 +144,7 @@ function recursoNumerado(r: Recurso): string {
   ].join("\n\n")
 }
 
-async function pedirPlan(m: MaterialFiguras, marca: string, correccion: string | null, timeoutMs: number) {
+async function pedirPlan(m: MaterialFiguras, marca: string, correccion: string | null, timeoutMs: number, modelo: string) {
   const prompt = `${recursoNumerado(m.recurso)}
 
 FUENTES
@@ -156,7 +156,7 @@ ${correccion ?? ""}`
   const r = await llamarClaude({
     paso: "recurso-figuras-plan",
     accountId: m.accountId,
-    model: MODELO_FIGURAS,
+    model: modelo,
     esfuerzo: "medium",
     system: sistemaPlan(marca),
     prompt,
@@ -174,10 +174,10 @@ const listaDeFallos = (fallos: Map<string, string[]>) =>
   [...fallos.entries()].map(([k, qs]) => `${k ? `Figura ${k}` : "El plan"}:\n${qs.map((q) => `  - ${q}`).join("\n")}`).join("\n")
 
 /** El plan, revisado y corregido una vez; lo que siga fallando se queda fuera. */
-async function planear(m: MaterialFiguras, marca: string, hasta: number): Promise<{ plan: PlanFiguras; uso: UsoClaude | null; avisos: string[] }> {
+async function planear(m: MaterialFiguras, marca: string, hasta: number, modelo: string): Promise<{ plan: PlanFiguras; uso: UsoClaude | null; avisos: string[] }> {
   const material = materialDe(m)
   let uso: UsoClaude | null = null
-  const primero = await pedirPlan(m, marca, null, tiempoPara(hasta, 140_000))
+  const primero = await pedirPlan(m, marca, null, tiempoPara(hasta, 140_000), modelo)
   uso = sumar(uso, primero.uso)
   let plan = primero.plan
   let fallos = revisarPlan(plan, m.recurso, material)
@@ -186,7 +186,8 @@ async function planear(m: MaterialFiguras, marca: string, hasta: number): Promis
       m,
       marca,
       `\nTU PLAN ANTERIOR\n${primero.bruto}\n\nEsto no se puede quedar así; corrígelo y responde el plan entero:\n${listaDeFallos(fallos)}`,
-      tiempoPara(hasta, 140_000)
+      tiempoPara(hasta, 140_000),
+      modelo
     )
     uso = sumar(uso, segundo.uso)
     plan = segundo.plan
@@ -242,6 +243,7 @@ REGLAS TÉCNICAS
 /** Lo que necesitan los pasos de diseño; se arma en cada pasada. */
 type ContextoFiguras = {
   accountId: string
+  modelo: string
   kc: KitCargado
   plan: PlanFiguras
   minimo: number
@@ -270,7 +272,7 @@ function guionDeFigura(f: PlanFiguras["figuras"][number], n: number): string {
     .join("\n")
 }
 
-async function contextoFiguras(accountId: string, kc: KitCargado, plan: PlanFiguras): Promise<ContextoFiguras> {
+async function contextoFiguras(accountId: string, kc: KitCargado, plan: PlanFiguras, modelo: string): Promise<ContextoFiguras> {
   const todas = await piezasConHtml(kc)
   if (!todas.length) throw new Error("El kit no tiene piezas de ejemplo para diseñar las figuras.")
   const elegidas = piezasParecidas(todas, plan.figuras.map(textoDeFigura).join(" "), PIEZAS_DISENO) as typeof todas
@@ -300,7 +302,7 @@ Arriba van ${elegidas.length} piezas que la marca publicó.
 
 LAS FIGURAS DEL REPORTE (${plan.figuras.length}, de 1600x900)
 ${plan.figuras.map((f, i) => guionDeFigura(f, i + 1)).join("\n\n")}`
-  return { accountId, kc, plan, minimo, elegidas, archivos, papeles: logos, encargo, bloques }
+  return { accountId, modelo, kc, plan, minimo, elegidas, archivos, papeles: logos, encargo, bloques }
 }
 
 const tiempoPara = (hasta: number, tope: number) => Math.max(60_000, Math.min(tope, hasta - Date.now() - 20_000))
@@ -309,7 +311,7 @@ async function pedirDiseno(ctx: ContextoFiguras, paso: string, prompt: string, b
   const r = await llamarClaude({
     paso,
     accountId: ctx.accountId,
-    model: MODELO_FIGURAS,
+    model: ctx.modelo,
     esfuerzo: "medium",
     system: SISTEMA_FIGURAS,
     prompt,
@@ -404,7 +406,7 @@ async function criticar(ctx: ContextoFiguras, dibujadas: LaminaDibujada[]): Prom
   const r = await llamarClaude({
     paso: "recurso-figuras-critica",
     accountId: ctx.accountId,
-    model: MODELO_FIGURAS,
+    model: ctx.modelo,
     esfuerzo: "low",
     system: SISTEMA_CRITICO,
     prompt: `Lo que enseña cada figura:
@@ -504,8 +506,13 @@ export async function avanzarFiguras(opciones: {
   material: MaterialFiguras
   estado: EstadoFiguras
   hasta?: number
+  /** Para comparar modelos: el de las llamadas y cuantas figuras por llamada de diseño. */
+  modelo?: string
+  lote?: number
 }): Promise<{ estado: EstadoFiguras; uso: UsoClaude | null }> {
   const { material: m } = opciones
+  const modelo = opciones.modelo ?? MODELO_FIGURAS
+  const lote = opciones.lote ?? LOTE
   const hasta = opciones.hasta ?? Date.now() + 15 * 60_000
   let e: EstadoFiguras = opciones.estado
   let uso: UsoClaude | null = null
@@ -517,7 +524,7 @@ export async function avanzarFiguras(opciones: {
   if (!kc) return { estado: fallar("La marca no tiene un kit de diseño activo: el recurso sale sin figuras."), uso }
   const marca = await nombreDeMarca(m.accountId)
   let ctx: ContextoFiguras | null = null
-  const contexto = async () => (ctx ??= await contextoFiguras(m.accountId, kc, e.plan!))
+  const contexto = async () => (ctx ??= await contextoFiguras(m.accountId, kc, e.plan!, modelo))
 
   let trabajo = false
   while (!figurasTerminadas(e)) {
@@ -528,7 +535,7 @@ export async function avanzarFiguras(opciones: {
     trabajo = true
     try {
       if (paso === "plan") {
-        const r = await planear(m, marca, hasta)
+        const r = await planear(m, marca, hasta, modelo)
         uso = sumar(uso, r.uso)
         e = { ...e, paso: r.plan.foto ? "foto" : "disenar", plan: r.plan, avisos: [...e.avisos, ...r.avisos], intentos: 0 }
       } else if (paso === "foto") {
@@ -538,7 +545,7 @@ export async function avanzarFiguras(opciones: {
       } else if (paso === "disenar") {
         const c = await contexto()
         const desde = e.disenadas ?? 0
-        const hastaN = Math.min(c.plan.figuras.length, desde + LOTE)
+        const hastaN = Math.min(c.plan.figuras.length, desde + lote)
         const pedido = desde
           ? `${c.encargo}
 
@@ -568,7 +575,7 @@ Diseña ahora las figuras 1 a ${hastaN} (data-lamina 1 a ${hastaN}); las demás 
         for (const k of cr.critica?.cambios ?? []) todos.set(k.lamina, [...(todos.get(k.lamina) ?? []), `crítico: ${k.que}`])
         // Lo del documento y como mucho LOTE figuras por ronda, primero las que mas fallan:
         // una correccion de todas a la vez no cabe en una pasada.
-        const porFigura = [...todos].filter(([n]) => n > 0).sort((a, b) => b[1].length - a[1].length).slice(0, LOTE)
+        const porFigura = [...todos].filter(([n]) => n > 0).sort((a, b) => b[1].length - a[1].length).slice(0, lote)
         const cambios = new Map<number, string[]>([...(todos.has(0) ? [[0, todos.get(0)!] as [number, string[]]] : []), ...porFigura])
         const bastante = !cambios.size || (cr.critica && cr.critica.puntaje >= PUNTAJE_BUENO && !medida.graves)
         if (bastante || e.rondas >= MAX_RONDAS) {

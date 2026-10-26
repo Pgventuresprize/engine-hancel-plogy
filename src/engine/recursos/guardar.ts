@@ -54,7 +54,7 @@ export async function drenarRecursos(log: ContentLog, presupuesto?: number): Pro
 }
 
 /** Guarda (o reemplaza) el recurso del angulo. Uno por angulo; rehacerlo sube la version. */
-async function guardarRecurso(job: JobRecurso, angle: ContentAngle, r: RespuestaRecurso): Promise<void> {
+export async function guardarRecurso(job: Pick<JobRecurso, "account_id">, angle: ContentAngle, r: RespuestaRecurso): Promise<void> {
   const supabase = supabaseAdmin()
   const { data: previo } = await supabase.from("content_recursos").select("id, version").eq("content_angle_id", angle.id).maybeSingle()
   const ahora = new Date()
