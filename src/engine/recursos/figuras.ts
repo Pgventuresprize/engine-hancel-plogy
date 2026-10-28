@@ -225,6 +225,7 @@ CÓMO DISEÑAS
 - Cada figura construye su contenido: un precio en tarjetas, una comparación en barras proporcionales a sus valores, una fórmula en bloques con sus operadores, un proceso en pasos con flechas, un ejemplo en una cuenta clara. Inventas la construcción para ESE dato, con HTML y CSS (o SVG en línea).
 - La portada es la de un reporte: titular grande en dos tiempos (la segunda parte en el color de acento), antetítulo, logo, y un gesto gráfico de la marca. Es la imagen que encabeza la página.
 - Alterna fondos entre figuras como lo hacen las piezas (claro, alterno, oscuro), sin que todas sean iguales.
+- Lo que solo tiene sentido en un carrusel no pasa a la figura: ni contador de láminas ("01/07"), ni barra de avance, ni "desliza" o flechas para pasar. Cada figura se lee sola dentro de la página.
 - Lo que es un cálculo de la marca se distingue a la vista (por ejemplo, una barra rayada) y lo dice; un ejemplo hipotético lleva su pastilla.
 
 EL TEXTO ES EL DEL PLAN
