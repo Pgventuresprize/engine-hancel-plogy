@@ -263,7 +263,42 @@ Un solo chat, varias voces (pedido 2026-10-22):
   linea a quien le paso el pedido y por que, y se le puede pedir que lo pase a
   otro.
 - **Lo que se crea queda enlazado.** Si un agente crea una idea, una pieza o un
-  guion, el mensaje lleva su tarjeta con enlace a la pieza en el estudio.
+  guion, el mensaje lleva su tarjeta; la tarjeta abre la pieza en el panel de
+  la derecha (ver abajo) y desde ahi se llega al estudio.
+
+### La pieza al lado del chat
+
+Pedido 2026-10-31. La pieza se ve y se diseña dentro de la conversacion, sin
+cambiar de pestaña en ningun momento (parecido a Claude Design):
+
+- **Panel a la derecha.** El chat queda a la izquierda y a la derecha se abre un
+  panel con la pieza o las piezas que se estan trabajando, tal como van a
+  salir: el carrusel lamina a lamina, el post de LinkedIn, el guion.
+- **Se diseña conversando.** Cada pedido del chat ("junta la 3 y la 4", "otra
+  foto en la portada", "mas corto") cambia la pieza del panel, que muestra la
+  version nueva sin recargar ni salir de la conversacion.
+- **Varias piezas a la vez.** Si se trabaja la misma noticia para varias redes,
+  o una semana entera, el panel muestra una miniatura por pieza y se pasa de
+  una a otra.
+- **Se abre y se cierra.** Se abre solo cuando aparece una pieza en la
+  conversacion; se puede cerrar para tener el chat entero y volver a abrir
+  desde la tarjeta del mensaje.
+- **Marcar lo que se quiere cambiar.** Clic sobre un componente de la pieza (el
+  titular, la foto, un parrafo, una lamina entera) lo selecciona; se pueden
+  marcar varios. El pedido del chat queda referido a lo marcado ("esto, mas
+  corto") y el agente solo toca eso (confirmado 2026-10-31).
+
+Propuesto, por confirmar:
+
+- **Versiones.** Cada cambio deja una version; se puede volver a una anterior o
+  comparar dos lado a lado.
+- **Acciones en el panel.** Aprobar, descargar o mandar a publicar desde el
+  mismo panel, respetando la autonomia de la marca.
+
+Lo tecnico: el panel muestra el HTML de la pieza (lo que hoy diseña Opus y
+previsualiza `/api/render/preview`), que cambia al instante; los PNG finales se
+dibujan al aprobar o descargar, no en cada vuelta, porque hoy un redibujo con
+Claude ronda los 40 a 50 s.
 
 ### Conversaciones guardadas
 
