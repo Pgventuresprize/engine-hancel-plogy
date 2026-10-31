@@ -99,8 +99,8 @@ export function LoginForm({
           justo a quien venia interesado. */}
       <p className="text-muted-foreground text-center text-xs text-balance">
         Si quieres un demo enviame un mensaje a{" "}
-        <a href="mailto:santiago@hancel.xyz" className="underline underline-offset-4">
-          santiago@hancel.xyz
+        <a href="mailto:plogydevs@gmail.com" className="underline underline-offset-4">
+          plogydevs@gmail.com
         </a>
       </p>
     </div>
