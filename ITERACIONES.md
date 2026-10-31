@@ -467,9 +467,12 @@ que costo.
 ## Producto y operación
 
 ### Programador automático (scheduler)
-- **Qué es:** que el motor corra solo por horario. pg_cron no está instalado;
-  hoy todo se lanza a mano. Pasos y cautelas en la memoria del proyecto.
-- **Cuándo:** cuando la calidad de las piezas permita dejarlas correr sin mirar.
+- **Estado (2026-10-24): instalado.** pg_cron y pg_net con `supabase/scheduler.sql`:
+  content_tick, redacción y publicación cada 5 min; studio, videos e ingest cada
+  10. La publicación sigue en manual y el ingest respeta el horario del agente
+  de extracción.
+- **Qué falta:** pasar la publicación a automática cuando la calidad de las
+  piezas permita dejarlas correr sin mirar.
 
 ### El carrusel espera a la siguiente pasada
 - **Qué es:** una pasada a mano genera una sola pieza (procesar.ts, por el
