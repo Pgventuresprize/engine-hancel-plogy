@@ -434,7 +434,23 @@ export type Estilo = {
    * en blanco y negro sobre bloque naranja, listas numeradas).
    */
   plantilla: "clasica" | "plogy"
+  /** Como se dibuja el carrusel cuando la marca tiene kit activo (ver MODOS_DISENO). */
+  diseno: ModoDiseno
 }
+
+/**
+ * Como se dibujan las laminas con el kit de la marca. El texto lo escribe
+ * siempre el agente; esto decide solo el dibujo.
+ * - inteligencia: Claude diseña cada lamina como las piezas de la marca (diseño libre).
+ * - plantillas: Claude reparte el guion en las plantillas aprobadas del kit.
+ * - mecanico: el codigo reparte el guion en las plantillas, sin Claude.
+ * Sin kit activo, o si el kit no puede con la pieza, salen las plantillas de siempre.
+ */
+export const MODOS_DISENO = ["inteligencia", "plantillas", "mecanico"] as const
+export type ModoDiseno = (typeof MODOS_DISENO)[number]
+export const MODO_DISENO_POR_DEFECTO: ModoDiseno = "plantillas"
+export const esModoDiseno = (v: unknown): v is ModoDiseno =>
+  typeof v === "string" && (MODOS_DISENO as readonly string[]).includes(v)
 
 export const ESTILO_POR_DEFECTO: Estilo = {
   paleta: PALETA,
@@ -453,6 +469,7 @@ export const ESTILO_POR_DEFECTO: Estilo = {
   fotosLiterales: false,
   cierre: CIERRE_POR_DEFECTO,
   plantilla: "clasica",
+  diseno: MODO_DISENO_POR_DEFECTO,
 }
 
 /** Arma el estilo a partir de lo guardado en `generation_config.carousel`. */
@@ -499,6 +516,7 @@ export function estiloDesdeConfig(valor: unknown): Estilo {
     fotosLiterales: raw.fotosLiterales === true,
     cierre: cierreDesdeConfig(raw.cierre),
     plantilla: raw.plantilla === "plogy" ? "plogy" : "clasica",
+    diseno: esModoDiseno(raw.diseno) ? raw.diseno : MODO_DISENO_POR_DEFECTO,
   }
 }
 

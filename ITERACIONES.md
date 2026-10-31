@@ -207,6 +207,45 @@ Al retomar uno, se detalla como bloque antes de construir.
   Los ejemplos ya guardan el tipo de cada lámina y una línea de lo visual, que
   es lo que la plantilla necesitará para elegir el diseño.
 
+### Plantillas por defecto para que cualquiera haga carruseles bonitos desde el principio
+- **Qué es:** un kit de fábrica con varias plantillas aprobadas, bien
+  diseñadas y neutras (sin nada de Plogy), que toda cuenta nueva tenga activo
+  desde el primer día: al menos una portada, idea, lista, dato, comparación,
+  cita, figura y un cierre por tipo de CTA (seguir, comentar, palabra, DM), en
+  claro y oscuro, que tomen los colores, las fuentes y el logo de la marca. Así
+  una marca sin kit propio no cae a las plantillas de siempre, y los modos
+  «plantillas del kit» y «mecánico» funcionan sin subir nada. Pedido el
+  2026-10-31, junto con el interruptor de modo de diseño.
+- **Requisito para el modo mecánico:** cada plantilla tiene que poder llenarse
+  sin Claude con lo que escribe el agente. En los cierres eso es título,
+  llamada (`cta`), motivo y la palabra en mayúsculas
+  (`laminaDeCierre` en `render/kit-reparto.ts`); un hueco obligatorio que el
+  guion no trae (como `respuesta` fuera del DM, o una figura obligatoria en el
+  cierre de comentar) deja la lámina sin plantilla en ese modo.
+- **Por qué esperó:** hoy cada marca sube su kit; las de fábrica son un
+  trabajo de diseño aparte.
+- **Cuándo:** antes de abrir Hancel a otras marcas.
+
+### Diseño con inteligencia a pedido desde la ficha
+- **Qué es:** en la ficha, «Regenerar → Con inteligencia» solo redibuja desde
+  un diseño libre que la pieza ya tenga. Una pieza creada con plantillas o en
+  mecánico no lo tiene, y sale con las plantillas del kit con un aviso. Hacer
+  el diseño libre desde cero a pedido necesita varias pasadas (5 a 10
+  minutos), como en el programador: una cola para rediseñar una pieza ya
+  creada, que actualice esa misma pieza en vez de crear otra.
+- **Por qué esperó:** se construyó primero el interruptor por marca
+  (2026-10-31).
+- **Cuándo:** si se usa seguido el modo plantillas y se quiere subir de nivel
+  solo algunas piezas.
+
+### Modo de diseño para las figuras de los recursos
+- **Qué es:** el interruptor de modo de diseño solo decide los carruseles. Las
+  figuras de los reportes y guías (R4) siguen siempre con inteligencia. Un modo
+  con plantillas de figura (barras, cifra, comparación) llenadas por código las
+  haría más rápidas y baratas.
+- **Por qué esperó:** las figuras no tienen plantillas todavía.
+- **Cuándo:** con las plantillas por defecto.
+
 ### Guardar las imágenes de las láminas en los ejemplos
 - **Qué es:** subir las capturas o el `carrusel.html` de una pieza y que queden
   junto a su ejemplo (la opción C del importador).

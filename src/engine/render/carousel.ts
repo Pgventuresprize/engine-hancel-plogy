@@ -18,7 +18,7 @@ import {
 } from "./render"
 import { subirCarrusel, subirImagenSuelta } from "./storage"
 import type { Slide } from "./templates"
-import { ESTILO_POR_DEFECTO, type Estilo } from "./theme"
+import { ESTILO_POR_DEFECTO, type Estilo, type ModoDiseno } from "./theme"
 
 /**
  * De la respuesta del agente de Instagram al carrusel subido.
@@ -63,6 +63,12 @@ export type CarouselPayload = {
   avisosKit?: string[]
   /** Salio con diseño libre (sin plantillas): cuantas correcciones, que puntaje le dio el critico y que piezas miro. */
   disenoLibre?: { rondas: number; puntaje: number | null; piezas: string[] }
+  /**
+   * Como se dibujo con el kit: con inteligencia (diseño libre), con plantillas
+   * (las reparte Claude) o mecanico (las reparte el codigo). Sin el, con las
+   * plantillas de siempre o de antes de que existieran los modos.
+   */
+  modoDiseno?: ModoDiseno
 }
 
 /** Lo que el agente deja en `jobs_instagram.respuesta`. */

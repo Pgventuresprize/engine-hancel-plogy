@@ -41,6 +41,7 @@ import {
   type PlanDeArchivo,
 } from "@/engine/marca/kit-importar-modelo"
 import type { Plantilla } from "@/engine/marca/kit-modelo"
+import { ModoDisenoKit } from "./modo-diseno"
 
 /**
  * Marca > Kit de diseño.
@@ -91,6 +92,8 @@ export function PestanaKit() {
       </div>
 
       {error ? <p className="text-destructive text-sm">{error}</p> : null}
+
+      <ModoDisenoKit />
 
       <SubirKit
         onEmpezado={(id) => {

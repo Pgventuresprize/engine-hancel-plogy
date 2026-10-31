@@ -294,6 +294,8 @@ export async function disenoLibrePendiente(
   /** Hasta cuando puede trabajar esta pasada (hora en ms). */
   hasta: number
 ): Promise<boolean> {
+  // Solo si la marca eligio que Claude diseñe; con plantillas o mecanico se dibuja ya.
+  if (estilo.diseno !== "inteligencia") return false
   const kc = await kitActivo(job.account_id).catch(() => null)
   if (!kc || !piezasDelKit(kc).length) return false
   const respuesta = { ...((job.respuesta ?? {}) as Record<string, unknown>) }

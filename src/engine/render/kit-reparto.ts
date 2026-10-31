@@ -40,8 +40,9 @@ export type LaminaRepartida = {
  */
 const SINONIMOS: Record<string, string[]> = {
   antetitulo: ["rotulo", "etiqueta", "tema"],
-  cuerpo: ["motivo", "subtitulo", "texto"],
+  cuerpo: ["motivo", "subtitulo", "texto", "respuesta"],
   titulo: ["cita"],
+  cta: ["accion"],
 }
 
 /** Si un tipo no tiene plantilla en el kit, con que otro tipo se dice lo mismo. */
@@ -63,10 +64,18 @@ const lleno = (l: LaminaKit, nombre: string) =>
 /** La lamina con sus textos movidos a los nombres de hueco de la plantilla. */
 export function adaptar(p: Plantilla, l: LaminaKit): LaminaKit {
   const nombres = new Set(p.huecos.map((h) => h.nombre))
+  const obligatorios = new Set(p.huecos.filter((h) => h.obligatorio).map((h) => h.nombre))
   const textos = { ...l.textos }
   for (const [comun, otros] of Object.entries(SINONIMOS)) {
-    if (nombres.has(comun) || !textos[comun]?.trim()) continue
-    const destino = otros.find((o) => nombres.has(o) && !lleno({ ...l, textos }, o))
+    if (!textos[comun]?.trim()) continue
+    // Si la plantilla tiene el hueco comun, el texto se queda ahi, salvo que sea
+    // opcional y un sinonimo obligatorio quede vacio (un cierre con "cuerpo"
+    // opcional y "motivo" obligatorio).
+    const soloObligatorios = nombres.has(comun)
+    if (soloObligatorios && obligatorios.has(comun)) continue
+    const destino = otros.find(
+      (o) => nombres.has(o) && !lleno({ ...l, textos }, o) && (!soloObligatorios || obligatorios.has(o))
+    )
     if (!destino) continue
     textos[destino] = textos[comun]
     delete textos[comun]
@@ -197,6 +206,45 @@ export function repartirKit(
 }
 
 /**
+ * El cierre del guion en los huecos que suelen pedir los cierres de un kit,
+ * sin escribir nada: el titulo del agente es la llamada ("Sigue a la marca",
+ * "Comenta PALABRA"), su texto se parte en titular y motivo por una coma, un
+ * punto o una "y" cercanos a la mitad, y la palabra en mayusculas va a su hueco.
+ * Si el texto no se deja partir, va como hasta ahora: titulo y cuerpo.
+ */
+export function laminaDeCierre(cierre: { titulo: string; texto: string; tipo: string | null }): LaminaKit {
+  const llamada = cierre.titulo.trim()
+  const texto = cierre.texto.trim()
+  const base = { tipo: "cierre", listas: {}, cta_tipo: cierre.tipo }
+  const partes = partirFrase(texto)
+  if (!llamada || !partes) return { ...base, textos: { titulo: llamada, cuerpo: texto } }
+  const palabra = (llamada.match(/(?<![\p{L}\d])\p{Lu}{3,}(?![\p{L}\d])/u) ?? texto.match(/(?<![\p{L}\d])\p{Lu}{3,}(?![\p{L}\d])/u))?.[0]
+  return {
+    ...base,
+    textos: { titulo: partes[0], cuerpo: partes[1], cta: llamada, ...(palabra ? { palabra } : {}) },
+  }
+}
+
+/** Una frase en dos, por el corte mas cercano a la mitad; null si no hay uno que deje dos partes con cuerpo. */
+function partirFrase(texto: string): [string, string] | null {
+  const mitad = texto.length / 2
+  for (const corte of [/[,;:]\s+/g, /\.\s+/g, /\s+y\s+/g]) {
+    let mejor: { i: number; fin: number } | null = null
+    for (const m of texto.matchAll(corte)) {
+      const i = m.index ?? 0
+      if (i < texto.length * 0.25 || i > texto.length * 0.75) continue
+      if (!mejor || Math.abs(i - mitad) < Math.abs(mejor.i - mitad)) mejor = { i, fin: i + m[0].length }
+    }
+    if (!mejor) continue
+    // La "y" del corte se queda con la segunda parte, que empieza con mayuscula.
+    const resto = corte.source.includes("y") ? texto.slice(mejor.i).trim() : texto.slice(mejor.fin).trim()
+    const primera = texto.slice(0, mejor.i).trim()
+    return [primera, resto.charAt(0).toLocaleUpperCase("es") + resto.slice(1)]
+  }
+  return null
+}
+
+/**
  * Un guion de los de antes (portada con gancho y laminas de titulo y cuerpo) en
  * laminas del kit. Es un puente: el guion escrito para el kit (con el tipo y los
  * huecos de cada lamina) enseña mucho mas.
@@ -226,13 +274,7 @@ export function laminasDeGuionClasico(
       ...(s.figura ? { figura: s.figura } : {}),
     }
   })
-  if (cierre)
-    laminas.push({
-      tipo: "cierre",
-      textos: { titulo: cierre.titulo, cuerpo: cierre.texto },
-      listas: {},
-      cta_tipo: cierre.tipo,
-    })
+  if (cierre) laminas.push(laminaDeCierre(cierre))
   // Un hueco vacio no cuenta: que no reste como texto perdido.
   for (const l of laminas) for (const k of Object.keys(l.textos)) if (!l.textos[k]) delete l.textos[k]
   return laminas

@@ -20,6 +20,7 @@ import type { ContentAngle, ContentPiece, Red, Variables } from "@/engine/conten
 import { parseVariables, validateVariables } from "@/engine/content/variables"
 import { disconnectLinkedin } from "@/engine/publish/linkedin"
 import { publishPiece } from "@/engine/publish/publish-piece"
+import { esModoDiseno, type ModoDiseno } from "@/engine/render/theme"
 import { supabaseAdmin } from "@/engine/supabase-admin"
 import type { RawNews } from "@/lib/types"
 
@@ -499,9 +500,13 @@ export async function publishPieceNow(pieceId: string): Promise<ActionResult> {
  * imagenes ya no estan en el storage —Buffer responde entonces "Image could not
  * be read from its URL"— y tambien para reaplicar un cambio de aspecto sin
  * volver a gastar una generacion del agente.
+ *
+ * Con `modo` se dibuja de esa manera solo esta vez; sin el, como lo tiene la
+ * marca en Marca > Kit.
  */
-export async function regenerateCarousel(pieceId: string): Promise<ActionResult> {
+export async function regenerateCarousel(pieceId: string, modo?: ModoDiseno): Promise<ActionResult> {
   if (!pieceId) return { ok: false, error: "Falta el id de la pieza." }
+  if (modo !== undefined && !esModoDiseno(modo)) return { ok: false, error: "Ese modo de diseño no existe." }
 
   try {
     const supabase = supabaseAdmin()
@@ -554,13 +559,14 @@ export async function regenerateCarousel(pieceId: string): Promise<ActionResult>
       .maybeSingle()
 
     const news = await noticiaDelAngulo(pieza.content_angle_id)
+    const estilo = estiloDesdeConfig((cfg as { carousel?: unknown } | null)?.carousel)
     const { imagenesDePieza, registrarUsos } = await import("@/engine/marca/imagenes")
     const carrusel = await generarCarrusel(
       (job as { id: string }).id,
       pieza.account_id,
       (job as { respuesta: unknown }).respuesta,
       news,
-      estiloDesdeConfig((cfg as { carousel?: unknown } | null)?.carousel),
+      { ...estilo, diseno: modo ?? estilo.diseno },
       await nichosConocidos(pieza.account_id),
       // Solo si hay pieza de Facebook que actualizar: dibujarla siempre seria
       // una llamada de mas a Satori en la mayoria de las regeneraciones.

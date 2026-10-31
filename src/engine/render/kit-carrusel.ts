@@ -2,11 +2,12 @@ import type { RawNews } from "@/lib/types"
 
 import { cifrasInventadas, figurasDelKit, type TipoFigura } from "../marca/figuras"
 import { elegirDeBiblioteca, hayFotosEnBiblioteca, type FotoElegida, type HuecoDeFoto } from "../marca/imagenes"
+import { piezasDelKit } from "../marca/kit-piezas"
 import { archivosComoDatos, armarLamina, CSS_SIN_PAGINACION, FORMATOS, medidasDe, type DatosLamina, type KitCargado } from "../marca/kit"
 import type { CarouselPayload, parseInstagramResponse } from "./carousel"
 import { terminosDeBusqueda } from "./keywords"
 import { maquetar } from "./kit-maqueta"
-import { repartirKit, type LaminaKit, type LaminaRepartida } from "./kit-reparto"
+import { laminasDeGuionClasico, repartirKit, type LaminaKit, type LaminaRepartida } from "./kit-reparto"
 import { paginasDeFuente } from "./kit-libre"
 import { cargarFotosLibre, claveKit, guionLibreDe, parseEstadoLibre, type EstadoLibre } from "./kit-libre-pasos"
 import { cerrarNavegador, dibujarLaminas, type LaminaDibujada, type OpcionesDibujo, type Problema } from "./navegador"
@@ -123,6 +124,7 @@ async function carruselLibre(
     ...(problemasDibujo.length ? { problemasDibujo } : {}),
     ...(libre.avisos.length ? { avisosKit: libre.avisos } : {}),
     disenoLibre: { rondas: libre.rondas, puntaje: libre.puntaje, piezas: libre.piezas },
+    modoDiseno: "inteligencia",
   }
 }
 
@@ -149,9 +151,17 @@ export async function generarCarruselKit(
 ): Promise<CarouselPayload & { kit: KitDelCarrusel }> {
   const { caption, hashtags, fotos, antetitulo, plan } = guion
   // Con diseño libre ya hecho (por pasos, en pasadas anteriores), se dibuja de
-  // su fuente. Si no salio, va con las plantillas y la ficha dice por que.
-  const libre = parseEstadoLibre(guion.disenoLibre)
+  // su fuente. Si no salio, va con las plantillas y la ficha dice por que. Solo
+  // en el modo "inteligencia": con los otros dos se dibuja con las plantillas
+  // aunque la pieza guarde un diseño de antes.
+  const conIA = estilo.diseno === "inteligencia"
+  const libre = conIA ? parseEstadoLibre(guion.disenoLibre) : null
   const avisosLibre: string[] = []
+  if (conIA && !libre && piezasDelKit(kc).length) {
+    avisosLibre.push(
+      "Esta pieza no tiene diseño con inteligencia (se creó antes o con otro modo): va con las plantillas del kit. Ese diseño se hace al crear la pieza."
+    )
+  }
   if (libre?.paso === "listo" && libre.fuente && libre.kit === claveKit(kc)) {
     try {
       return await carruselLibre(pieceKey, accountId, kc, guion, libre, conPortadaFacebook)
@@ -170,13 +180,17 @@ export async function generarCarruselKit(
     figurasDelKit(kc.kit.parciales)
   )
   // El maquetador pone el guion en las plantillas; lo que no supere su
-  // comprobacion sale del reparto automatico.
+  // comprobacion sale del reparto automatico. En modo mecanico no se le llama:
+  // todo sale del reparto automatico.
   const fotosDelKit = kc.kit.sistema.fotos_por_carrusel ?? 0
-  let maqueta = await maquetar(accountId, kc, guion, slides)
+  const mecanico = estilo.diseno === "mecanico"
+  let maqueta: Awaited<ReturnType<typeof maquetar>> = mecanico
+    ? { laminas: laminasDeGuionClasico(slides, guion.antetitulo, guion.cierre), descartadas: [] }
+    : await maquetar(accountId, kc, guion, slides)
   // Una plantilla con huecos obligatorios que el reparto automatico no sabe
   // llenar (la palabra y la respuesta de un cierre de DM) deja la lamina sin
   // sitio: el maquetador se prueba otra vez antes de dibujar con el respaldo.
-  if (repartirKit(kc.plantillas, maqueta.laminas, kc.kit.sistema.ritmo, fotosDelKit).some((r) => r === null)) {
+  if (!mecanico && repartirKit(kc.plantillas, maqueta.laminas, kc.kit.sistema.ritmo, fotosDelKit).some((r) => r === null)) {
     const otra = await maquetar(accountId, kc, guion, slides)
     if (otra.descartadas.length < maqueta.descartadas.length) maqueta = otra
   }
@@ -196,7 +210,9 @@ export async function generarCarruselKit(
   const sinPlantilla = reparto.findIndex((r) => r === null)
   if (sinPlantilla >= 0)
     throw new Error(
-      `El kit no tiene una plantilla aprobada que sirva para la lámina ${sinPlantilla + 1} (${laminas[sinPlantilla].tipo}).`
+      mecanico
+        ? `En modo mecánico ninguna plantilla del kit se puede llenar con la lámina ${sinPlantilla + 1} (${laminas[sinPlantilla].tipo}) sin inventar texto: el kit pide huecos que el guion no trae.`
+        : `El kit no tiene una plantilla aprobada que sirva para la lámina ${sinPlantilla + 1} (${laminas[sinPlantilla].tipo}).`
     )
   const repartidas = reparto as LaminaRepartida[]
 
@@ -323,5 +339,6 @@ export async function generarCarruselKit(
     },
     ...(problemasDibujo.length ? { problemasDibujo } : {}),
     ...(avisosKit.length ? { avisosKit } : {}),
+    modoDiseno: mecanico ? "mecanico" : "plantillas",
   }
 }

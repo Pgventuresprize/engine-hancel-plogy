@@ -54,6 +54,8 @@ import { conPocoMaterial, nombreMaterial } from "@/engine/content/material"
 import type { Hallazgo, Revision } from "@/engine/content/revisor"
 import type { CriterioDecidido } from "@/engine/content/types"
 import { NOMBRE_OBJETIVO, type Clasificacion } from "@/engine/marca/clasificacion"
+import { MODOS_DISENO } from "@/engine/render/theme"
+import { NOMBRE_MODO_DISENO } from "@/components/marca/modo-diseno"
 import type { Ficha, PiezaDelTablero } from "@/lib/kanban-data"
 import { formatDateTime } from "@/lib/format"
 
@@ -501,6 +503,13 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
         <p className="leading-relaxed whitespace-pre-wrap">{texto || "(sin texto)"}</p>
       )}
 
+      {esCarrusel && pieza.payload.modoDiseno && !pieza.payload.respaldo ? (
+        <p className="text-muted-foreground text-xs">
+          Dibujada: {NOMBRE_MODO_DISENO[pieza.payload.modoDiseno].nombre.toLowerCase()}
+          {pieza.payload.disenoLibre?.puntaje != null ? ` · crítico ${pieza.payload.disenoLibre.puntaje}/10` : ""}
+        </p>
+      ) : null}
+
       {/* La marca tiene kit de diseño pero esta pieza no salio con el: que se
           vea antes de publicarla, con el motivo. */}
       {esCarrusel && pieza.payload.respaldo ? (
@@ -642,16 +651,34 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
               <DownloadIcon />
               Descargar
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={pending || publicada}
-              title="Vuelve a dibujar y subir las imagenes desde el guion original"
-              onClick={() => correr(() => regenerateCarousel(pieza.id))}
-            >
-              <RefreshCwIcon />
-              Regenerar
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={pending || publicada}
+                    title="Vuelve a dibujar y subir las imagenes desde el guion original"
+                  />
+                }
+              >
+                <RefreshCwIcon />
+                Regenerar
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>Redibujar con</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => correr(() => regenerateCarousel(pieza.id))}>
+                    Lo que tiene la marca
+                  </DropdownMenuItem>
+                  {MODOS_DISENO.map((m) => (
+                    <DropdownMenuItem key={m} onClick={() => correr(() => regenerateCarousel(pieza.id, m))}>
+                      {NOMBRE_MODO_DISENO[m].nombre}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         ) : null}
 

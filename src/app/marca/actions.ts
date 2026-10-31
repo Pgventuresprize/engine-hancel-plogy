@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache"
 
 import { parseVariables, validateVariables } from "@/engine/content/variables"
 import { guardarPerfil, type PerfilMarca } from "@/engine/marca/perfil"
-import { esHex, FUENTES, PALETAS } from "@/engine/render/theme"
+import { kitActivo } from "@/engine/marca/kit"
+import { piezasDelKit } from "@/engine/marca/kit-piezas"
+import { esHex, esModoDiseno, estiloDesdeConfig, FUENTES, PALETAS, type ModoDiseno } from "@/engine/render/theme"
 import { supabaseAdmin } from "@/engine/supabase-admin"
 import { idDeCuentaActual } from "@/lib/accounts"
 
@@ -97,6 +99,41 @@ export async function guardarVoz(campos: CamposVoz): Promise<ActionResult> {
     return { ok: true }
   } catch (error) {
     return fail(error, "No se pudo guardar la voz.")
+  }
+}
+
+// ------------------------------------------------------------ modo de diseño
+
+export type ModoDisenoDeCuenta = {
+  modo: ModoDiseno
+  /** Sin kit activo todo sale con las plantillas de siempre, sea cual sea el modo. */
+  hayKit: boolean
+  /** El modo con inteligencia diseña mirando las piezas de ejemplo del kit. */
+  piezas: number
+}
+
+export async function leerModoDiseno(): Promise<{ ok: true; valor: ModoDisenoDeCuenta } | { ok: false; error: string }> {
+  try {
+    const accountId = await idDeCuentaActual()
+    const [{ data }, kc] = await Promise.all([
+      supabaseAdmin().from("generation_config").select("carousel").eq("account_id", accountId).maybeSingle(),
+      kitActivo(accountId).catch(() => null),
+    ])
+    const modo = estiloDesdeConfig((data as { carousel?: unknown } | null)?.carousel).diseno
+    return { ok: true, valor: { modo, hayKit: Boolean(kc), piezas: kc ? piezasDelKit(kc).length : 0 } }
+  } catch (error) {
+    return { ok: false, error: (error instanceof Error ? error.message : String(error)) || "No se pudo leer cómo se dibujan las piezas." }
+  }
+}
+
+export async function guardarModoDiseno(modo: ModoDiseno): Promise<ActionResult> {
+  if (!esModoDiseno(modo)) return { ok: false, error: "Ese modo de diseño no existe." }
+  try {
+    await fundirEnConfig(await idDeCuentaActual(), "carousel", { diseno: modo })
+    refresh()
+    return { ok: true }
+  } catch (error) {
+    return fail(error, "No se pudo guardar cómo se dibujan las piezas.")
   }
 }
 

@@ -9,6 +9,7 @@ import { parseCriterio } from "@/engine/content/criterio"
 import { parseRevision, type Revision } from "@/engine/content/revisor"
 import type { FotoDeBiblioteca } from "@/engine/marca/imagenes-modelo"
 import type { PlanLamina } from "@/engine/render/carousel"
+import type { ModoDiseno } from "@/engine/render/theme"
 import { parseClasificacion } from "@/engine/marca/clasificacion"
 import { supabaseAdmin } from "@/engine/supabase-admin"
 import { idDeCuentaActual } from "@/lib/accounts"
@@ -59,6 +60,8 @@ export type PiezaDelTablero = {
     respaldo?: string
     problemasDibujo?: { lamina: number; tipo: string; hueco: string; detalle: string }[]
     avisosKit?: string[]
+    modoDiseno?: ModoDiseno
+    disenoLibre?: { puntaje: number | null }
   }
   published_at: string | null
   linkedin_urn: string | null
