@@ -9,7 +9,7 @@ import { terminosDeBusqueda } from "./keywords"
 import { maquetar } from "./kit-maqueta"
 import { laminasDeGuionClasico, repartirKit, type LaminaKit, type LaminaRepartida } from "./kit-reparto"
 import { paginasDeFuente } from "./kit-libre"
-import { cargarFotosLibre, claveKit, guionLibreDe, parseEstadoLibre, type EstadoLibre } from "./kit-libre-pasos"
+import { cargarFotosLibre, claveKit, guionLibreDe, parseEstadoLibre, type EstadoLibre, type FotoGuardada } from "./kit-libre-pasos"
 import { cerrarNavegador, dibujarLaminas, type LaminaDibujada, type OpcionesDibujo, type Problema } from "./navegador"
 import { BancoDeFotos, descargarFotoPexels, pexelsConfigurado } from "./pexels"
 import { MAX_SLIDES } from "./render"
@@ -31,6 +31,24 @@ export type ProblemaDibujo = Problema & { lamina: number }
 
 /** Lo que el carrusel anota del kit con que se dibujo, para saber de donde salio. */
 export type KitDelCarrusel = { id: string; version: number; nombre: string; plantillas: string[] }
+
+/**
+ * Lo que se dibujo en cada lamina con las plantillas del kit: que plantilla,
+ * que texto en cada hueco y de donde salio su foto. Va en el payload de la
+ * pieza para volver a dibujarla igual —sin volver a maquetar ni elegir otras
+ * fotos— y para que el chat la enseñe y cambie una lamina sola.
+ */
+export type MaquetaGuardada = {
+  /** El kit con que se dibujo (id y version): con otro kit, la maqueta ya no sirve. */
+  kit: string
+  laminas: {
+    plantilla: string
+    textos: Record<string, string>
+    listas: Record<string, string[]>
+    figura: LaminaKit["figura"]
+    foto: FotoGuardada["origen"] | null
+  }[]
+}
 
 /** Lo que hace falta rehacer: no cabe, se sale o choca. */
 const GRAVES = new Set<Problema["tipo"]>(["se_sale", "choca", "desborda", "letra_pequena"])
@@ -245,6 +263,12 @@ export async function generarCarruselKit(
   const banco = new BancoDeFotos(terminos)
   const creditos: { autor: string; url: string }[] = []
   const fotoDe: (string | null)[] = repartidas.map((_, i) => deBiblioteca.get(i)?.foto ?? null)
+  // De donde salio cada foto, para la maqueta guardada: la foto en si es un data
+  // URI de cientos de KB y no cabe en el payload.
+  const origenDe: (FotoGuardada["origen"] | null)[] = repartidas.map((_, i) => {
+    const b = deBiblioteca.get(i)
+    return b ? { tipo: "biblioteca", imagenId: b.imagenId, motivo: b.motivo } : null
+  })
   // Las fotos que lleva un carrusel del kit de este largo (el kit lo cuenta en
   // uno tipico de 7): hasta ahi, una plantilla con foto opcional tambien la busca fuera.
   const objetivo = Math.round((fotosDelKit * repartidas.length) / 7)
@@ -255,8 +279,9 @@ export async function generarCarruselKit(
     if (estilo.usarFotos && pexelsConfigurado()) {
       const elegida = await banco.siguiente()
       const descargada = elegida ? await descargarFotoPexels(elegida) : null
-      if (descargada) {
+      if (descargada && elegida) {
         fotoDe[i] = descargada
+        origenDe[i] = { tipo: "pexels", foto: elegida }
         if (elegida?.autor) creditos.push({ autor: elegida.autor, url: elegida.autorUrl })
         continue
       }
@@ -340,5 +365,83 @@ export async function generarCarruselKit(
     ...(problemasDibujo.length ? { problemasDibujo } : {}),
     ...(avisosKit.length ? { avisosKit } : {}),
     modoDiseno: mecanico ? "mecanico" : "plantillas",
+    maqueta: {
+      kit: claveKit(kc),
+      laminas: repartidas.map((r, i) => ({
+        plantilla: r.plantilla.id,
+        textos: r.lamina.textos,
+        listas: r.lamina.listas,
+        figura: r.lamina.figura ?? null,
+        // Una plantilla de respaldo sin foto deja la suya sin usar.
+        foto: r.plantilla.foto.usa !== "no" && fotoDe[i] ? origenDe[i] : null,
+      })),
+    },
   }
+}
+
+/**
+ * Las paginas de cada lamina de una maqueta guardada, listas para el navegador
+ * o para enseñarlas en el chat. Lanza si el kit ya no tiene alguna plantilla.
+ */
+export async function paginasDeMaqueta(
+  accountId: string,
+  kc: KitCargado,
+  maqueta: MaquetaGuardada,
+  { sinPaginacionEnLaPrimera = false } = {}
+): Promise<{ htmls: string[]; medidas: OpcionesDibujo }> {
+  const plantillas = maqueta.laminas.map((l, i) => {
+    const p = kc.plantillas.find((x) => x.id === l.plantilla)
+    if (!p) throw new Error(`El kit ya no tiene la plantilla de la lámina ${i + 1}.`)
+    return p
+  })
+  const cargadas = await cargarFotosLibre(
+    accountId,
+    maqueta.laminas.flatMap((l, i) => (l.foto ? [{ clave: `foto${i + 1}`, lamina: i + 1, descripcion: "", origen: l.foto }] : []))
+  )
+  const fotoDe = (n: number) => cargadas.find((f) => f.lamina === n)?.datos ?? null
+  const total = maqueta.laminas.length
+  const htmls = await Promise.all(
+    maqueta.laminas.map((l, i) =>
+      armarLamina(
+        kc,
+        plantillas[i],
+        { textos: l.textos, listas: l.listas, n: i + 1, total: sinPaginacionEnLaPrimera && i === 0 ? 1 : total, foto: fotoDe(i + 1), figura: l.figura ?? null },
+        { sinPaginacion: sinPaginacionEnLaPrimera && i === 0 }
+      )
+    )
+  )
+  return { htmls, medidas: medidasDe(plantillas[0]) }
+}
+
+/**
+ * Vuelve a dibujar y subir un carrusel desde su maqueta guardada: las mismas
+ * plantillas, textos y fotos. No llama a Claude ni elige fotos nuevas.
+ */
+export async function dibujarMaqueta(
+  pieceKey: string,
+  accountId: string,
+  kc: KitCargado,
+  maqueta: MaquetaGuardada,
+  conPortadaFacebook: boolean
+): Promise<{ images: string[]; portadaFacebook?: string; problemasDibujo?: ProblemaDibujo[] }> {
+  if (maqueta.kit !== claveKit(kc)) throw new Error("La maqueta es de otra versión del kit.")
+  const { htmls, medidas } = await paginasDeMaqueta(accountId, kc, maqueta)
+  const dibujadas = await dibujarConReintento(htmls, medidas)
+  const images = await subirCarrusel(
+    pieceKey,
+    dibujadas.map((d) => d.png)
+  )
+  let portadaFacebook: string | undefined
+  if (conPortadaFacebook) {
+    const { htmls: sinPaginacion } = await paginasDeMaqueta(
+      accountId,
+      kc,
+      { ...maqueta, laminas: maqueta.laminas.slice(0, 1) },
+      { sinPaginacionEnLaPrimera: true }
+    )
+    const [portada] = await dibujarConReintento(sinPaginacion, medidas)
+    portadaFacebook = await subirImagenSuelta(pieceKey, "facebook", portada.png)
+  }
+  const problemasDibujo = dibujadas.flatMap((d, i) => d.problemas.map((p) => ({ ...p, lamina: i + 1 })))
+  return { images, ...(portadaFacebook ? { portadaFacebook } : {}), ...(problemasDibujo.length ? { problemasDibujo } : {}) }
 }

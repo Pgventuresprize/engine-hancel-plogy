@@ -530,3 +530,35 @@ select public.sync_ingest_schedule();
 -- La ventana de Serper de cada segmento tiene que ser valida (qdr:d...): con
 -- "q" Google la ignoraba y traia noticias de cualquier fecha.
 update public.engine_segments set freshness = 'qdr:d' where freshness is null or freshness !~ '^qdr:[hdwmy][0-9]*$';
+
+-- ------------------------------------------------------- papelera del chat
+--
+-- Las conversaciones que llevan 15 dias en la papelera se borran para siempre,
+-- cada dia a las 03:17 de Bogota. Solo SQL. El mismo bloque va en la migracion
+-- 2026-10-31-chat.sql, para que aplicarla deje el cron andando.
+
+create or replace function public.vaciar_papelera_chat()
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_borradas integer;
+begin
+  delete from public.conversaciones
+  where borrada_at < now() - interval '15 days';
+  get diagnostics v_borradas = row_count;
+  return v_borradas;
+end;
+$$;
+
+revoke all on function public.vaciar_papelera_chat() from public, anon, authenticated;
+grant execute on function public.vaciar_papelera_chat() to service_role;
+
+do $$
+begin
+  perform cron.unschedule(jobid) from cron.job where jobname = 'engine_hancel_papelera_chat';
+  perform cron.schedule('engine_hancel_papelera_chat', '17 8 * * *', 'select public.vaciar_papelera_chat();');
+end
+$$;

@@ -1,0 +1,106 @@
+import { supabaseAdmin } from "../supabase-admin"
+
+/**
+ * Los mensajes del chat con los agentes (tabla mensajes, migracion
+ * 2026-10-31-chat). Escribir un mensaje tambien toca su conversacion: la sube
+ * en la lista (updated_at) y suma al agente que habla a los que participaron.
+ */
+
+/** Los agentes que hablan en el chat. Los colores y nombres viven en la interfaz. */
+export type AgenteChat = "coordinador" | "instagram" | "linkedin" | "revisor"
+
+export type RolMensaje = "usuario" | "agente" | "ruta"
+
+/** La noticia adjunta a un mensaje: lo que enseña su ficha en el chat. */
+export type NoticiaAdjunta = { angleId: string; newsId: string; titulo: string; puntaje: number | null; fuente: string | null }
+
+/** Un componente marcado en la pieza (ver MARCAS.md, "La pieza al lado del chat"). */
+export type Seleccion = {
+  pieceId: string
+  /** La lamina (1 es la portada); en un post, el parrafo. */
+  lamina: number
+  /** La direccion estable si la hay: data-campo, data-hueco o "parrafo". */
+  campo: string | null
+  /** El HTML recortado del elemento, para que el agente sepa que es. */
+  html: string
+  /** Lo que ve la persona: "L1 · Titular". */
+  etiqueta: string
+}
+
+/** Lo que un mensaje enseña como tarjeta: una pieza lista, en una version. */
+export type Referencia = {
+  tipo: "pieza"
+  pieceId: string
+  red: "instagram" | "linkedin"
+  titulo: string
+  meta: string
+  version: number | null
+}
+
+export type Mensaje = {
+  id: string
+  conversacion_id: string
+  rol: RolMensaje
+  agente: AgenteChat | null
+  autor: string | null
+  contenido: string
+  noticia: NoticiaAdjunta | null
+  agentes_pedidos: AgenteChat[] | null
+  selecciones: Seleccion[]
+  referencias: Referencia[]
+  created_at: string
+}
+
+export type NuevoMensaje = {
+  accountId: string
+  conversacionId: string
+  rol: RolMensaje
+  agente?: AgenteChat | null
+  autor?: string | null
+  contenido: string
+  noticia?: NoticiaAdjunta | null
+  agentesPedidos?: AgenteChat[] | null
+  selecciones?: Seleccion[]
+  referencias?: Referencia[]
+  uso?: unknown
+}
+
+export async function escribirMensaje(m: NuevoMensaje): Promise<Mensaje> {
+  const supabase = supabaseAdmin()
+  const { data, error } = await supabase
+    .from("mensajes")
+    .insert({
+      conversacion_id: m.conversacionId,
+      account_id: m.accountId,
+      rol: m.rol,
+      agente: m.agente ?? null,
+      autor: m.autor ?? null,
+      contenido: m.contenido,
+      noticia: m.noticia ?? null,
+      agentes_pedidos: m.agentesPedidos ?? null,
+      selecciones: m.selecciones ?? [],
+      referencias: m.referencias ?? [],
+      uso: m.uso ?? null,
+    })
+    .select("*")
+    .single()
+  if (error) throw new Error(`No se pudo guardar el mensaje: ${error.message}`)
+
+  const { data: conv } = await supabase
+    .from("conversaciones")
+    .select("agentes")
+    .eq("id", m.conversacionId)
+    .eq("account_id", m.accountId)
+    .maybeSingle()
+  const agentes = ((conv as { agentes: string[] } | null)?.agentes ?? []) as string[]
+  await supabase
+    .from("conversaciones")
+    .update({
+      updated_at: new Date().toISOString(),
+      ...(m.agente && !agentes.includes(m.agente) ? { agentes: [...agentes, m.agente] } : {}),
+    })
+    .eq("id", m.conversacionId)
+    .eq("account_id", m.accountId)
+
+  return data as Mensaje
+}

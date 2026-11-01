@@ -69,7 +69,22 @@ export type LlamadaClaude = {
   esfuerzo?: "low" | "medium" | "high" | "xhigh" | "max"
   /** Que paso hace la llamada ("instagram", "diseno-libre"...). Con el se cuenta el gasto por paso. */
   paso?: string
+  /**
+   * Las vueltas anteriores de una conversacion, de la mas vieja a la mas nueva.
+   * `prompt` es siempre la ultima del usuario. Sin historial, la llamada es de
+   * un tiro como todas las del pipeline.
+   */
+  historial?: Vuelta[]
+  /**
+   * Si esta, la respuesta llega en streaming y cada trozo de texto se entrega
+   * aqui en cuanto sale (el chat lo muestra mientras se escribe). El resultado
+   * final es el mismo que sin el.
+   */
+  alTexto?: (trozo: string) => void
 }
+
+/** Una vuelta de conversacion: lo que dijo el usuario o lo que respondio el modelo. */
+export type Vuelta = { rol: "user" | "assistant"; texto: string }
 
 export type Bloque =
   | { tipo: "texto"; texto: string }
@@ -219,7 +234,9 @@ export async function llamarClaude(opciones: LlamadaClaude): Promise<ResultadoCl
         : { thinking: opciones.model.includes("-5-5") ? { type: "between_tools" } : { type: "disabled" } }),
       ...(opciones.esfuerzo ? { output_config: { effort: opciones.esfuerzo } } : {}),
       system,
+      ...(opciones.alTexto ? { stream: true } : {}),
       messages: [
+        ...(opciones.historial ?? []).map((v) => ({ role: v.rol, content: v.texto })),
         {
           role: "user",
           content:
@@ -246,22 +263,14 @@ export async function llamarClaude(opciones: LlamadaClaude): Promise<ResultadoCl
       signal: AbortSignal.timeout(opciones.timeoutMs ?? (opciones.buscarWeb ? TIMEOUT_MS_BUSQUEDA : TIMEOUT_MS)),
     })
 
-    const cuerpo = await response.text()
-
     if (!response.ok) {
-      return { ok: false, error: mensajeDeError(response.status, cuerpo) }
+      return { ok: false, error: mensajeDeError(response.status, await response.text()) }
     }
 
-    const datos = JSON.parse(cuerpo) as {
-      content?: { type: string; text?: string }[]
-      usage?: {
-        input_tokens?: number
-        output_tokens?: number
-        cache_creation_input_tokens?: number
-        cache_read_input_tokens?: number
-        server_tool_use?: { web_search_requests?: number }
-      }
-    }
+    const datos: { content?: { type: string; text?: string }[]; usage?: UsoApi } =
+      opciones.alTexto && response.body
+        ? await leerStream(response.body, opciones.alTexto)
+        : JSON.parse(await response.text())
     const texto = (datos.content ?? [])
       .filter((bloque) => bloque.type === "text" && bloque.text)
       .map((bloque) => bloque.text)
@@ -290,6 +299,65 @@ export async function llamarClaude(opciones: LlamadaClaude): Promise<ResultadoCl
     const message = error instanceof Error ? error.message : String(error)
     return { ok: false, error: message }
   }
+}
+
+/** El uso tal como lo cuenta la API. */
+type UsoApi = {
+  input_tokens?: number
+  output_tokens?: number
+  cache_creation_input_tokens?: number
+  cache_read_input_tokens?: number
+  server_tool_use?: { web_search_requests?: number }
+}
+
+/**
+ * Lee una respuesta en streaming (eventos SSE de la API) y la devuelve con la
+ * misma forma que la respuesta entera: el texto junto y el uso sumado. Cada
+ * trozo de texto se entrega a `alTexto` en cuanto llega.
+ */
+async function leerStream(
+  body: ReadableStream<Uint8Array>,
+  alTexto: (trozo: string) => void
+): Promise<{ content: { type: string; text: string }[]; usage: UsoApi }> {
+  const lector = body.getReader()
+  const decodificador = new TextDecoder()
+  let pendiente = ""
+  let texto = ""
+  let usage: UsoApi = {}
+
+  const evento = (linea: string) => {
+    if (!linea.startsWith("data:")) return
+    const dato = linea.slice(5).trim()
+    if (!dato) return
+    const e = JSON.parse(dato) as {
+      type: string
+      message?: { usage?: UsoApi }
+      delta?: { type?: string; text?: string }
+      usage?: UsoApi
+      error?: { message?: string }
+    }
+    if (e.type === "message_start") usage = { ...e.message?.usage }
+    else if (e.type === "content_block_delta" && e.delta?.type === "text_delta" && e.delta.text) {
+      texto += e.delta.text
+      alTexto(e.delta.text)
+    } else if (e.type === "message_delta" && e.usage) usage = { ...usage, ...e.usage }
+    else if (e.type === "error") throw new Error(e.error?.message ?? "Claude cortó la respuesta.")
+  }
+
+  for (;;) {
+    const { value, done } = await lector.read()
+    if (done) break
+    // stream: true guarda un caracter de varios bytes partido hasta la siguiente lectura.
+    pendiente += decodificador.decode(value, { stream: true })
+    // Un evento puede llegar partido entre dos lecturas: solo se procesan las
+    // lineas completas y el resto espera a la siguiente.
+    const lineas = pendiente.split("\n")
+    pendiente = lineas.pop() ?? ""
+    for (const linea of lineas) evento(linea)
+  }
+  if (pendiente) evento(pendiente)
+
+  return { content: [{ type: "text", text: texto }], usage }
 }
 
 /**

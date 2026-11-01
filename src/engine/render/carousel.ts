@@ -4,7 +4,7 @@ import { elegirDeBiblioteca, hayFotosEnBiblioteca, type HuecoDeFoto } from "../m
 import type { FotoDeBiblioteca } from "../marca/imagenes-modelo"
 import { supabaseAdmin } from "../supabase-admin"
 import { terminosDeBusqueda } from "./keywords"
-import type { KitDelCarrusel, ProblemaDibujo } from "./kit-carrusel"
+import type { KitDelCarrusel, MaquetaGuardada, ProblemaDibujo } from "./kit-carrusel"
 import { BancoDeFotos, descargarFotoPexels, pexelsConfigurado } from "./pexels"
 import {
   descargarFoto,
@@ -69,6 +69,8 @@ export type CarouselPayload = {
    * plantillas de siempre o de antes de que existieran los modos.
    */
   modoDiseno?: ModoDiseno
+  /** Lo que lleva cada lamina con las plantillas del kit, para redibujarla igual (kit-carrusel.ts). */
+  maqueta?: MaquetaGuardada
 }
 
 /** Lo que el agente deja en `jobs_instagram.respuesta`. */

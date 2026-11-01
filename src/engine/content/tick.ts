@@ -13,6 +13,8 @@ import { getPublishSchedules, marcarTanda } from "../publish/schedule"
 import { generarCarrusel, nichosConocidos, noticiaDelAngulo, parseInstagramResponse } from "../render/carousel"
 import { armarPublicacionFacebook } from "../render/facebook"
 import { disenoLibrePendiente } from "../render/kit-libre-pasos"
+import { guardarVersion } from "./versiones"
+import { actualizarTrabajos } from "../chat/trabajos"
 import { conContexto } from "../claude/contexto"
 import { estiloDesdeConfig } from "../render/theme"
 import { etiquetarPendientes, registrarUsos } from "../marca/imagenes"
@@ -606,7 +608,7 @@ export async function runContentTick(
 
     const variablesUsadas = (job.input?.variables ?? null) as Variables | null
 
-    const { error } = await supabase.from("content_pieces").insert({
+    const { data: creadaPost, error } = await supabase.from("content_pieces").insert({
       account_id: job.account_id,
       content_angle_id: job.content_angle_id,
       raw_news_id: (angleRow as { raw_news_id: string } | null)?.raw_news_id ?? null,
@@ -617,7 +619,7 @@ export async function runContentTick(
       variables_usadas: variablesUsadas,
       generated_at: new Date().toISOString(),
       revision: await revisionDeRespuesta(job.account_id, "linkedin", job.respuesta, job.input),
-    })
+    }).select("id").single()
 
     // 23505 es el indice de una pieza por red: ya hay post de LinkedIn de esta
     // noticia. No es un fallo, es que alguien llego antes.
@@ -632,6 +634,9 @@ export async function runContentTick(
     }
 
     if (!error) piecesCreated++
+    if (creadaPost) {
+      await guardarVersion({ accountId: job.account_id, pieceId: (creadaPost as { id: string }).id, autorAgente: "linkedin", motivo: "Escribió el post" })
+    }
     await supabase
       .from("content_angles")
       .update({ status: "generated" })
@@ -712,7 +717,10 @@ export async function runContentTick(
         // noticia, asi que no hay nada que hacer y tampoco nada que reportar.
         if (error && error.code !== "23505") throw new Error(error.message)
         if (!error) carouselsCreated++
-        if (creada) piezaConFotos = { id: (creada as { id: string }).id, red: "instagram" }
+        if (creada) {
+          piezaConFotos = { id: (creada as { id: string }).id, red: "instagram" }
+          await guardarVersion({ accountId: job.account_id, pieceId: piezaConFotos.id, autorAgente: "instagram", motivo: "Armó el carrusel" })
+        }
       }
 
       await supabase
@@ -999,6 +1007,15 @@ export async function runContentTick(
     for (const e of res.errores) errors.push(e)
   } catch (error) {
     errors.push(error instanceof Error ? error.message : String(error))
+  }
+
+  // El chat sigue las piezas que pidio: su avance, el mensaje al terminar y el
+  // agente que esperaba su turno. Lo que suelte aqui lo recoge la proxima
+  // pasada, o la que dispara el propio chat al consultar el estado.
+  try {
+    await actualizarTrabajos()
+  } catch (error) {
+    errors.push(`[chat] ${error instanceof Error ? error.message : String(error)}`)
   }
 
   const durationMs = Date.now() - started.getTime()

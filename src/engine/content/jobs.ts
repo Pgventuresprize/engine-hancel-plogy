@@ -279,16 +279,23 @@ export async function enqueueAngleJob(
   return (data as { id: string }).id
 }
 
+/**
+ * Donde quedo una pieza pedida: su buzon, o el del recurso que va antes. Lo
+ * lee el chat para seguir el trabajo; el tablero no lo necesita.
+ */
+export type Encolado = { buzon: "jobs_recurso" | "jobs_linkedin" | "jobs_instagram"; id: string }
+
 export async function enqueueLinkedinJob(
   angle: ContentAngle,
   news: RawNews,
   variables: Variables,
   override?: Partial<Variables> | null
-): Promise<string> {
+): Promise<Encolado> {
   // Si su CTA promete un recurso que aun no esta escrito, va primero el recurso
   // y el post se encola cuando termine (tick.ts, drenaje de recursos).
   const recurso = await estadoDelRecurso(angle)
-  if (recurso.estado === "falta") return enqueueRecursoJob(angle, news, variables, override, { instagram: null, linkedin: true })
+  if (recurso.estado === "falta")
+    return { buzon: "jobs_recurso", id: await enqueueRecursoJob(angle, news, variables, override, { instagram: null, linkedin: true }) }
 
   const { data, error } = await supabaseAdmin()
     .from("jobs_linkedin")
@@ -301,7 +308,7 @@ export async function enqueueLinkedinJob(
     .single()
 
   if (error) throw new Error(`No se pudo encolar el post: ${error.message}`)
-  return (data as { id: string }).id
+  return { buzon: "jobs_linkedin", id: (data as { id: string }).id }
 }
 
 /**
@@ -400,12 +407,13 @@ export async function enqueueInstagramJob(
   variables: Variables,
   override?: Partial<Variables> | null,
   destinos: DestinoCarrusel[] = ["instagram"]
-): Promise<string> {
+): Promise<Encolado> {
   const supabase = supabaseAdmin()
 
   // Como el post: con un recurso prometido y sin escribir, primero el recurso.
   const recurso = await estadoDelRecurso(angle)
-  if (recurso.estado === "falta") return enqueueRecursoJob(angle, news, variables, override, { instagram: destinos, linkedin: false })
+  if (recurso.estado === "falta")
+    return { buzon: "jobs_recurso", id: await enqueueRecursoJob(angle, news, variables, override, { instagram: destinos, linkedin: false }) }
 
   // Un angulo produce un solo guion, aunque se pidan sus dos redes por separado
   // o se arrastre dos veces. Sin esto salian varios buzones del mismo angulo
@@ -429,7 +437,7 @@ export async function enqueueInstagramJob(
         .update({ input: { ...fila.input, destinos: unidos } })
         .eq("id", fila.id)
     }
-    return fila.id
+    return { buzon: "jobs_instagram", id: fila.id }
   }
 
   const { data, error } = await supabase
@@ -443,7 +451,7 @@ export async function enqueueInstagramJob(
     .single()
 
   if (error) throw new Error(`No se pudo encolar el carrusel: ${error.message}`)
-  return (data as { id: string }).id
+  return { buzon: "jobs_instagram", id: (data as { id: string }).id }
 }
 
 /**

@@ -2,11 +2,9 @@
 
 import { revalidatePath } from "next/cache"
 
-import {
-  enqueueAngleJob,
-  enqueueInstagramJob,
-  enqueueLinkedinJob,
-} from "@/engine/content/jobs"
+import { enqueueAngleJob } from "@/engine/content/jobs"
+import { pedirPiezaDeAngulo } from "@/engine/content/pedir"
+import { guardarVersion } from "@/engine/content/versiones"
 import { configuracionDeGeneracion } from "@/lib/content-data"
 import { idDeCuentaActual } from "@/lib/accounts"
 import { tokenClaude } from "@/engine/claude/messages"
@@ -16,12 +14,13 @@ import { elegirPorHecho } from "@/engine/content/repetidas"
 import { modelosClaude } from "@/engine/claude/modelos"
 import { runContentTick } from "@/engine/content/tick"
 
-import type { ContentAngle, ContentPiece, Red, Variables } from "@/engine/content/types"
+import type { ContentPiece, Red, Variables } from "@/engine/content/types"
 import { parseVariables, validateVariables } from "@/engine/content/variables"
 import { disconnectLinkedin } from "@/engine/publish/linkedin"
 import { publishPiece } from "@/engine/publish/publish-piece"
 import { esModoDiseno, type ModoDiseno } from "@/engine/render/theme"
 import { supabaseAdmin } from "@/engine/supabase-admin"
+import { usuarioActual } from "@/lib/supabase/auth"
 import type { RawNews } from "@/lib/types"
 
 /**
@@ -316,46 +315,13 @@ export async function generateFromAngle(
   if (invalido) return { ok: false, error: invalido }
 
   try {
-    const supabase = supabaseAdmin()
-    const { data, error } = await supabase
-      .from("content_angles")
-      .select("*")
-      .eq("id", angleId)
-      .eq("account_id", await idDeCuentaActual())
-      .single()
-
-    if (error) throw new Error(error.message)
-    const angle = data as ContentAngle
-
-    const [news, config] = await Promise.all([loadNews(angle.raw_news_id), configuracionDeGeneracion()])
-
-    // El mismo angulo alimenta todas las redes: esa es la razon de que el
-    // angulo se decida una sola vez y por separado.
-    if (network === "facebook") {
-      // Si ya hay carrusel de este angulo, Facebook sale de el ahora mismo, sin
-      // pedirle otro guion al agente. Si no, se encola el buzon de Instagram
-      // con Facebook como unico destino.
-      const hecha = await facebookDesdeCarruselExistente(angle.id)
-      if (hecha) {
-        refresh()
-        return { ok: true }
-      }
-      await enqueueInstagramJob(angle, news, config.variables, override, ["facebook"])
-    } else if (network === "instagram") {
-      await enqueueInstagramJob(angle, news, config.variables, override)
-    } else {
-      await enqueueLinkedinJob(angle, news, config.variables, override)
+    // Si ya hay carrusel de este angulo, Facebook sale de el ahora mismo, sin
+    // pedirle otro guion al agente. Si no, se encola como las demas redes.
+    if (network === "facebook" && (await facebookDesdeCarruselExistente(angleId))) {
+      refresh()
+      return { ok: true }
     }
-
-    // Solo se marca a la espera si no habia nada generado aun; si ya hay una
-    // pieza de la otra red, el angulo se queda en 'generated' y no retrocede.
-    if (angle.status === "angled") {
-      await supabase
-        .from("content_angles")
-        .update({ status: "pending_generation" })
-        .eq("id", angleId)
-        .eq("account_id", await idDeCuentaActual())
-    }
+    await pedirPiezaDeAngulo(await idDeCuentaActual(), angleId, network, override)
 
     // Igual que al encolar un angulo: pedir una pieza a mano la adelanta a lo
     // que haya en cola, sea cual sea el modo de su agente.
@@ -450,6 +416,12 @@ export async function updatePiece(form: FormData): Promise<ActionResult> {
       .eq("account_id", await idDeCuentaActual())
 
     if (errorUpdate) throw new Error(errorUpdate.message)
+    await guardarVersion({
+      accountId: await idDeCuentaActual(),
+      pieceId,
+      motivo: "Editado a mano",
+      autorUsuario: (await usuarioActual())?.id,
+    })
 
     // Un post de LinkedIn editado a mano se revisa otra vez: la revision tiene
     // que hablar del texto que va a salir, no del que escribio el agente. Si
@@ -505,6 +477,14 @@ export async function publishPieceNow(pieceId: string): Promise<ActionResult> {
  * marca en Marca > Kit.
  */
 export async function regenerateCarousel(pieceId: string, modo?: ModoDiseno): Promise<ActionResult> {
+  return redibujarCarrusel(pieceId, modo, "Regeneró las imágenes")
+}
+
+/**
+ * Lo de regenerateCarousel. `motivo` es la version que deja; sin el no deja
+ * ninguna, porque quien llama (corregir) guarda la suya con su propio motivo.
+ */
+async function redibujarCarrusel(pieceId: string, modo: ModoDiseno | undefined, motivo: string | null): Promise<ActionResult> {
   if (!pieceId) return { ok: false, error: "Falta el id de la pieza." }
   if (modo !== undefined && !esModoDiseno(modo)) return { ok: false, error: "Ese modo de diseño no existe." }
 
@@ -591,6 +571,14 @@ export async function regenerateCarousel(pieceId: string, modo?: ModoDiseno): Pr
 
     if (error) throw new Error(error.message)
     await registrarUsos(pieza.account_id, pieceId, "instagram", carrusel.fotosBiblioteca)
+    if (motivo) {
+      await guardarVersion({
+        accountId: pieza.account_id,
+        pieceId,
+        motivo: modo ? `${motivo} (${modo})` : motivo,
+        autorUsuario: (await usuarioActual())?.id,
+      })
+    }
 
     // La pieza de Facebook que salio de este mismo carrusel lleva la portada:
     // si se redibujo, la suya tambien cambia. Solo si no se publico ya, porque
@@ -640,15 +628,18 @@ export async function corregirPiezaConIA(pieceId: string): Promise<ActionResult>
   if (!pieceId) return { ok: false, error: "Falta el id de la pieza." }
   try {
     const { corregirPieza } = await import("@/engine/content/revision")
-    const r = await corregirPieza(await idDeCuentaActual(), pieceId)
+    const accountId = await idDeCuentaActual()
+    const r = await corregirPieza(accountId, pieceId)
     const quedan = r.revision.hallazgos.filter((h) => h.nivel === "frena").length
 
-    if (r.redibujar) {
-      const dibujo = await regenerateCarousel(r.redibujar)
-      if (!dibujo.ok) {
-        refresh()
-        return { ok: true, warning: `El texto se corrigió, pero no se pudieron redibujar las imágenes: ${dibujo.error}` }
-      }
+    const dibujo = r.redibujar ? await redibujarCarrusel(r.redibujar, undefined, null) : null
+    const autorUsuario = (await usuarioActual())?.id
+    for (const id of new Set([pieceId, r.redibujar].filter((x): x is string => Boolean(x)))) {
+      await guardarVersion({ accountId, pieceId: id, motivo: "Corrigió lo que encontró el revisor", autorUsuario })
+    }
+    if (dibujo && !dibujo.ok) {
+      refresh()
+      return { ok: true, warning: `El texto se corrigió, pero no se pudieron redibujar las imágenes: ${dibujo.error}` }
     }
     refresh()
     return quedan > 0
