@@ -10,7 +10,7 @@ import {
   renombrarConversacion,
   restaurarConversacion,
 } from "@/app/chat/actions"
-import type { AgenteElegible, EstadoChat, FilaConversacion, Hilo, NoticiaAdjunta } from "@/lib/chat-tipos"
+import type { AgenteChat, AgenteElegible, EstadoChat, FilaConversacion, Hilo, NoticiaAdjunta } from "@/lib/chat-tipos"
 import { tituloProvisional } from "@/lib/chat-titulo"
 
 import s from "./chat.module.css"
@@ -51,6 +51,8 @@ export function ChatApp(props: {
   /** La conversacion que se esta creando, antes de que el servidor devuelva su id. */
   const [provisional, setProvisional] = React.useState<Hilo | null>(null)
   const [enviando, setEnviando] = React.useState(false)
+  /** La respuesta que un agente esta escribiendo ahora, antes de guardarse. */
+  const [enVivo, setEnVivo] = React.useState<{ conversacion: string; agente: AgenteChat | null; texto: string } | null>(null)
   const [faltante, setFaltante] = React.useState<string | null>(null)
   const [panel, setPanel] = React.useState(false)
   const [enPapelera, setEnPapelera] = React.useState(false)
@@ -239,6 +241,49 @@ export function ChatApp(props: {
     void refrescar()
   }
 
+  // ------------------------------------------------------------ conversar
+
+  /** Pide la respuesta del agente y la pinta mientras llega; al final trae el hilo guardado. */
+  const escuchar = async (id: string) => {
+    setEnVivo({ conversacion: id, agente: null, texto: "" })
+    try {
+      const r = await fetch(`/api/chat/${id}/responder`, { method: "POST" })
+      if (!r.ok || !r.body) {
+        const data = (await r.json().catch(() => ({}))) as { error?: string }
+        throw new Error(data.error ?? "El agente no pudo responder.")
+      }
+      const lector = r.body.getReader()
+      const decodificar = new TextDecoder()
+      let resto = ""
+      for (;;) {
+        const { done, value } = await lector.read()
+        if (done) break
+        resto += decodificar.decode(value, { stream: true })
+        const lineas = resto.split("\n")
+        resto = lineas.pop() ?? ""
+        for (const linea of lineas) {
+          if (!linea.trim()) continue
+          const e = JSON.parse(linea) as { tipo: string; agente?: AgenteChat; t?: string; error?: string }
+          if (e.tipo === "agente" && e.agente) {
+            const agente = e.agente
+            setEnVivo((v) => (v ? { ...v, agente } : v))
+          } else if (e.tipo === "texto" && e.t) {
+            const t = e.t
+            setEnVivo((v) => (v ? { ...v, texto: v.texto + t } : v))
+          } else if (e.tipo === "error") avisar(e.error ?? "El agente no pudo responder.")
+        }
+      }
+    } catch (e) {
+      avisar(e instanceof Error ? e.message : "El agente no pudo responder.")
+    } finally {
+      version.current++
+      await refrescar()
+      setEnVivo(null)
+      // El nombre automatico se pone justo despues de responder.
+      setTimeout(() => void refrescar(), 4000)
+    }
+  }
+
   // ------------------------------------------------------------ pedir trabajo
 
   const enviarPortada = async (texto: string, noticia: NoticiaAdjunta | null, eleccion: Eleccion): Promise<boolean> => {
@@ -266,12 +311,15 @@ export function ChatApp(props: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ texto, noticia, agentes }),
       })
-      const data = (await r.json().catch(() => ({}))) as { id?: string; error?: string }
+      const data = (await r.json().catch(() => ({}))) as { id?: string; responder?: boolean; error?: string }
       if (!r.ok || !data.id) throw new Error(data.error ?? "No se pudo enviar.")
+      const id = data.id
       // Se sigue viendo lo escrito hasta que llega el hilo de verdad.
-      setProvisional((p) => (p ? { ...p, conversacion: { ...p.conversacion, id: data.id as string } } : p))
-      ir(data.id)
+      setProvisional((p) => (p ? { ...p, conversacion: { ...p.conversacion, id } } : p))
+      ir(id)
       await refrescar()
+      setEnviando(false)
+      if (data.responder) await escuchar(id)
       return true
     } catch (e) {
       setProvisional(null)
@@ -307,10 +355,12 @@ export function ChatApp(props: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ texto }),
       })
-      const data = (await r.json().catch(() => ({}))) as { error?: string }
+      const data = (await r.json().catch(() => ({}))) as { responder?: boolean; error?: string }
       if (!r.ok) throw new Error(data.error ?? "No se pudo enviar.")
       version.current++
       await refrescar()
+      setEnviando(false)
+      if (data.responder) await escuchar(id)
       return true
     } catch (e) {
       fallo(e instanceof Error ? e.message : "No se pudo enviar.")
@@ -405,6 +455,7 @@ export function ChatApp(props: {
               hilo={hiloAbierto}
               faltante={!hiloAbierto && Boolean(activa) && faltante === activa}
               enviando={enviando}
+              enVivo={enVivo && enVivo.conversacion === activa ? enVivo : null}
               montado={montado}
               onGuardar={() => activa && void alternarGuardada(activa)}
               onRenombrar={() => activa && empezarRenombrar(activa)}

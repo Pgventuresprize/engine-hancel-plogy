@@ -12,8 +12,8 @@ import { empezarTrabajos, reanudarConversacion, type RedChat } from "./trabajos"
  * Las piezas las hacen los buzones de siempre; quien llama dispara la pasada
  * con las redes que devuelve, o el trabajo esperaria al cron.
  *
- * Conversar con los agentes (responder, cambiar una pieza) es la fase 1E: hasta
- * entonces el coordinador lo dice en claro en vez de fingir que lo hizo.
+ * Lo que no es un pedido con noticia lo contesta un agente conversando
+ * (conversar.ts), en streaming desde /api/chat/[id]/responder.
  */
 
 export type Pedido = {
@@ -45,8 +45,12 @@ async function redesConPieza(accountId: string, angleId: string): Promise<RedCha
   return (["instagram", "linkedin"] as const).filter((r) => redes.has(r))
 }
 
-/** Una conversacion nueva desde la portada. Devuelve su id y las redes a disparar. */
-export async function crearConversacion(p: Pedido): Promise<{ conversacionId: string; disparar: RedChat[] }> {
+/**
+ * Una conversacion nueva desde la portada. Devuelve su id, las redes a
+ * disparar y si toca que un agente responda conversando (sin noticia no hay
+ * pieza que encolar: se habla).
+ */
+export async function crearConversacion(p: Pedido): Promise<{ conversacionId: string; disparar: RedChat[]; responder: boolean }> {
   const supabase = supabaseAdmin()
   const { data, error } = await supabase
     .from("conversaciones")
@@ -70,30 +74,18 @@ export async function crearConversacion(p: Pedido): Promise<{ conversacionId: st
     noticia: p.noticia,
     agentesPedidos: p.agentes,
   })
-  const disparar = await repartir(p, conversacionId, mensaje.id)
-  return { conversacionId, disparar }
+  if (!p.noticia || !p.agentes.length) return { conversacionId, disparar: [], responder: true }
+  const disparar = await repartir({ ...p, noticia: p.noticia }, conversacionId, mensaje.id)
+  return { conversacionId, disparar, responder: false }
 }
 
-/** La linea del coordinador y los trabajos de un pedido con noticia. */
-async function repartir(p: Pedido, conversacionId: string, mensajeId: string): Promise<RedChat[]> {
+/** La linea del coordinador y los trabajos de un pedido con noticia y agentes. */
+async function repartir(p: Pedido & { noticia: NoticiaAdjunta }, conversacionId: string, mensajeId: string): Promise<RedChat[]> {
   const ruta = (contenido: string) =>
     escribirMensaje({ accountId: p.accountId, conversacionId, rol: "ruta", agente: "coordinador", contenido })
 
-  if (!p.noticia) {
-    await ruta(
-      "Para armar una pieza, adjunta una noticia con ángulo decidido con **Adjuntar noticia**. " +
-        "Conversar conmigo sin noticia llega en el siguiente paso."
-    )
-    return []
-  }
-
   const conRevisor = p.agentes.includes("revisor")
   let redes = (["instagram", "linkedin"] as const).filter((r) => p.agentes.includes(r))
-
-  if (!redes.length && !conRevisor) {
-    await ruta("Entendido. Lo dejo anotado para el equipo.")
-    return []
-  }
 
   if (!redes.length) {
     // Solo el revisor: mira las piezas que la noticia ya tiene.
@@ -125,13 +117,16 @@ async function repartir(p: Pedido, conversacionId: string, mensajeId: string): P
 
 const SIGUE = /\b(sigue|seguir|segu[ií]|contin[uú]a|continuar|reanuda|reanudar|retoma|retomar|dale)\b/i
 
-/** Un mensaje en una conversacion abierta. Devuelve las redes a disparar. */
+/**
+ * Un mensaje en una conversacion abierta. "Sigue" con algo detenido lo retoma;
+ * lo demas lo contesta un agente conversando (`responder`).
+ */
 export async function seguirConversacion(p: {
   accountId: string
   conversacionId: string
   usuarioId: string
   texto: string
-}): Promise<{ disparar: RedChat[] }> {
+}): Promise<{ disparar: RedChat[]; responder: boolean }> {
   const supabase = supabaseAdmin()
   const { data: conv } = await supabase
     .from("conversaciones")
@@ -143,24 +138,15 @@ export async function seguirConversacion(p: {
   if (!conv) throw new Error("Esa conversación no existe o está en la papelera.")
 
   await escribirMensaje({ accountId: p.accountId, conversacionId: p.conversacionId, rol: "usuario", autor: p.usuarioId, contenido: p.texto })
-  const ruta = (contenido: string) =>
-    escribirMensaje({ accountId: p.accountId, conversacionId: p.conversacionId, rol: "ruta", agente: "coordinador", contenido })
 
   const { count } = await supabase
     .from("chat_trabajos")
     .select("id", { count: "exact", head: true })
     .eq("conversacion_id", p.conversacionId)
     .eq("estado", "detenido")
-  const detenidos = count ?? 0
-
-  if (detenidos && SIGUE.test(p.texto)) {
-    await ruta("Retomo donde quedó.")
-    return reanudarConversacion(p.accountId, p.conversacionId)
+  if (count && SIGUE.test(p.texto) && p.texto.length < 80) {
+    await escribirMensaje({ accountId: p.accountId, conversacionId: p.conversacionId, rol: "ruta", agente: "coordinador", contenido: "Retomo donde quedó." })
+    return { ...(await reanudarConversacion(p.accountId, p.conversacionId)), responder: false }
   }
-  await ruta(
-    detenidos
-      ? "Anotado. Lo que detuviste sigue detenido: escribe **sigue** cuando quieras retomarlo. Responder y aplicar cambios desde aquí llega en el siguiente paso."
-      : "Anotado. Responder y aplicar cambios desde aquí llega en el siguiente paso. Para otra pieza, empieza una conversación nueva y adjunta la noticia."
-  )
-  return { disparar: [] }
+  return { disparar: [], responder: true }
 }

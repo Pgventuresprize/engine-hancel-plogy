@@ -67,9 +67,9 @@ export async function POST(request: Request) {
       : null
 
   try {
-    const { conversacionId, disparar } = await crearConversacion({ ...sesion, texto, noticia, agentes })
+    const { conversacionId, disparar, responder } = await crearConversacion({ ...sesion, texto, noticia, agentes })
     dispararPasada(disparar)
-    return NextResponse.json({ id: conversacionId })
+    return NextResponse.json({ id: conversacionId, responder })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 })
   }

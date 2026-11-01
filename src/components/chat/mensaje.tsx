@@ -2,7 +2,7 @@
 
 import * as React from "react"
 
-import type { MensajeUI, ReferenciaUI, TrabajoUI } from "@/lib/chat-tipos"
+import type { AgenteChat, MensajeUI, ReferenciaUI, TrabajoUI } from "@/lib/chat-tipos"
 
 import s from "./chat.module.css"
 import { AG, Avatar, cx, hora, iniciales, puntaje } from "./comun"
@@ -30,7 +30,11 @@ export function MensajeVista({ m, montado, onAbrirPieza }: { m: MensajeUI; monta
           </span>
           <span className={s.cm}>{montado ? hora(m.creado) : ""}</span>
         </div>
-        {m.rol === "ruta" ? <p className={cx(s.mt, s.sys)}>{conNegritas(m.contenido)}</p> : <p className={s.mt}>{m.contenido}</p>}
+        {m.rol === "ruta" ? (
+          <p className={cx(s.mt, s.sys)}>{conNegritas(m.contenido)}</p>
+        ) : (
+          <p className={s.mt}>{esUsuario ? m.contenido : conNegritas(m.contenido)}</p>
+        )}
         {m.noticia ? (
           <div className={s.newsref}>
             <span className={s.score}>{puntaje(m.noticia.puntaje)}</span>
@@ -145,6 +149,33 @@ export function PensandoVista() {
           <span />
           <span />
         </div>
+      </div>
+    </div>
+  )
+}
+
+/** La respuesta de un agente mientras la escribe. */
+export function EnVivoVista({ agente, texto }: { agente: AgenteChat; texto: string }) {
+  const a = AG[agente]
+  return (
+    <div className={s.msg}>
+      <Avatar agente={agente} />
+      <div className={s.mb}>
+        <div className={s.mh}>
+          <span className={s.n} style={{ color: agente === "coordinador" ? "var(--ink)" : a.color }}>
+            {a.nombre}
+          </span>
+          <span className={s.cm}>escribiendo</span>
+        </div>
+        {texto ? (
+          <p className={s.mt}>{conNegritas(texto)}</p>
+        ) : (
+          <div className={s.dots} aria-label={`${a.nombre} está pensando`} style={{ padding: "6px 0" }}>
+            <span />
+            <span />
+            <span />
+          </div>
+        )}
       </div>
     </div>
   )

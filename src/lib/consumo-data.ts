@@ -54,6 +54,12 @@ const PASOS: Record<string, { etiqueta: string; grupo: Grupo }> = {
   "estudio-ubicar": { etiqueta: "Ubicar en el estudio", grupo: "otros" },
   ideas: { etiqueta: "Ideas", grupo: "otros" },
   "video-guion": { etiqueta: "Guion de video", grupo: "otros" },
+  "chat-coordinador": { etiqueta: "Chat · Coordinador", grupo: "otros" },
+  "chat-instagram": { etiqueta: "Chat · Instagram", grupo: "otros" },
+  "chat-linkedin": { etiqueta: "Chat · LinkedIn", grupo: "otros" },
+  "chat-revisor": { etiqueta: "Chat · Revisor", grupo: "otros" },
+  "chat-titulo": { etiqueta: "Chat · Nombre de la conversación", grupo: "otros" },
+  "chat-resumen": { etiqueta: "Chat · Resumen de lo hablado", grupo: "otros" },
   "probar-conexion": { etiqueta: "Probar conexión", grupo: "otros" },
 }
 

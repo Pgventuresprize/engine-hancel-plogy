@@ -6,7 +6,11 @@ import { dispararPasada, sesionChat } from "@/lib/chat-sesion"
 export const dynamic = "force-dynamic"
 export const maxDuration = 300
 
-/** Un mensaje en una conversacion abierta (el campo "Responde o pide un cambio…"). */
+/**
+ * Un mensaje en una conversacion abierta (el campo "Responde o pide un cambio…").
+ * Lo guarda y dice si toca que conteste un agente: eso lo pide la pantalla a
+ * /api/chat/[id]/responder, que contesta en streaming.
+ */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const sesion = await sesionChat()
   if (!sesion) return NextResponse.json({ error: "Sin sesión" }, { status: 401 })
@@ -16,9 +20,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!texto) return NextResponse.json({ error: "El mensaje está vacío." }, { status: 400 })
 
   try {
-    const { disparar } = await seguirConversacion({ accountId: sesion.accountId, conversacionId: id, usuarioId: sesion.usuarioId, texto })
+    const { disparar, responder } = await seguirConversacion({ accountId: sesion.accountId, conversacionId: id, usuarioId: sesion.usuarioId, texto })
     dispararPasada(disparar)
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ responder })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 })
   }

@@ -20,6 +20,8 @@
 .app button { cursor: pointer }
 .app button:disabled { cursor: default }
 .app :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px }
+/* Los campos de texto ya marcan el foco con el borde de su caja. */
+.app .composer textarea:focus-visible, .app .dockc textarea:focus-visible, .app .search input:focus-visible, .app .ren:focus-visible { outline: none }
 .app svg { display: inline-block }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap }
 .ico { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round }

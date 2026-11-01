@@ -2,11 +2,11 @@
 
 import * as React from "react"
 
-import type { FilaConversacion, Hilo, ReferenciaUI } from "@/lib/chat-tipos"
+import type { AgenteChat, FilaConversacion, Hilo, ReferenciaUI } from "@/lib/chat-tipos"
 
 import s from "./chat.module.css"
 import { AG, autoAltura, Avatar, cx, I, Ico, ORDEN_AGENTES, useFuera } from "./comun"
-import { MensajeVista, PensandoVista, TrabajoVista } from "./mensaje"
+import { EnVivoVista, MensajeVista, PensandoVista, TrabajoVista } from "./mensaje"
 
 /** Una conversacion abierta: cabecera, hilo y el campo para responder (o detener). */
 export function Conversacion(props: {
@@ -15,6 +15,8 @@ export function Conversacion(props: {
   /** No existe o esta en la papelera. */
   faltante: boolean
   enviando: boolean
+  /** La respuesta que se esta escribiendo; sin agente aun, el coordinador lee. */
+  enVivo: { agente: AgenteChat | null; texto: string } | null
   montado: boolean
   onGuardar: () => void
   onRenombrar: () => void
@@ -34,7 +36,14 @@ export function Conversacion(props: {
   useFuera(masRef, mas, cerrarMas)
 
   const trabajando = Boolean(hilo?.trabajos.some((t) => t.estado !== "detenido"))
-  const ocupado = props.enviando ? "coordinador" : trabajando ? (hilo?.conversacion.ocupado ?? null) : null
+  const respondiendo = props.enviando || Boolean(props.enVivo)
+  const ocupado = props.enVivo
+    ? (props.enVivo.agente ?? "coordinador")
+    : props.enviando
+      ? "coordinador"
+      : trabajando
+        ? (hilo?.conversacion.ocupado ?? null)
+        : null
 
   // El hilo en orden: los mensajes y, en su sitio, las tarjetas de trabajo vivas.
   const items = React.useMemo(() => {
@@ -48,7 +57,7 @@ export function Conversacion(props: {
   // Abajo del todo al abrir y cuando llega algo, salvo que se este leyendo arriba.
   const abierta = hilo?.conversacion.id ?? null
   const ultimaAbierta = React.useRef<string | null>(null)
-  const firma = `${items.length}-${items.at(-1)?.t?.paso ?? ""}-${props.enviando}`
+  const firma = `${items.length}-${items.at(-1)?.t?.paso ?? ""}-${props.enviando}-${props.enVivo?.texto.length ?? -1}`
   React.useLayoutEffect(() => {
     const el = caja.current
     if (!el) return
@@ -63,7 +72,7 @@ export function Conversacion(props: {
 
   const enviar = async () => {
     const t = texto.trim()
-    if (!t || props.enviando || trabajando) return
+    if (!t || respondiendo || trabajando) return
     setTexto("")
     requestAnimationFrame(() => autoAltura(campo.current, 160))
     const ok = await props.onEnviar(t)
@@ -141,7 +150,11 @@ export function Conversacion(props: {
               ) : null
             )
           )}
-          {props.enviando ? <PensandoVista /> : null}
+          {props.enVivo?.agente ? (
+            <EnVivoVista agente={props.enVivo.agente} texto={props.enVivo.texto} />
+          ) : respondiendo ? (
+            <PensandoVista />
+          ) : null}
         </div>
       </div>
 
@@ -175,7 +188,7 @@ export function Conversacion(props: {
               type="button"
               className={cx(s.sq36, s.go)}
               aria-label="Enviar"
-              disabled={!texto.trim() || props.enviando || props.faltante || !hilo}
+              disabled={!texto.trim() || respondiendo || props.faltante || !hilo}
               onClick={() => void enviar()}
             >
               <Ico d={I.flecha} />
