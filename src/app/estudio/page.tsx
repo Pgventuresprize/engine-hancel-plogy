@@ -33,12 +33,10 @@ const PIPELINES = [
 ] as const
 
 /**
- * El pipeline como tablero, y la pantalla de inicio.
+ * El pipeline como tablero.
  *
- * Es lo primero que se abre porque es lo unico que hay que mirar a diario: que
- * se atasco y donde. Cuando haya un panel de metricas cambiara, pero mientras
- * tanto una portada vacia solo seria un clic de mas.
- *
+ * Fue la pantalla de inicio hasta que llego el chat con los agentes; ahora vive
+ * en /estudio y el inicio es la conversacion con el equipo.
  *
  * Sustituye a las listas sueltas de candidatas, angulos y piezas, que no dejaban
  * ver que un post venia de un angulo y ese angulo de una noticia. Aqui cada
@@ -84,7 +82,7 @@ export default async function ContenidoPage({
           {PIPELINES.map((p) => (
             <Link
               key={p.id}
-              href={p.id === "redes" ? "/" : "/?pipeline=redaccion"}
+              href={p.id === "redes" ? "/estudio" : "/estudio?pipeline=redaccion"}
               aria-current={pipeline === p.id ? "page" : undefined}
               className={`rounded-md px-3 py-1.5 transition-colors ${
                 pipeline === p.id ? "bg-background text-foreground font-medium shadow-sm" : "hover:text-foreground"

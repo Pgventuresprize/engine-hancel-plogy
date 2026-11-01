@@ -19,7 +19,7 @@ function fail(error: unknown, fallback: string): ActionResult {
 
 function refresh(clave: string) {
   revalidatePath(`/agentes/${clave}`)
-  revalidatePath("/")
+  revalidatePath("/estudio")
 }
 
 /**

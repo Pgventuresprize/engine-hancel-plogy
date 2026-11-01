@@ -18,7 +18,7 @@ import { despertarRedaccion } from "@/lib/redaccion-despertar"
 export type Resultado = { ok: true; aviso?: string } | { ok: false; error: string }
 
 function refrescar() {
-  revalidatePath("/")
+  revalidatePath("/estudio")
 }
 
 async function noticiaDeLaCuenta(newsId: string) {

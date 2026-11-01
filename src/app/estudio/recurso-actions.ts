@@ -151,7 +151,7 @@ export async function aprobarRecurso(recursoId: string): Promise<Resultado> {
         updated_at: new Date().toISOString(),
       })
       .eq("id", r.id)
-    revalidatePath("/")
+    revalidatePath("/estudio")
     revalidatePath("/recursos")
     if (!conectado) {
       return { ok: true, warning: "Aprobado, pero la marca no tiene portal conectado: conéctalo en Configuración > Conexiones para que salga a la web y el DM tenga enlace." }
@@ -177,7 +177,7 @@ export async function retirarRecurso(recursoId: string): Promise<Resultado> {
       })
       .eq("id", r.id)
     if (r.web_version > 0) await procesarWebRecursos(r.account_id)
-    revalidatePath("/")
+    revalidatePath("/estudio")
     revalidatePath("/recursos")
     return { ok: true }
   } catch (e) {
@@ -245,7 +245,7 @@ export async function rehacerRecurso(angleId: string, modo: "rehacer" | "corregi
     if (error) throw new Error(error.message)
 
     await runContentTick({ trigger: "manual", forzar: ["recursos"], presupuesto: 1 })
-    revalidatePath("/")
+    revalidatePath("/estudio")
     revalidatePath("/recursos")
     return { ok: true, warning: "El agente lo está escribiendo por etapas: tarda unos minutos. Vuelve a abrir la pestaña para ver cómo va." }
   } catch (e) {
@@ -313,7 +313,7 @@ export async function rehacerFiguras(angleId: string): Promise<Resultado> {
     })
     if (error) throw new Error(error.message)
     await runContentTick({ trigger: "manual", forzar: ["recursos"], presupuesto: 1 })
-    revalidatePath("/")
+    revalidatePath("/estudio")
     revalidatePath("/recursos")
     return { ok: true, warning: "El agente está diseñando las figuras por pasos: tarda unos minutos. Vuelve a abrir la pestaña para ver cómo va." }
   } catch (e) {

@@ -21,7 +21,7 @@ function falla(e: unknown): ResultadoWeb {
 
 function refrescar() {
   revalidatePath("/configuracion/conexiones")
-  revalidatePath("/")
+  revalidatePath("/estudio")
 }
 
 /** Guarda la URL. La primera vez genera el secreto y lo devuelve para copiarlo. */

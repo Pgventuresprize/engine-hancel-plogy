@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
     // redibujan desde el tablero (la pagina de inicio).
     "/marca": ["./node_modules/@sparticuz/chromium/bin/**"],
     "/api/content/tick": ["./node_modules/@sparticuz/chromium/bin/**"],
-    "/": ["./node_modules/@sparticuz/chromium/bin/**"],
+    "/estudio": ["./node_modules/@sparticuz/chromium/bin/**"],
   },
   serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
   // Marca salio de Configuracion a su propia seccion: los enlaces viejos

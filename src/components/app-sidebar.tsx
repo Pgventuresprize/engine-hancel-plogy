@@ -17,7 +17,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { BotIcon, ChefHatIcon, ClapperboardIcon, FileTextIcon, FingerprintIcon, GalleryHorizontalEndIcon, KanbanIcon, LayersIcon, LightbulbIcon, SendIcon, SettingsIcon } from "lucide-react"
+import { BotIcon, ChefHatIcon, MessageSquareIcon, ClapperboardIcon, FileTextIcon, FingerprintIcon, GalleryHorizontalEndIcon, KanbanIcon, LayersIcon, LightbulbIcon, SendIcon, SettingsIcon } from "lucide-react"
 
 import { AGENTES } from "@/lib/agentes-catalogo"
 
@@ -38,12 +38,20 @@ export function AppSidebar({
 
   const todo = [
     {
+      // El inicio: la conversacion con el equipo de agentes (chat.html).
+      title: "Chat",
+      url: "/",
+      icon: <MessageSquareIcon />,
+      isActive: pathname === "/" || pathname.startsWith("/chat"),
+      items: [],
+    },
+    {
       // Sin subsecciones: el estudio es una sola pantalla, el tablero, y
       // colgarle hijos que no existen solo añadiria un desplegable vacio.
       title: "Estudio",
-      url: "/",
+      url: "/estudio",
       icon: <KanbanIcon />,
-      isActive: pathname === "/",
+      isActive: pathname === "/estudio",
       items: [],
     },
     {
