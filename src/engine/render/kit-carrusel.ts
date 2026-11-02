@@ -382,12 +382,13 @@ export async function generarCarruselKit(
 /**
  * Las paginas de cada lamina de una maqueta guardada, listas para el navegador
  * o para enseñarlas en el chat. Lanza si el kit ya no tiene alguna plantilla.
+ * Con `solo`, arma solo esa lamina (1 es la portada): la que se ve en el panel.
  */
 export async function paginasDeMaqueta(
   accountId: string,
   kc: KitCargado,
   maqueta: MaquetaGuardada,
-  { sinPaginacionEnLaPrimera = false } = {}
+  { sinPaginacionEnLaPrimera = false, solo }: { sinPaginacionEnLaPrimera?: boolean; solo?: number } = {}
 ): Promise<{ htmls: string[]; medidas: OpcionesDibujo }> {
   const plantillas = maqueta.laminas.map((l, i) => {
     const p = kc.plantillas.find((x) => x.id === l.plantilla)
@@ -396,18 +397,24 @@ export async function paginasDeMaqueta(
   })
   const cargadas = await cargarFotosLibre(
     accountId,
-    maqueta.laminas.flatMap((l, i) => (l.foto ? [{ clave: `foto${i + 1}`, lamina: i + 1, descripcion: "", origen: l.foto }] : []))
+    maqueta.laminas.flatMap((l, i) =>
+      l.foto && (!solo || solo === i + 1) ? [{ clave: `foto${i + 1}`, lamina: i + 1, descripcion: "", origen: l.foto }] : []
+    )
   )
   const fotoDe = (n: number) => cargadas.find((f) => f.lamina === n)?.datos ?? null
   const total = maqueta.laminas.length
   const htmls = await Promise.all(
-    maqueta.laminas.map((l, i) =>
-      armarLamina(
-        kc,
-        plantillas[i],
-        { textos: l.textos, listas: l.listas, n: i + 1, total: sinPaginacionEnLaPrimera && i === 0 ? 1 : total, foto: fotoDe(i + 1), figura: l.figura ?? null },
-        { sinPaginacion: sinPaginacionEnLaPrimera && i === 0 }
-      )
+    maqueta.laminas.flatMap((l, i) =>
+      solo && solo !== i + 1
+        ? []
+        : [
+            armarLamina(
+              kc,
+              plantillas[i],
+              { textos: l.textos, listas: l.listas, n: i + 1, total: sinPaginacionEnLaPrimera && i === 0 ? 1 : total, foto: fotoDe(i + 1), figura: l.figura ?? null },
+              { sinPaginacion: sinPaginacionEnLaPrimera && i === 0 }
+            ),
+          ]
     )
   )
   return { htmls, medidas: medidasDe(plantillas[0]) }

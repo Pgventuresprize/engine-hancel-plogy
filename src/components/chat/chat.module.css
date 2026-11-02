@@ -8,6 +8,7 @@
   --line: #e7e7e5; --line2: #dcdcda; --soft: #f4f4f3; --soft2: #efefed; --soft3: #fafaf9;
   --red: #b91c1c; --redbg: #fdecec;
   --ig: #db2777; --li: #2563eb; --rv: #c2410c;
+  --mark: #6d4aff; --mark-soft: #6d4aff1f;
   color-scheme: light;
   height: 100vh; height: 100dvh;
   display: flex; flex-direction: column;
@@ -263,6 +264,48 @@
 .vlamina b { display: block; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px }
 .pvacio { margin: auto; padding: 32px; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.5 }
 .volver { display: none }
+
+/* Marcar en la pieza (prototipo-chat-pieza.html) */
+.slidebox { position: relative }
+.tool[aria-pressed="true"] { background: var(--mark-soft); border-color: transparent; color: var(--mark) }
+.cur { width: 9px; height: 9px; border: 1.5px solid currentColor; border-radius: 2px; transform: rotate(45deg) }
+.panelhint { text-align: center; font-size: 12px; color: var(--muted); padding: 0 16px 4px }
+.marcable { position: absolute; inset: 0; overflow: hidden }
+.marcable img { width: 100%; height: 100%; object-fit: cover; display: block }
+.marcable iframe { position: absolute; left: 0; top: 0; border: 0; transform-origin: 0 0; background: transparent }
+.preparando { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); font-size: 12px; background: rgba(10,10,10,.75); color: #fff; padding: 4px 10px; border-radius: 99px; white-space: nowrap }
+.laminaentera { position: absolute; inset: 0; border: 0; background: transparent; padding: 0; border-radius: 8px; cursor: pointer }
+.laminaentera:hover { box-shadow: inset 0 0 0 3px var(--mark) }
+.laminaentera.sel { box-shadow: inset 0 0 0 3px var(--mark), inset 0 0 0 9999px var(--mark-soft) }
+.laminaentera .badge { position: absolute; left: 14px; top: 14px }
+.badge { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--mark); color: #fff; font-size: 11px; font-weight: 700; box-shadow: 0 0 0 2px #fff; pointer-events: none }
+.cuenta { position: absolute; right: 3px; top: 3px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 99px; background: var(--mark); color: #fff; font-size: 10px; font-weight: 700; line-height: 16px; text-align: center }
+.partes { flex: none; display: grid; gap: 6px; width: 100%; max-width: 432px; margin: 0 auto; padding: 4px 16px 6px; box-sizing: content-box }
+.parte { display: grid; gap: 2px; text-align: left; font: inherit; color: var(--ink2); background: #fff; border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; cursor: pointer }
+.parte:hover { border-color: var(--mark) }
+.parte.sel { border-color: var(--mark); background: var(--mark-soft) }
+.parteq { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--muted) }
+.parte.sel .parteq { color: var(--mark) }
+.partet { font-size: 13px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
+.parteq .badge { width: 16px; height: 16px; font-size: 10px; box-shadow: none }
+.parr { position: relative; border-radius: 6px; cursor: pointer; outline: 2px solid transparent; outline-offset: 3px }
+.parr:hover { outline: 2px dashed var(--mark) }
+.parr.sel { outline: 2px solid var(--mark) }
+.parr .badge { position: absolute; left: -12px; top: -10px }
+.flash { animation: flash 1.4s ease-out }
+@keyframes flash { 0% { box-shadow: 0 0 0 6px #ffd84d; background-color: #ffd84d55 } 100% { box-shadow: 0 0 0 0 transparent } }
+.dock.conMarcas { flex-direction: column; align-items: center; gap: 8px }
+.selchips { width: 100%; max-width: 720px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center }
+.selchip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 3px 4px 3px 8px; border-radius: 6px; background: var(--mark-soft); color: var(--mark); font-weight: 500; border: 0 }
+.selchip span { width: 16px; height: 16px; display: grid; place-items: center; border-radius: 4px; font-size: 13px; line-height: 1 }
+.selchip:hover span { background: var(--mark); color: #fff }
+.selclear { font-size: 12px; color: var(--muted); background: none; border: 0; padding: 3px 4px; text-decoration: underline; text-underline-offset: 2px }
+.dockhint { width: 100%; max-width: 720px; font-size: 12px; color: var(--muted) }
+.dockhint kbd { font-family: inherit; font-size: 11px; border: 1px solid var(--line2); border-radius: 4px; padding: 0 4px; background: var(--soft3) }
+.refs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px }
+.ref { font-size: 12px; padding: 2px 7px; border-radius: 6px; background: var(--mark-soft); color: var(--mark); font-weight: 500 }
+.aplicando { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 13px; color: var(--muted) }
+@media (prefers-reduced-motion: reduce) { .flash { animation: none } }
 
 @media (max-width: 900px) {
   .panel { position: absolute; z-index: 30; top: 0; bottom: 0; left: 0; box-shadow: 8px 0 32px rgba(0,0,0,.1) }

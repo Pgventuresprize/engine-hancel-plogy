@@ -11,13 +11,16 @@ export const maxDuration = 300
 
 /**
  * La respuesta de un agente al ultimo mensaje de la conversacion, mientras se
- * escribe. Una linea JSON por evento: quien contesta, cada trozo de texto y el
- * final (o el error). Despues, si toca, Hancel le pone nombre a la conversacion.
+ * escribe. Una linea JSON por evento: quien contesta, cada trozo de texto, que
+ * esta aplicando un cambio en su pieza y el final, con las laminas que cambio
+ * (o el error). Despues, si toca, Hancel le pone nombre a la conversacion.
  */
-export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const [sesion, usuario] = await Promise.all([sesionChat(), usuarioActual()])
   if (!sesion || !usuario) return Response.json({ error: "Sin sesión" }, { status: 401 })
   const { id } = await params
+  const body = (await request.json().catch(() => null)) as { piezaAbierta?: unknown } | null
+  const piezaAbierta = typeof body?.piezaAbierta === "string" ? body.piezaAbierta : null
 
   const { data: conv } = await supabaseAdmin()
     .from("conversaciones")
@@ -40,14 +43,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         }
       }
       try {
-        await responder({
+        const { aplicado } = await responder({
           accountId: sesion.accountId,
           conversacionId: id,
           persona,
+          piezaAbierta,
           alAgente: (agente) => enviar({ tipo: "agente", agente }),
           alTexto: (t) => enviar({ tipo: "texto", t }),
+          alAplicar: () => enviar({ tipo: "aplicando" }),
         })
-        enviar({ tipo: "fin" })
+        enviar({ tipo: "fin", ...(aplicado ? { pieza: { id: aplicado.pieceId, tocadas: aplicado.tocadas, version: aplicado.version } } : {}) })
       } catch (e) {
         enviar({ tipo: "error", error: e instanceof Error ? e.message : String(e) })
       } finally {

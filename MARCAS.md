@@ -300,6 +300,28 @@ previsualiza `/api/render/preview`), que cambia al instante; los PNG finales se
 dibujan al aprobar o descargar, no en cada vuelta, porque hoy un redibujo con
 Claude ronda los 40 a 50 s.
 
+**Hecho (rama `chat-agentes`, 2026-11-01):**
+
+- **Panel** (fase 2): pestañas por pieza, láminas con flechas y miniaturas, el
+  post por párrafos, versiones con "Restaurar como nueva versión". En el
+  Estudio, "Abrir en el chat".
+- **Marcar** (fase 3): botón Marcar (tecla M). Un carrusel con maqueta guardada
+  se enseña armado en un iframe aislado y se marca cada hueco de texto o cada
+  elemento de una lista; uno sin maqueta (de antes, de diseño libre o de otro
+  kit) enseña debajo de la imagen las partes de cada lámina sacadas del guion
+  (gancho, antetítulo, titular, cuerpo, cada punto, la figura, el cierre) para
+  marcarlas una a una, o la lámina entera con un clic en la imagen; un post,
+  por párrafo. El agente también cambia las figuras (encabezado, textos y
+  cifras; una cifra que no está en la noticia ni en el carrusel no entra). Las marcas van como
+  etiquetas numeradas sobre el campo de escribir; Esc las quita.
+- **Cambiar conversando:** Instagram y LinkedIn ven su pieza tal como se puede
+  cambiar y devuelven el cambio en un bloque que Hancel aplica: los huecos y
+  "otra foto" se redibujan con las mismas plantillas; un carrusel sin maqueta se
+  vuelve a maquetar desde su guion (y desde ahí ya tiene maqueta). Cada cambio
+  deja versión; la primera vez se guarda cómo estaba. Las láminas tocadas
+  destellan en el panel.
+- Lo que quedó fuera está en ITERACIONES.md, "Chat con los agentes".
+
 ### Conversaciones guardadas
 
 - Cada conversacion se guarda, con su marca, su autor y la fecha.

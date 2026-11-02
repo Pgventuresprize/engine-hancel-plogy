@@ -6,8 +6,11 @@ import { bloqueMarca } from "../marca/bloque"
 import { textoDeCarrusel } from "../marca/ejemplos"
 import { datosParaPrompt } from "../marca/prompt"
 import { parseInstagramResponse } from "../render/carousel"
+import type { MaquetaGuardada } from "../render/kit-carrusel"
 import { supabaseAdmin } from "../supabase-admin"
-import { escribirMensaje, type AgenteChat, type Mensaje } from "./mensajes"
+import { aplicarCambios, contratoDeCambios, editableDe, leerCambios, textoDeSelecciones, textoEditable, type Aplicado, type Editable } from "./editar"
+import { escribirMensaje, type AgenteChat, type Mensaje, type Referencia } from "./mensajes"
+import { anuncioDePieza } from "./trabajos"
 
 /**
  * Conversar con los agentes en el chat.
@@ -18,8 +21,10 @@ import { escribirMensaje, type AgenteChat, type Mensaje } from "./mensajes"
  * la misma que en el pipeline) mas un contrato de chat y lo que tiene delante:
  * las piezas de la conversacion y lo hablado.
  *
- * Aun no cambia piezas: eso llega con el panel de la pieza (fase 3). Hasta
- * entonces propone el cambio con el texto exacto y lo dice en claro.
+ * Instagram y LinkedIn cambian su pieza: la ven tal como se puede cambiar (lo
+ * marcado en el panel, si hay) y, si se les pide un cambio, lo devuelven en un
+ * bloque ```cambios que se aplica al terminar (editar.ts). El bloque no se
+ * enseña: la persona lee la prosa y la tarjeta de la version nueva.
  */
 
 /** El coordinador conversa y reparte: rapido y bueno escribiendo. */
@@ -41,10 +46,15 @@ const NOMBRE: Record<AgenteChat, string> = {
 const MENCION = /@(coordinador|instagram|linkedin|revisor)\b/i
 
 /** Quien contesta el ultimo mensaje de la persona. */
-export function quienResponde(mensajes: Pick<Mensaje, "rol" | "agente" | "contenido" | "agentes_pedidos" | "noticia">[]): AgenteChat {
+export function quienResponde(
+  mensajes: Pick<Mensaje, "rol" | "agente" | "contenido" | "agentes_pedidos" | "noticia" | "selecciones">[]
+): AgenteChat {
   const ultimo = [...mensajes].reverse().find((m) => m.rol === "usuario")
   const mencion = ultimo?.contenido.match(MENCION)?.[1]?.toLowerCase()
   if (mencion) return mencion as AgenteChat
+  // Lo marcado en una pieza lo cambia el agente de su red.
+  const red = ultimo?.selecciones?.find((x) => x.red)?.red
+  if (red) return red
   // Al empezar sin noticia y con un solo agente elegido, habla ese.
   const primero = mensajes[0]
   if (primero?.rol === "usuario" && !primero.noticia && primero.agentes_pedidos?.length === 1) return primero.agentes_pedidos[0]
@@ -66,6 +76,19 @@ type Pieza = {
 
 /** Lo que dice una pieza, en texto: las laminas del carrusel o el post. */
 async function textoDePieza(p: Pieza): Promise<string> {
+  // Con maqueta, lo que se ve es lo que dicen sus huecos: un cambio desde el chat va ahi.
+  const maqueta = p.payload.maqueta as MaquetaGuardada | undefined
+  if (p.network === "instagram" && maqueta?.laminas?.length) {
+    return [
+      ...maqueta.laminas.map(
+        (l, i) =>
+          `Lámina ${i + 1}: ${[...Object.values(l.textos), ...Object.values(l.listas).map((x) => x.map((y) => `- ${y}`).join("\n"))].filter(Boolean).join("\n")}`
+      ),
+      typeof p.payload.caption === "string" ? `Texto de la publicación: ${p.payload.caption}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n")
+  }
   if (p.network === "instagram" && p.job_instagram_id) {
     const { data } = await supabaseAdmin().from("jobs_instagram").select("respuesta").eq("id", p.job_instagram_id).maybeSingle()
     const respuesta = (data as { respuesta?: unknown } | null)?.respuesta
@@ -97,7 +120,7 @@ function textoDeRevision(r: Revision | null): string {
 }
 
 /** Las piezas de la conversacion, con su texto y su revision, para el contexto. */
-async function piezasDeConversacion(accountId: string, conversacionId: string): Promise<{ red: string; texto: string }[]> {
+async function piezasDeConversacion(accountId: string, conversacionId: string): Promise<{ id: string; red: string; texto: string }[]> {
   const supabase = supabaseAdmin()
   const { data: enlaces } = await supabase.from("conversacion_piezas").select("piece_id").eq("conversacion_id", conversacionId)
   const ids = ((enlaces ?? []) as { piece_id: string }[]).map((e) => e.piece_id)
@@ -119,6 +142,7 @@ async function piezasDeConversacion(accountId: string, conversacionId: string): 
   }
   return Promise.all(
     piezas.map(async (p) => ({
+      id: p.id,
       red: p.network,
       texto: [
         `## ${p.network === "instagram" ? "Carrusel de Instagram" : "Post de LinkedIn"} (${p.status === "approved" ? "aprobado" : p.status === "published" ? "publicado" : "borrador"})`,
@@ -165,7 +189,12 @@ async function noticiasListas(accountId: string): Promise<string> {
 
 const OFICIO_COORDINADOR = `Eres el coordinador del equipo de agentes de contenido de la marca en Hancel. El equipo: Instagram (arma carruseles), LinkedIn (escribe posts) y el Revisor (revisa cada pieza antes de publicarla y frena lo que no cumple). Tú hablas con la persona, entiendes qué necesita y la orientas; no escribes piezas tú.`
 
-function contratoDeChat(agente: AgenteChat, persona: string): string {
+function contratoDeChat(agente: AgenteChat, persona: string, editable: Editable | null): string {
+  const cambiar = editable
+    ? "- Puedes cambiar tu pieza: cómo, más abajo. Nunca digas que la cambiaste si no pones el bloque de cambios."
+    : agente === "instagram" || agente === "linkedin"
+      ? "- En esta conversación no hay una pieza tuya que cambiar. Si te piden un cambio, dilo."
+      : "- Tú no cambias piezas: el carrusel lo cambia Instagram y el post, LinkedIn. Si te piden un cambio, propón el texto exacto y sugiere pedírselo a @Instagram o @LinkedIn."
   return `# ESTÁS EN EL CHAT DE HANCEL
 
 Hablas con ${persona}, del equipo de la marca, en una conversación donde también están el Coordinador, Instagram, LinkedIn y el Revisor. Tú eres ${NOMBRE[agente]}.
@@ -173,10 +202,12 @@ Hablas con ${persona}, del equipo de la marca, en una conversación donde tambi�
 - Responde en español, en prosa breve: de dos a seis frases, o una lista corta si de verdad ayuda. Sin JSON, sin encabezados, sin firmar y sin empezar con tu nombre.
 - Habla como colega: directo, concreto, sin relleno ni halagos.
 - Cuando hables de una pieza, di dónde (lámina, párrafo) y el texto exacto.
-- Todavía no puedes cambiar piezas desde el chat. Si te piden un cambio, propónlo con el texto exacto como quedaría y aclara que por ahora se aplica a mano en el Estudio. Nunca digas que ya lo cambiaste.
+${cambiar}
 - Para crear una pieza nueva, la persona empieza una conversación nueva, adjunta una noticia con ángulo decidido y elige quién trabaja. Si te piden una pieza, explícalo así.
 - Si te hablan de algo que es de otro agente, dilo y sugiere escribirle con @Instagram, @LinkedIn, @Revisor o @Coordinador.
-- No inventes datos de la noticia ni de la marca: si algo no está en lo que tienes delante, dilo.`
+- No inventes datos de la noticia ni de la marca: si algo no está en lo que tienes delante, dilo.${editable ? `
+
+${contratoDeCambios(editable.modo)}` : ""}`
 }
 
 /** Lo hablado, como transcripcion: con resumen de lo viejo si la conversacion es larga. */
@@ -225,17 +256,49 @@ async function transcripcion(
   return `${resumen ? `(Resumen de lo hablado antes)\n${resumen}\n\n(Lo último)\n` : ""}${recientes.map(linea).join("\n\n")}`
 }
 
+/** Las piezas que se pueden cambiar en el chat. */
+const esRed = (a: AgenteChat): a is "instagram" | "linkedin" => a === "instagram" || a === "linkedin"
+
+/**
+ * Deja pasar al streaming solo la prosa: lo que viene desde el primer ``` es el
+ * bloque de cambios. Las comillas sueltas del final se guardan hasta saber si
+ * abren el bloque.
+ */
+function soloProsa(alTexto: (t: string) => void): (t: string) => void {
+  let visto = ""
+  let enviado = 0
+  let cortado = false
+  return (t) => {
+    if (cortado) return
+    visto += t
+    const i = visto.indexOf("```")
+    if (i >= 0) {
+      cortado = true
+      if (i > enviado) alTexto(visto.slice(enviado, i))
+      return
+    }
+    let fin = visto.length
+    while (fin > enviado && visto[fin - 1] === "`") fin--
+    if (fin > enviado) alTexto(visto.slice(enviado, fin))
+    enviado = fin
+  }
+}
+
 /**
  * La respuesta al ultimo mensaje de la persona, en streaming por `alTexto`.
- * Guarda el mensaje del agente al terminar (o uno que dice por que no pudo).
+ * Si el agente cambia su pieza, `alAplicar` avisa mientras se aplica y se
+ * redibuja. Guarda el mensaje del agente al terminar (o uno que dice por que no pudo).
  */
 export async function responder(o: {
   accountId: string
   conversacionId: string
   persona: string
+  /** La pieza que se ve en el panel, si hay: la que cambia un pedido sin marcas. */
+  piezaAbierta?: string | null
   alAgente: (agente: AgenteChat) => void
   alTexto: (trozo: string) => void
-}): Promise<{ agente: AgenteChat; mensaje: Mensaje }> {
+  alAplicar?: () => void
+}): Promise<{ agente: AgenteChat; mensaje: Mensaje; aplicado: (Aplicado & { pieceId: string }) | null }> {
   const supabase = supabaseAdmin()
   const { data, error } = await supabase
     .from("mensajes")
@@ -258,11 +321,30 @@ export async function responder(o: {
     transcripcion(o.accountId, o.conversacionId, anteriores, o.persona),
   ])
 
+  // La pieza que puede cambiar: la marcada, la abierta en el panel o la ultima de su red.
+  const selecciones = (ultimo.selecciones ?? []).filter((x) => !x.red || x.red === agente)
+  const propias = esRed(agente) ? piezas.filter((p) => p.red === agente) : piezas
+  const objetivo = esRed(agente)
+    ? (propias.find((p) => p.id === selecciones[0]?.pieceId) ??
+      propias.find((p) => p.id === o.piezaAbierta) ??
+      propias.at(-1) ??
+      null)
+    : null
+  let editable: Editable | null = null
+  if (objetivo) {
+    try {
+      editable = await editableDe(o.accountId, objetivo.id)
+    } catch (e) {
+      console.error("[chat] La pieza no se puede cambiar:", e instanceof Error ? e.message : e)
+    }
+  }
+
   // Lo que el agente tiene delante.
-  const propias = agente === "instagram" || agente === "linkedin" ? piezas.filter((p) => p.red === agente) : piezas
   const contexto: string[] = []
-  if (propias.length) contexto.push(`# LAS PIEZAS DE ESTA CONVERSACIÓN\n\n${propias.map((p) => p.texto).join("\n\n")}`)
-  else if (agente === "revisor") contexto.push(await frenadosDeLaMarca(o.accountId))
+  const otras = propias.filter((p) => !editable || p.id !== objetivo?.id)
+  if (editable && objetivo) contexto.push(`# TU PIEZA, TAL COMO LA PUEDES CAMBIAR\n\n${objetivo.texto.split("\n\n").slice(0, 2).join("\n\n")}\n\n${textoEditable(editable)}`)
+  if (otras.length) contexto.push(`# ${editable ? "OTRAS PIEZAS" : "LAS PIEZAS"} DE ESTA CONVERSACIÓN\n\n${otras.map((p) => p.texto).join("\n\n")}`)
+  else if (!editable && agente === "revisor") contexto.push(await frenadosDeLaMarca(o.accountId))
   if (agente === "coordinador") contexto.push(`# NOTICIAS CON ÁNGULO DECIDIDO, LISTAS PARA PIEZA\n\n${await noticiasListas(o.accountId)}`)
 
   let fijo: string
@@ -277,10 +359,11 @@ export async function responder(o: {
     modelo = m
   }
 
+  const marcado = selecciones.length ? `\n\nLo que marcó en la pieza para este pedido:\n${textoDeSelecciones(selecciones)}` : ""
   const prompt = [
     ...contexto,
     charla ? `# LO HABLADO HASTA AHORA\n\n${charla}` : "",
-    `# EL MENSAJE AL QUE RESPONDES\n\n[${o.persona}] ${ultimo.contenido}${ultimo.noticia ? `\n(Noticia adjunta: ${ultimo.noticia.titulo})` : ""}`,
+    `# EL MENSAJE AL QUE RESPONDES\n\n[${o.persona}] ${ultimo.contenido}${ultimo.noticia ? `\n(Noticia adjunta: ${ultimo.noticia.titulo})` : ""}${marcado}`,
   ]
     .filter(Boolean)
     .join("\n\n")
@@ -289,23 +372,46 @@ export async function responder(o: {
     paso: `chat-${agente}`,
     accountId: o.accountId,
     model: modelo,
-    system: { fijo, resto: contratoDeChat(agente, o.persona) },
+    system: { fijo, resto: contratoDeChat(agente, o.persona, editable) },
     prompt,
-    maxTokens: 1500,
+    // Con la pieza delante, el bloque de cambios puede traer laminas enteras.
+    maxTokens: editable ? 4000 : 1500,
     // Opus no deja apagar el razonamiento: sin esto, una respuesta corta tarda minutos.
     ...(modelo.includes("opus") ? { esfuerzo: "low" as const } : {}),
-    alTexto: o.alTexto,
+    alTexto: soloProsa(o.alTexto),
   })
+
+  let contenido = r.ok ? r.texto.trim() || "…" : `No pude responder: ${r.error}`
+  let referencias: Referencia[] = []
+  let aplicado: (Aplicado & { pieceId: string }) | null = null
+  if (r.ok) {
+    const leido = leerCambios(r.texto)
+    contenido = leido.prosa || "…"
+    if (leido.error) contenido += `\n\nNo pude aplicar el cambio: ${leido.error}. Pídemelo otra vez.`
+    else if (leido.cambios && editable && objetivo && esRed(agente)) {
+      o.alAplicar?.()
+      try {
+        const a = await aplicarCambios({ accountId: o.accountId, pieceId: objetivo.id, cambios: leido.cambios, agente })
+        aplicado = { ...a, pieceId: objetivo.id }
+        const { referencia } = await anuncioDePieza(o.accountId, objetivo.id, agente)
+        referencias = [{ ...referencia, version: a.version ?? referencia.version }]
+        contenido += `\n\n${a.version ? `Quedó como **v${a.version}**.` : "Listo, quedó aplicado."}${a.avisos.length ? `\n\n${a.avisos.join("\n")}` : ""}`
+      } catch (e) {
+        contenido += `\n\nNo pude aplicar el cambio: ${e instanceof Error ? e.message : String(e)}`
+      }
+    } else if (leido.cambios) contenido += "\n\nNo pude aplicar el cambio: no hay una pieza mía en esta conversación."
+  }
 
   const mensaje = await escribirMensaje({
     accountId: o.accountId,
     conversacionId: o.conversacionId,
     rol: "agente",
     agente,
-    contenido: r.ok ? r.texto.trim() || "…" : `No pude responder: ${r.error}`,
+    contenido,
+    referencias,
     uso: r.ok ? { modelo, ...r.uso } : { error: r.error },
   })
-  return { agente, mensaje }
+  return { agente, mensaje, aplicado }
 }
 
 /**

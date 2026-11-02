@@ -1,4 +1,4 @@
-import type { AgenteChat, NoticiaAdjunta, Referencia, RolMensaje } from "@/engine/chat/mensajes"
+import type { AgenteChat, NoticiaAdjunta, Referencia, RolMensaje, Seleccion } from "@/engine/chat/mensajes"
 import type { PiezaVista, VersionVista } from "@/engine/chat/piezas"
 import type { EstadoTrabajo } from "@/engine/chat/trabajos"
 
@@ -8,6 +8,9 @@ import type { EstadoTrabajo } from "@/engine/chat/trabajos"
  */
 
 export type { AgenteChat, NoticiaAdjunta, PiezaVista, VersionVista }
+
+/** Algo marcado en la pieza del panel: va con el siguiente mensaje. */
+export type Marca = Seleccion
 
 /** Los agentes que se eligen en "¿Quién trabaja?". El coordinador va siempre. */
 export type AgenteElegible = "instagram" | "linkedin" | "revisor"
@@ -38,6 +41,8 @@ export type MensajeUI = {
   contenido: string
   noticia: NoticiaAdjunta | null
   referencias: ReferenciaUI[]
+  /** Lo que marco en la pieza para este pedido: "L1 · Titulo". */
+  marcas: string[]
   creado: string
 }
 

@@ -2,7 +2,7 @@
 
 import * as React from "react"
 
-import type { AgenteChat, FilaConversacion, Hilo, ReferenciaUI } from "@/lib/chat-tipos"
+import type { AgenteChat, FilaConversacion, Hilo, Marca, ReferenciaUI } from "@/lib/chat-tipos"
 
 import s from "./chat.module.css"
 import { AG, autoAltura, Avatar, cx, I, Ico, ORDEN_AGENTES, useFuera } from "./comun"
@@ -16,7 +16,7 @@ export function Conversacion(props: {
   faltante: boolean
   enviando: boolean
   /** La respuesta que se esta escribiendo; sin agente aun, el coordinador lee. */
-  enVivo: { agente: AgenteChat | null; texto: string } | null
+  enVivo: { agente: AgenteChat | null; texto: string; aplicando: boolean } | null
   montado: boolean
   onGuardar: () => void
   onRenombrar: () => void
@@ -25,6 +25,10 @@ export function Conversacion(props: {
   onEnviar: (texto: string) => Promise<boolean>
   onDetener: () => void
   onAbrirPieza: (r: ReferenciaUI) => void
+  /** Lo marcado en la pieza del panel: va con el mensaje. */
+  marcas: Marca[]
+  onQuitarMarca: (m: Marca) => void
+  onLimpiarMarcas: () => void
 }) {
   const { fila, hilo } = props
   const [mas, setMas] = React.useState(false)
@@ -151,21 +155,48 @@ export function Conversacion(props: {
             )
           )}
           {props.enVivo?.agente ? (
-            <EnVivoVista agente={props.enVivo.agente} texto={props.enVivo.texto} />
+            <EnVivoVista agente={props.enVivo.agente} texto={props.enVivo.texto} aplicando={props.enVivo.aplicando} />
           ) : respondiendo ? (
             <PensandoVista />
           ) : null}
         </div>
       </div>
 
-      <div className={s.dock}>
+      <div className={cx(s.dock, props.marcas.length > 0 && s.conMarcas)}>
+        {props.marcas.length ? (
+          <div className={s.selchips} aria-label="Lo marcado en la pieza">
+            {props.marcas.map((m, i) => (
+              <button
+                key={`${m.pieceId}-${m.lamina}-${m.campo ?? ""}-${m.item ?? ""}`}
+                type="button"
+                className={s.selchip}
+                title="Quitar esta marca"
+                onClick={() => props.onQuitarMarca(m)}
+              >
+                {i + 1}. {m.etiqueta}
+                <span aria-hidden="true">×</span>
+              </button>
+            ))}
+            {props.marcas.length > 1 ? (
+              <button type="button" className={s.selclear} onClick={props.onLimpiarMarcas}>
+                Quitar todo
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         <div className={s.dockc}>
           <label className={s.sr} htmlFor="mensaje-chat">Mensaje para los agentes</label>
           <textarea
             id="mensaje-chat"
             ref={campo}
             rows={1}
-            placeholder="Responde o pide un cambio…"
+            placeholder={
+              props.marcas.length === 1
+                ? "¿Qué le cambio a lo marcado?"
+                : props.marcas.length
+                  ? `¿Qué le cambio a estas ${props.marcas.length} cosas?`
+                  : "Responde o pide un cambio…"
+            }
             value={texto}
             disabled={props.faltante}
             onChange={(e) => {
@@ -195,6 +226,11 @@ export function Conversacion(props: {
             </button>
           )}
         </div>
+        {props.marcas.length ? (
+          <div className={s.dockhint}>
+            El agente solo toca lo marcado. <kbd>Esc</kbd> quita las marcas.
+          </div>
+        ) : null}
       </div>
     </section>
   )

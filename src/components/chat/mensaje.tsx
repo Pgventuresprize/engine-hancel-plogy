@@ -35,6 +35,15 @@ export function MensajeVista({ m, montado, onAbrirPieza }: { m: MensajeUI; monta
         ) : (
           <p className={s.mt}>{esUsuario ? m.contenido : conNegritas(m.contenido)}</p>
         )}
+        {m.marcas.length ? (
+          <div className={s.refs} aria-label="Lo que marcó en la pieza">
+            {m.marcas.map((x, i) => (
+              <span key={i} className={s.ref}>
+                {i + 1}. {x}
+              </span>
+            ))}
+          </div>
+        ) : null}
         {m.noticia ? (
           <div className={s.newsref}>
             <span className={s.score}>{puntaje(m.noticia.puntaje)}</span>
@@ -155,7 +164,7 @@ export function PensandoVista() {
 }
 
 /** La respuesta de un agente mientras la escribe. */
-export function EnVivoVista({ agente, texto }: { agente: AgenteChat; texto: string }) {
+export function EnVivoVista({ agente, texto, aplicando }: { agente: AgenteChat; texto: string; aplicando?: boolean }) {
   const a = AG[agente]
   return (
     <div className={s.msg}>
@@ -165,11 +174,19 @@ export function EnVivoVista({ agente, texto }: { agente: AgenteChat; texto: stri
           <span className={s.n} style={{ color: agente === "coordinador" ? "var(--ink)" : a.color }}>
             {a.nombre}
           </span>
-          <span className={s.cm}>escribiendo</span>
+          <span className={s.cm}>{aplicando ? "aplicando el cambio" : "escribiendo"}</span>
         </div>
-        {texto ? (
-          <p className={s.mt}>{conNegritas(texto)}</p>
-        ) : (
+        {texto ? <p className={s.mt}>{conNegritas(texto)}</p> : null}
+        {aplicando ? (
+          <div className={s.aplicando} role="status">
+            <span className={s.dots} aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </span>
+            Aplicando el cambio y volviendo a dibujar…
+          </div>
+        ) : texto ? null : (
           <div className={s.dots} aria-label={`${a.nombre} está pensando`} style={{ padding: "6px 0" }}>
             <span />
             <span />

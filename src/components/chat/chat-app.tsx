@@ -10,7 +10,7 @@ import {
   renombrarConversacion,
   restaurarConversacion,
 } from "@/app/chat/actions"
-import type { AgenteChat, AgenteElegible, EstadoChat, FilaConversacion, Hilo, NoticiaAdjunta, ReferenciaUI } from "@/lib/chat-tipos"
+import type { AgenteChat, AgenteElegible, EstadoChat, FilaConversacion, Hilo, Marca, NoticiaAdjunta, ReferenciaUI } from "@/lib/chat-tipos"
 import { tituloProvisional } from "@/lib/chat-titulo"
 
 import s from "./chat.module.css"
@@ -26,6 +26,10 @@ import { Portada, type Eleccion } from "./portada"
 const CADA_MS = 3000
 
 const angosta = () => typeof window !== "undefined" && window.innerWidth <= 900
+
+/** Dos marcas son la misma si señalan lo mismo de la misma pieza. */
+const mismaMarca = (a: Marca, b: Marca) =>
+  a.pieceId === b.pieceId && a.lamina === b.lamina && (a.campo ?? null) === (b.campo ?? null) && (a.item ?? null) === (b.item ?? null)
 
 /**
  * La pantalla del chat con los agentes, el inicio de Hancel. Se ve y funciona
@@ -53,7 +57,7 @@ export function ChatApp(props: {
   const [provisional, setProvisional] = React.useState<Hilo | null>(null)
   const [enviando, setEnviando] = React.useState(false)
   /** La respuesta que un agente esta escribiendo ahora, antes de guardarse. */
-  const [enVivo, setEnVivo] = React.useState<{ conversacion: string; agente: AgenteChat | null; texto: string } | null>(null)
+  const [enVivo, setEnVivo] = React.useState<{ conversacion: string; agente: AgenteChat | null; texto: string; aplicando: boolean } | null>(null)
   const [faltante, setFaltante] = React.useState<string | null>(null)
   const [panel, setPanel] = React.useState(false)
   const [enPapelera, setEnPapelera] = React.useState(false)
@@ -67,6 +71,16 @@ export function ChatApp(props: {
     return p && /^[0-9a-f-]{36}$/i.test(p) ? [p] : []
   })
   const [piezaActiva, setPiezaActiva] = React.useState<string | null>(() => params.get("p"))
+  /** Lo marcado en las piezas del panel: va con el siguiente mensaje. */
+  const [marcas, setMarcas] = React.useState<Marca[]>([])
+  /** En el celular el panel tapa el chat: "Volver al chat" lo esconde sin cerrar las piezas ni quitar las marcas. */
+  const [piezaOculta, setPiezaOculta] = React.useState(false)
+  /** Las laminas que acaba de cambiar un agente, para que destellen en el panel. */
+  const [destello, setDestello] = React.useState<{ id: string; tocadas: number[]; cuando: number } | null>(null)
+  const piezaActivaRef = React.useRef(piezaActiva)
+  React.useEffect(() => {
+    piezaActivaRef.current = piezaActiva
+  }, [piezaActiva])
 
   // Una consulta vieja no pisa lo que se acaba de cambiar a mano ni a otra mas nueva.
   const version = React.useRef(0)
@@ -155,6 +169,7 @@ export function ChatApp(props: {
   const cerrarPiezas = () => {
     setPiezas([])
     setPiezaActiva(null)
+    setMarcas([])
   }
 
   const abrir = (id: string) => {
@@ -259,9 +274,13 @@ export function ChatApp(props: {
 
   /** Pide la respuesta del agente y la pinta mientras llega; al final trae el hilo guardado. */
   const escuchar = async (id: string) => {
-    setEnVivo({ conversacion: id, agente: null, texto: "" })
+    setEnVivo({ conversacion: id, agente: null, texto: "", aplicando: false })
     try {
-      const r = await fetch(`/api/chat/${id}/responder`, { method: "POST" })
+      const r = await fetch(`/api/chat/${id}/responder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ piezaAbierta: piezaActivaRef.current }),
+      })
       if (!r.ok || !r.body) {
         const data = (await r.json().catch(() => ({}))) as { error?: string }
         throw new Error(data.error ?? "El agente no pudo responder.")
@@ -277,13 +296,27 @@ export function ChatApp(props: {
         resto = lineas.pop() ?? ""
         for (const linea of lineas) {
           if (!linea.trim()) continue
-          const e = JSON.parse(linea) as { tipo: string; agente?: AgenteChat; t?: string; error?: string }
+          const e = JSON.parse(linea) as {
+            tipo: string
+            agente?: AgenteChat
+            t?: string
+            error?: string
+            pieza?: { id: string; tocadas: number[] }
+          }
           if (e.tipo === "agente" && e.agente) {
             const agente = e.agente
             setEnVivo((v) => (v ? { ...v, agente } : v))
           } else if (e.tipo === "texto" && e.t) {
             const t = e.t
             setEnVivo((v) => (v ? { ...v, texto: v.texto + t } : v))
+          } else if (e.tipo === "aplicando") setEnVivo((v) => (v ? { ...v, aplicando: true } : v))
+          else if (e.tipo === "fin" && e.pieza) {
+            // La pieza que cambio queda a la vista, con sus laminas nuevas destellando.
+            const { id: pieceId, tocadas } = e.pieza
+            setPiezas((p) => (p.includes(pieceId) ? p : [...p, pieceId]))
+            setPiezaActiva(pieceId)
+            setPiezaOculta(false)
+            setDestello({ id: pieceId, tocadas, cuando: Date.now() })
           } else if (e.tipo === "error") avisar(e.error ?? "El agente no pudo responder.")
         }
       }
@@ -314,7 +347,7 @@ export function ChatApp(props: {
         ocupado: "coordinador",
         borrada: null,
       },
-      mensajes: [{ id: "nuevo", rol: "usuario", agente: null, autor: props.usuario.nombre, contenido: texto, noticia, referencias: [], creado: ahora }],
+      mensajes: [{ id: "nuevo", rol: "usuario", agente: null, autor: props.usuario.nombre, contenido: texto, noticia, referencias: [], marcas: [], creado: ahora }],
       trabajos: [],
     })
     setEnviando(true)
@@ -348,6 +381,7 @@ export function ChatApp(props: {
     const id = activaRef.current
     if (!id) return false
     const ahora = new Date().toISOString()
+    const marcadas = marcas
     mutar((e) =>
       e.hilo && e.hilo.conversacion.id === id
         ? {
@@ -356,21 +390,35 @@ export function ChatApp(props: {
               ...e.hilo,
               mensajes: [
                 ...e.hilo.mensajes,
-                { id: `nuevo-${ahora}`, rol: "usuario", agente: null, autor: props.usuario.nombre, contenido: texto, noticia: null, referencias: [], creado: ahora },
+                {
+                  id: `nuevo-${ahora}`,
+                  rol: "usuario",
+                  agente: null,
+                  autor: props.usuario.nombre,
+                  contenido: texto,
+                  noticia: null,
+                  referencias: [],
+                  marcas: marcadas.map((m) => m.etiqueta),
+                  creado: ahora,
+                },
               ],
             },
           }
         : e
     )
     setEnviando(true)
+    setMarcas([])
     try {
       const r = await fetch(`/api/chat/${id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ texto }),
+        body: JSON.stringify({ texto, selecciones: marcadas }),
       })
       const data = (await r.json().catch(() => ({}))) as { responder?: boolean; error?: string }
-      if (!r.ok) throw new Error(data.error ?? "No se pudo enviar.")
+      if (!r.ok) {
+        setMarcas(marcadas)
+        throw new Error(data.error ?? "No se pudo enviar.")
+      }
       version.current++
       await refrescar()
       setEnviando(false)
@@ -396,6 +444,7 @@ export function ChatApp(props: {
   const abrirPieza = (r: ReferenciaUI) => {
     setPiezas((p) => (p.includes(r.pieceId) ? p : [...p, r.pieceId]))
     setPiezaActiva(r.pieceId)
+    setPiezaOculta(false)
     // El chat se angosta: si no cabe con la lista de conversaciones, la lista se cierra.
     if (typeof window !== "undefined" && window.innerWidth < 1280) setPanel(false)
   }
@@ -403,8 +452,24 @@ export function ChatApp(props: {
   const cerrarPieza = (id: string) => {
     const resto = piezas.filter((x) => x !== id)
     setPiezas(resto)
+    setMarcas((m) => m.filter((x) => x.pieceId !== id))
     if (piezaActiva === id) setPiezaActiva(resto.at(-1) ?? null)
   }
+
+  const alternarMarca = React.useCallback((m: Marca) => {
+    setMarcas((lista) => (lista.some((x) => mismaMarca(x, m)) ? lista.filter((x) => !mismaMarca(x, m)) : [...lista, m]))
+  }, [])
+  const limpiarMarcas = React.useCallback(() => setMarcas([]), [])
+
+  // Esc quita las marcas, salvo con una ventana abierta encima.
+  React.useEffect(() => {
+    if (!marcas.length || borrar || drawer) return
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMarcas([])
+    }
+    window.addEventListener("keydown", tecla)
+    return () => window.removeEventListener("keydown", tecla)
+  }, [marcas.length, borrar, drawer])
 
   // ------------------------------------------------------------ pintar
 
@@ -484,13 +549,16 @@ export function ChatApp(props: {
               onEnviar={enviarEnConversacion}
               onDetener={() => void detener()}
               onAbrirPieza={abrirPieza}
+              marcas={marcas}
+              onQuitarMarca={alternarMarca}
+              onLimpiarMarcas={limpiarMarcas}
             />
           ) : (
             <Portada noticias={noticias} enviando={enviando} onAbrirNoticias={() => void refrescar({ noticias: true })} onEnviar={enviarPortada} />
           )}
         </main>
 
-        {enChat && piezaActiva && piezas.length ? (
+        {enChat && piezaActiva && piezas.length && !piezaOculta ? (
           <PanelPieza
             abiertas={piezas}
             activa={piezaActiva}
@@ -500,7 +568,13 @@ export function ChatApp(props: {
             onActivar={setPiezaActiva}
             onCerrar={cerrarPieza}
             onCerrarTodo={cerrarPiezas}
+            onOcultar={() => setPiezaOculta(true)}
             onAvisar={(t) => avisar(t)}
+            marcas={marcas}
+            onMarcar={alternarMarca}
+            onLimpiarMarcas={limpiarMarcas}
+            destello={destello}
+            ocupada={Boolean(enVivo) || enviando}
           />
         ) : null}
       </div>

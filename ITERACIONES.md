@@ -577,3 +577,39 @@ que costo.
 - **Qué es:** quitar `news.ts`, que ya no se usa, y rehacer `schema.sql` desde cero
   con todas las migraciones.
 - **Cuándo:** antes de que entre otra persona a trabajar en el código.
+
+---
+
+## Chat con los agentes
+
+Lo que quedó fuera de la fase 3 (marcar y editar desde el chat, 2026-11-01).
+
+### Pedidos largos que siguen en segundo plano
+- **Qué es:** si un cambio no termina en el plazo de la ruta (300 s en Vercel),
+  que pase a una cola `jobs_chat_edicion` que procesa el tick y se vea como
+  tarjeta de trabajo.
+- **Por qué esperó:** cambiar huecos y redibujar tarda menos de un minuto, y
+  rehacer un carrusel desde su guion ronda uno o dos. Cabe.
+- **Cuándo:** si en producción aparecen cambios cortados por el plazo.
+
+### Revisor después de cada cambio del chat
+- **Qué es:** pasar el revisor de código (y quizá el de Claude) sobre la versión
+  nueva y decir en el mensaje si algo quedó mal.
+- **Por qué esperó:** suma tiempo y gasto a cada vuelta; hoy se le puede pedir
+  al Revisor en la misma conversación.
+
+### Que el guion siga a los cambios por hueco
+- **Qué es:** un cambio por hueco cambia la maqueta guardada, no el guion del
+  buzón. "Regenerar" o "Corregir" en el Estudio vuelven a maquetar desde el
+  guion y pierden esos cambios (quedan en el historial de versiones).
+- **Ideas:** escribir también el texto en el guion cuando el hueco corresponde a
+  un campo claro (titular, cuerpo, lista), o que Regenerar use la maqueta.
+- **Cuándo:** antes de pasar el chat a producción si el equipo sigue usando
+  Regenerar.
+
+### Marcar por partes en el diseño con inteligencia
+- **Qué es:** `data-campo` en lo que dibuja el diseñador libre, para marcar sus
+  partes y rediseñar solo las láminas tocadas (`editarDiseno`).
+- **Por qué esperó:** el modo por defecto ahora son las plantillas del kit. Un
+  carrusel de diseño libre se marca por lámina entera y, al cambiar su texto,
+  vuelve a las plantillas.

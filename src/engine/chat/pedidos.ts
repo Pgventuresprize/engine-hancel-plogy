@@ -1,7 +1,7 @@
 import { tituloProvisional } from "@/lib/chat-titulo"
 
 import { supabaseAdmin } from "../supabase-admin"
-import { escribirMensaje, type AgenteChat, type NoticiaAdjunta } from "./mensajes"
+import { escribirMensaje, type AgenteChat, type NoticiaAdjunta, type Seleccion } from "./mensajes"
 import { empezarTrabajos, reanudarConversacion, type RedChat } from "./trabajos"
 
 /**
@@ -126,6 +126,8 @@ export async function seguirConversacion(p: {
   conversacionId: string
   usuarioId: string
   texto: string
+  /** Lo marcado en el panel de la pieza para este pedido. */
+  selecciones?: Seleccion[]
 }): Promise<{ disparar: RedChat[]; responder: boolean }> {
   const supabase = supabaseAdmin()
   const { data: conv } = await supabase
@@ -137,14 +139,14 @@ export async function seguirConversacion(p: {
     .maybeSingle()
   if (!conv) throw new Error("Esa conversación no existe o está en la papelera.")
 
-  await escribirMensaje({ accountId: p.accountId, conversacionId: p.conversacionId, rol: "usuario", autor: p.usuarioId, contenido: p.texto })
+  await escribirMensaje({ accountId: p.accountId, conversacionId: p.conversacionId, rol: "usuario", autor: p.usuarioId, contenido: p.texto, selecciones: p.selecciones })
 
   const { count } = await supabase
     .from("chat_trabajos")
     .select("id", { count: "exact", head: true })
     .eq("conversacion_id", p.conversacionId)
     .eq("estado", "detenido")
-  if (count && SIGUE.test(p.texto) && p.texto.length < 80) {
+  if (count && !p.selecciones?.length && SIGUE.test(p.texto) && p.texto.length < 80) {
     await escribirMensaje({ accountId: p.accountId, conversacionId: p.conversacionId, rol: "ruta", agente: "coordinador", contenido: "Retomo donde quedó." })
     return { ...(await reanudarConversacion(p.accountId, p.conversacionId)), responder: false }
   }

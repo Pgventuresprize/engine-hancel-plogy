@@ -17,12 +17,17 @@ export type NoticiaAdjunta = { angleId: string; newsId: string; titulo: string; 
 /** Un componente marcado en la pieza (ver MARCAS.md, "La pieza al lado del chat"). */
 export type Seleccion = {
   pieceId: string
+  red?: "instagram" | "linkedin"
   /** La lamina (1 es la portada); en un post, el parrafo. */
   lamina: number
-  /** La direccion estable si la hay: data-campo, data-hueco o "parrafo". */
+  /** La direccion estable si la hay: data-campo, data-hueco o "parrafo". Null: la lamina entera. */
   campo: string | null
+  /** En un hueco de lista, el elemento (1 es el primero). */
+  item?: number | null
   /** El HTML recortado del elemento, para que el agente sepa que es. */
   html: string
+  /** El texto que se ve en lo marcado. */
+  texto?: string
   /** Lo que ve la persona: "L1 · Titular". */
   etiqueta: string
 }

@@ -140,6 +140,7 @@ export async function hiloDe(accountId: string, conversacionId: string): Promise
         contenido: m.contenido,
         noticia: m.noticia,
         referencias: (m.referencias ?? []).map((r) => ({ ...r, miniatura: portada.get(r.pieceId) ?? null })),
+        marcas: (m.selecciones ?? []).map((x) => x.etiqueta),
         creado: m.created_at,
       })
     ),
