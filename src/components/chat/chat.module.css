@@ -211,9 +211,64 @@
 .toast button { height: 30px; padding: 0 10px; border: 0; border-radius: 8px; background: #2a2a2a; color: #fff; font-size: 13px; flex: none }
 .toast button:hover { background: #3a3a3a }
 
+/* panel de la pieza (prototipo-chat-pieza.html, con los tokens de chat.html) */
+.pieza { width: min(48vw, 680px); min-width: 420px; flex: none; border-left: 1px solid var(--soft2); background: var(--soft3); display: flex; flex-direction: column; min-height: 0; animation: slideInR .18s ease-out }
+@keyframes slideInR { from { opacity: 0; transform: translateX(8px) } to { opacity: 1; transform: none } }
+.pbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--soft2); background: #fff; position: relative }
+.tabs { display: flex; gap: 2px; background: var(--soft2); padding: 3px; border-radius: 10px; min-width: 0; overflow-x: auto }
+.tab { border: 0; background: transparent; padding: 0 4px 0 10px; height: 28px; border-radius: 7px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap }
+.tab[aria-selected="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08) }
+.tab > i { width: 8px; height: 8px; border-radius: 99px; flex: none }
+.tabx { width: 20px; height: 20px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; color: var(--muted2) }
+.tabx:hover { background: var(--soft); color: var(--ink) }
+.tool { height: 32px; padding: 0 10px; border: 1px solid #e3e3e1; border-radius: 8px; background: #fff; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; color: var(--ink2); white-space: nowrap }
+.tool:hover { background: var(--soft) }
+.tool:disabled { opacity: .5 }
+.mono { font-variant-numeric: tabular-nums; font-weight: 600 }
+.vmenu { position: absolute; z-index: 20; right: 52px; top: 50px; width: 320px; max-width: calc(100vw - 32px); max-height: 60vh; overflow-y: auto; padding: 6px; background: #fff; border: 1px solid #e3e3e1; border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.12); display: flex; flex-direction: column; gap: 2px; animation: pop .12s ease-out }
+.vopt { display: grid; grid-template-columns: 34px 1fr; gap: 6px; width: 100%; padding: 8px; border: 0; border-radius: 8px; background: transparent; text-align: left; font-size: 13px; color: var(--ink2) }
+.vopt:hover { background: var(--soft) }
+.vopt.on { background: var(--soft2) }
+.vopt small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px }
+.oldbanner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: #fff7ed; border-bottom: 1px solid #fde4c4; font-size: 13px; color: var(--ink2) }
+.oldbanner .grow { min-width: 8px }
+.escena { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column }
+.stage { flex: 1; min-height: 320px; container-type: size; display: grid; place-items: center; padding: 18px 56px 8px; position: relative }
+.slidebox { width: min(100cqw, 80cqh); max-width: 100%; aspect-ratio: 4 / 5; border-radius: 8px; overflow: hidden; background: #e9e9e7; box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 12px 32px rgba(0,0,0,.08) }
+.slidebox img { width: 100%; height: 100%; object-fit: cover; display: block }
+.navbtn { position: absolute; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; border-radius: 99px; border: 1px solid #e3e3e1; background: #fff; display: flex; align-items: center; justify-content: center; color: var(--ink2) }
+.navbtn:hover { background: var(--soft) }
+.navbtn:disabled { opacity: .3 }
+.navbtn.prev { left: 12px }
+.navbtn.next { right: 12px }
+.contador { text-align: center; font-size: 12px; color: var(--muted); padding-bottom: 4px }
+.tira { display: flex; gap: 8px; overflow-x: auto; padding: 8px 14px 12px; flex: none }
+.mini2 { flex: 0 0 56px; aspect-ratio: 4 / 5; border: 2px solid transparent; border-radius: 6px; padding: 0; background: #e9e9e7; position: relative; overflow: hidden }
+.mini2 img { width: 100%; height: 100%; object-fit: cover; display: block }
+.mini2[aria-current="true"] { border-color: var(--ink) }
+.mini2 span { position: absolute; left: 3px; bottom: 3px; font-size: 10px; font-weight: 600; background: rgba(0,0,0,.65); color: #fff; padding: 0 4px; border-radius: 3px }
+.pcaption { margin: 0 14px 14px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font-size: 13px }
+.pcaption summary { cursor: pointer; padding: 10px 12px; font-weight: 500; color: var(--ink2) }
+.pcaption p { margin: 0; padding: 0 12px 12px; white-space: pre-wrap; line-height: 1.5; color: var(--ink3) }
+.lilienzo { padding: 20px 16px 24px; display: flex; justify-content: center }
+.lipost { width: 100%; max-width: 540px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px 18px; box-shadow: 0 1px 2px rgba(0,0,0,.04) }
+.lihead { display: flex; align-items: center; gap: 10px; margin-bottom: 12px }
+.lihead .me { width: 40px; height: 40px }
+.lihead b { display: block; font-size: 14px }
+.lihead small { font-size: 12px; color: var(--muted) }
+.lipost p { margin: 0 0 12px; font-size: 14px; line-height: 1.55; white-space: pre-wrap; word-wrap: break-word }
+.litags { color: #0a66c2; font-size: 14px }
+.vlaminas { padding: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px }
+.vlamina { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; font-size: 13px; line-height: 1.45; white-space: pre-wrap; aspect-ratio: 4 / 5; overflow: auto }
+.vlamina b { display: block; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px }
+.pvacio { margin: auto; padding: 32px; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.5 }
+.volver { display: none }
+
 @media (max-width: 900px) {
   .panel { position: absolute; z-index: 30; top: 0; bottom: 0; left: 0; box-shadow: 8px 0 32px rgba(0,0,0,.1) }
   .crumb { display: none }
+  .pieza { position: fixed; z-index: 35; top: 64px; left: 0; right: 0; bottom: 0; width: auto; min-width: 0; border-left: 0 }
+  .volver { display: inline-flex }
 }
 @media (max-width: 640px) {
   .sugs { grid-template-columns: 1fr }

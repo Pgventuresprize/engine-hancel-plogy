@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 
 import {
   borrarConversacionYa,
@@ -10,7 +10,7 @@ import {
   renombrarConversacion,
   restaurarConversacion,
 } from "@/app/chat/actions"
-import type { AgenteChat, AgenteElegible, EstadoChat, FilaConversacion, Hilo, NoticiaAdjunta } from "@/lib/chat-tipos"
+import type { AgenteChat, AgenteElegible, EstadoChat, FilaConversacion, Hilo, NoticiaAdjunta, ReferenciaUI } from "@/lib/chat-tipos"
 import { tituloProvisional } from "@/lib/chat-titulo"
 
 import s from "./chat.module.css"
@@ -19,6 +19,7 @@ import { Conversacion } from "./conversacion"
 import { AvisoVista, ModalBorrar, type Aviso, type PedidoBorrar } from "./dialogos"
 import { MenuFunciones } from "./menu-funciones"
 import { PanelConversaciones } from "./panel-conversaciones"
+import { PanelPieza } from "./panel-pieza"
 import { Portada, type Eleccion } from "./portada"
 
 /** Cada cuanto se mira el avance mientras algo trabaja. */
@@ -42,8 +43,8 @@ export function ChatApp(props: {
   cuenta: { nombre: string; slug: string; plan: string }
   cuentas: { nombre: string; slug: string }[]
 }) {
-  const router = useRouter()
-  const activa = useSearchParams().get("c")
+  const params = useSearchParams()
+  const activa = params.get("c")
   const montado = useMontado()
 
   const [estado, setEstado] = React.useState(props.inicial)
@@ -60,6 +61,12 @@ export function ChatApp(props: {
   const [renombrando, setRenombrando] = React.useState<string | null>(null)
   const [borrar, setBorrar] = React.useState<PedidoBorrar | null>(null)
   const [aviso, setAviso] = React.useState<Aviso | null>(null)
+  // Las piezas abiertas en el panel de la derecha. "Abrir en el chat" llega con ?p=.
+  const [piezas, setPiezas] = React.useState<string[]>(() => {
+    const p = params.get("p")
+    return p && /^[0-9a-f-]{36}$/i.test(p) ? [p] : []
+  })
+  const [piezaActiva, setPiezaActiva] = React.useState<string | null>(() => params.get("p"))
 
   // Una consulta vieja no pisa lo que se acaba de cambiar a mano ni a otra mas nueva.
   const version = React.useRef(0)
@@ -145,7 +152,13 @@ export function ChatApp(props: {
     window.history.pushState(null, "", id ? `/?c=${id}` : "/")
   }
 
+  const cerrarPiezas = () => {
+    setPiezas([])
+    setPiezaActiva(null)
+  }
+
   const abrir = (id: string) => {
+    if (id !== activaRef.current) cerrarPiezas()
     setProvisional(null)
     setEnPapelera(false)
     if (angosta()) setPanel(false)
@@ -153,6 +166,7 @@ export function ChatApp(props: {
   }
 
   const nueva = () => {
+    cerrarPiezas()
     setProvisional(null)
     if (angosta()) setPanel(false)
     ir(null)
@@ -379,11 +393,17 @@ export function ChatApp(props: {
     await refrescar()
   }
 
-  const abrirPieza = () => {
-    avisar("El panel de la pieza llega en el siguiente bloque. Mientras, está en el Estudio.", {
-      etiqueta: "Ir al Estudio",
-      fn: () => router.push("/estudio"),
-    })
+  const abrirPieza = (r: ReferenciaUI) => {
+    setPiezas((p) => (p.includes(r.pieceId) ? p : [...p, r.pieceId]))
+    setPiezaActiva(r.pieceId)
+    // El chat se angosta: si no cabe con la lista de conversaciones, la lista se cierra.
+    if (typeof window !== "undefined" && window.innerWidth < 1280) setPanel(false)
+  }
+
+  const cerrarPieza = (id: string) => {
+    const resto = piezas.filter((x) => x !== id)
+    setPiezas(resto)
+    if (piezaActiva === id) setPiezaActiva(resto.at(-1) ?? null)
   }
 
   // ------------------------------------------------------------ pintar
@@ -469,6 +489,20 @@ export function ChatApp(props: {
             <Portada noticias={noticias} enviando={enviando} onAbrirNoticias={() => void refrescar({ noticias: true })} onEnviar={enviarPortada} />
           )}
         </main>
+
+        {enChat && piezaActiva && piezas.length ? (
+          <PanelPieza
+            abiertas={piezas}
+            activa={piezaActiva}
+            recarga={`${hiloAbierto?.mensajes.length ?? 0}-${hiloAbierto?.mensajes.at(-1)?.id ?? ""}`}
+            montado={montado}
+            marca={props.cuenta.nombre}
+            onActivar={setPiezaActiva}
+            onCerrar={cerrarPieza}
+            onCerrarTodo={cerrarPiezas}
+            onAvisar={(t) => avisar(t)}
+          />
+        ) : null}
       </div>
 
       {drawer ? <MenuFunciones onCerrar={() => setDrawer(false)} usuario={props.usuario} cuenta={props.cuenta} cuentas={props.cuentas} /> : null}

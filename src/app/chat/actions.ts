@@ -76,3 +76,18 @@ export async function borrarConversacionYa(id: string): Promise<Resultado> {
     return { ok: false, error: e instanceof Error ? e.message : String(e) }
   }
 }
+
+/**
+ * "Abrir en el chat" desde la ficha del tablero: devuelve la conversacion de la
+ * pieza (la crea si no tiene) para abrirla con la pieza en el panel.
+ */
+export async function abrirPiezaEnChat(pieceId: string): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  try {
+    const [cuenta, usuario] = await Promise.all([cuentaActual(), usuarioActual()])
+    if (!usuario) return { ok: false, error: "Sin sesión." }
+    const { conversacionDePieza } = await import("@/engine/chat/piezas")
+    return { ok: true, id: await conversacionDePieza(cuenta.id, pieceId, usuario.id) }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) }
+  }
+}

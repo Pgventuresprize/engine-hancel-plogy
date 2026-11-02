@@ -1,4 +1,5 @@
 import type { AgenteChat, NoticiaAdjunta, Referencia, RolMensaje } from "@/engine/chat/mensajes"
+import type { PiezaVista, VersionVista } from "@/engine/chat/piezas"
 import type { EstadoTrabajo } from "@/engine/chat/trabajos"
 
 /**
@@ -6,7 +7,7 @@ import type { EstadoTrabajo } from "@/engine/chat/trabajos"
  * datos planos: la pantalla los pinta y agrupa, el servidor los lee y escribe.
  */
 
-export type { AgenteChat, NoticiaAdjunta }
+export type { AgenteChat, NoticiaAdjunta, PiezaVista, VersionVista }
 
 /** Los agentes que se eligen en "¿Quién trabaja?". El coordinador va siempre. */
 export type AgenteElegible = "instagram" | "linkedin" | "revisor"

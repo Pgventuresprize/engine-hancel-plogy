@@ -1,12 +1,14 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import {
   BookmarkPlusIcon,
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   CopyIcon,
+  MessageSquareIcon,
   DownloadIcon,
   ExternalLinkIcon,
   RefreshCwIcon,
@@ -28,6 +30,7 @@ import {
   rechazarFicha,
   revisarPiezaDeNuevo,
 } from "@/app/estudio/actions"
+import { abrirPiezaEnChat } from "@/app/chat/actions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -440,6 +443,7 @@ function PanelAngulo({ ficha, redesHechas }: { ficha: Ficha; redesHechas: Set<st
 
 function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string }) {
   const { pending, error, aviso, correr } = useAccion()
+  const router = useRouter()
   const [copiado, setCopiado] = React.useState(false)
 
   const esCarrusel = pieza.network === "instagram"
@@ -736,6 +740,25 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
               </DropdownMenuContent>
             </DropdownMenu>
           </>
+        ) : null}
+
+        {pieza.network === "instagram" || pieza.network === "linkedin" ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={pending}
+            title="Abre la pieza al lado del chat, con su conversación, para hablarla con su agente."
+            onClick={() =>
+              correr(async () => {
+                const r = await abrirPiezaEnChat(pieza.id)
+                if (r.ok) router.push(`/?c=${r.id}&p=${pieza.id}`)
+                return r
+              })
+            }
+          >
+            <MessageSquareIcon />
+            Abrir en el chat
+          </Button>
         ) : null}
 
         {error ? <span className="text-destructive text-xs">{error}</span> : null}

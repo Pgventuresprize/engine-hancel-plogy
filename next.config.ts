@@ -14,6 +14,9 @@ const nextConfig: NextConfig = {
     "/marca": ["./node_modules/@sparticuz/chromium/bin/**"],
     "/api/content/tick": ["./node_modules/@sparticuz/chromium/bin/**"],
     "/estudio": ["./node_modules/@sparticuz/chromium/bin/**"],
+    // El chat dispara pasadas que dibujan carruseles y restaura versiones
+    // redibujandolas desde su maqueta.
+    "/api/chat/**": ["./node_modules/@sparticuz/chromium/bin/**"],
   },
   serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
   // Marca salio de Configuracion a su propia seccion: los enlaces viejos

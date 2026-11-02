@@ -325,7 +325,7 @@ async function fallar(t: TrabajoChat, motivo: string): Promise<TrabajoChat> {
 }
 
 /** Lo que dice el agente al terminar, con la tarjeta de su pieza. */
-async function anuncioDePieza(accountId: string, pieceId: string, red: RedChat): Promise<{ texto: string; referencia: Referencia }> {
+export async function anuncioDePieza(accountId: string, pieceId: string, red: RedChat): Promise<{ texto: string; referencia: Referencia }> {
   const supabase = supabaseAdmin()
   const [{ data: pieza }, { data: ultima }] = await Promise.all([
     supabase.from("content_pieces").select("payload").eq("id", pieceId).eq("account_id", accountId).maybeSingle(),
