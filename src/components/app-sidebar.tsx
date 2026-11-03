@@ -172,10 +172,10 @@ export function AppSidebar({
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" render={<Link href="/" />}>
-              {/* El lockup completo con la sidebar abierta; al colapsarla a
-                  ancho de icono no cabe una marca apaisada, asi que se cambia
-                  por la esfera. La que esta oculta no se anuncia. */}
-              <PlogyStudioLogo className="text-lg group-data-[collapsible=icon]:hidden" />
+              {/* La esfera con "Studio" con la sidebar abierta; al colapsarla
+                  a ancho de icono queda solo la esfera. La que esta oculta no
+                  se anuncia. */}
+              <PlogyStudioLogo forma="compacto" className="text-xl group-data-[collapsible=icon]:hidden" />
               <PlogyStudioLogo forma="simbolo" className="hidden text-2xl group-data-[collapsible=icon]:block" />
             </SidebarMenuButton>
           </SidebarMenuItem>

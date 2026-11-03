@@ -17,8 +17,12 @@ export function PlogyStudioLogo({
   className,
   style,
 }: {
-  /** "simbolo" deja solo la esfera, para espacios de ancho de icono. */
-  forma?: "completo" | "simbolo"
+  /**
+   * "simbolo" deja solo la esfera, para espacios de ancho de icono.
+   * "compacto" es la esfera con "Studio" al lado, para la barra lateral,
+   * donde el wordmark completo quedaria demasiado chico para leerse.
+   */
+  forma?: "completo" | "compacto" | "simbolo"
   className?: string
   style?: React.CSSProperties
 }) {
@@ -41,6 +45,22 @@ export function PlogyStudioLogo({
         {degradado}
         <circle cx="40.5" cy="40.5" r="13.5" fill={`url(#${id})`} />
       </svg>
+    )
+  }
+
+  if (forma === "compacto") {
+    // Los `!` ganan al `[&_svg]:size-4` con el que el menu de la barra
+    // lateral iguala todos sus iconos.
+    return (
+      <span role="img" aria-label="Plogy Studio" className={cn("inline-flex items-center gap-[0.45em] text-foreground", className)} style={style}>
+        <svg viewBox="27 27 27 27" aria-hidden="true" className="size-[1.4em]! shrink-0">
+          {degradado}
+          <circle cx="40.5" cy="40.5" r="13.5" fill={`url(#${id})`} />
+        </svg>
+        <span aria-hidden="true" className="font-display leading-none">
+          Studio
+        </span>
+      </span>
     )
   }
 
