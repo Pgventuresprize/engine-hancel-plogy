@@ -582,7 +582,28 @@ que costo.
 
 ## Chat con los agentes
 
-Lo que quedó fuera de la fase 3 (marcar y editar desde el chat, 2026-11-01).
+Lo que quedó fuera de la fase 3 (marcar y editar desde el chat, 2026-11-01) y de
+las piezas por tema en paralelo (2026-11-03).
+
+### Escribir mientras las piezas trabajan
+- **Qué es:** hoy el campo queda bloqueado hasta que terminan todas, salvo para
+  detener. Un pedido de seis piezas ocupa la conversación un buen rato.
+- **Por qué esperó:** conversar y cambiar piezas a la vez pide decidir qué hace el
+  agente con lo que aún no existe.
+- **Cuándo:** si en el uso diario se nota la espera.
+
+### Adjuntar varias noticias
+- **Qué es:** elegir varias noticias en la portada para sacar una pieza de cada
+  una, por el carril del chat.
+- **Por qué esperó:** el mismo resultado se pide con texto y `crear_piezas`.
+- **Cuándo:** si el equipo sigue partiendo de las noticias.
+
+### Filtros de marca en los temas del chat
+- **Qué es:** el veto y el filtro de política viven en el análisis, y un tema
+  pedido en el chat no pasa por él. Solo lo mira el Revisor al final.
+- **Por qué esperó:** lo pide una persona de la marca a propósito.
+- **Cuándo:** con marcas que tengan vetos estrictos o personas externas usando el
+  chat.
 
 ### Pedidos largos que siguen en segundo plano
 - **Qué es:** si un cambio no termina en el plazo de la ruta (300 s en Vercel),

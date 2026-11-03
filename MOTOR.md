@@ -275,6 +275,55 @@ botón de ejecutar, que trabaja sobre lo que dejó la etapa anterior: pulsar en
 
 ---
 
+## El chat: piezas sobre cualquier tema
+
+Desde el chat una persona pide hasta seis piezas con un mensaje, sobre cualquier
+tema y sin noticia, y hasta tres agentes trabajan a la vez por marca.
+
+**Los agentes tienen herramientas** (`engine/chat/herramientas.ts`): `buscar_web`
+y `leer_pagina` para investigar en la conversación, y `crear_piezas` para poner
+al equipo a trabajar. La búsqueda es la misma del análisis, por Composio. Si la
+persona dice de qué y cuántas, se crean de una; si pide ideas, el agente propone
+y espera.
+
+**Cada pieza entra por el mismo sitio que una noticia.** Es una fila de
+`chat_trabajos` que avanza por fases:
+
+| Fase | Qué hace | Termina en |
+|---|---|---|
+| `investigar` | Busca, lee las fuentes citadas y consolida (`chat/investigar.ts`) | Una fila en `raw_news` y su `jobs_angle` |
+| `angulo` | El agente de ángulo de siempre | `content_angles` |
+| `pieza` | Recurso, escritor, diseño, revisor | `content_pieces`. Se repite: un carrusel ocupa varias pasadas |
+
+Sin material suficiente la pieza falla con su motivo en vez de inventar.
+
+**Carril.** Tres pasadas normales a la vez no reparten nada: las tres leen la cola
+del más viejo al más nuevo y se pelean por la misma fila. Por eso lo del chat va
+con `carril = 'chat'` y cada pasada se apunta a su trabajo (`objetivo` en
+`runContentTick`). La cola normal solo mira `general`. El carril también aparta
+estas filas de lo que ignora el estado: la deduplicación de la ingesta, que borra
+en cascada; los hechos cubiertos; el encolado automático de otras redes; y la
+publicación automática. Una pieza del chat solo sale si alguien la aprueba.
+
+**Turnos.** `chat_despachar` (SQL) es lo único que reparte: con un bloqueo por
+marca cuenta los turnos vivos, aparta hasta completar tres y llama por `pg_net`
+a `/api/chat/pasada` en la misma transacción. Cada pasada confirma su turno,
+avanza una fase, lo suelta y vuelve a despachar. Así el trabajo termina aunque se
+cierre el navegador. Un cron de un minuto recoge lo que quede sin turno.
+
+| Qué pasa | Qué lo recoge |
+|---|---|
+| La llamada no llega | El turno caduca a los 60 s |
+| La pasada muere | El turno caduca a los 330 s; quien lo tome limpia lo que quedó en `processing` |
+| Límite del plan o corte de red | Vuelve a la cola y reintenta |
+| Cuatro turnos seguidos sin avanzar | La tarjeta falla con el motivo |
+| Noventa minutos sin terminar | La tarjeta falla |
+
+Para probar contra otro despliegue, el secreto de Vault `chat_pasada_url`
+sustituye a la URL de producción. En local, `scripts/probar-chat.ts` escribe en
+el chat y `scripts/pasada-chat.ts` corre los trabajos sin `pg_net`, con
+`CHAT_SIN_DESPACHO=1`.
+
 ## Qué impide que las cosas se dupliquen
 
 Tres candados, en tres sitios distintos:
