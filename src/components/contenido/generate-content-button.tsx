@@ -48,7 +48,7 @@ export function GenerateContentButton({
           <span className="text-destructive">{result.error}</span>
         ) : result?.ok && result.warning ? (
           // Encolado si, procesado no: mejor decirlo que dejarlo esperando.
-          <span className="text-amber-700 dark:text-amber-400">{result.warning}</span>
+          <span className="text-warning">{result.warning}</span>
         ) : null}
       </span>
     </div>

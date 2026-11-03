@@ -89,7 +89,7 @@ export function ModoDisenoKit() {
           Mientras no haya un kit activo, las piezas salen con las plantillas de siempre, sea cual sea el modo.
         </p>
       ) : valor.modo === "inteligencia" && valor.piezas === 0 ? (
-        <p className="text-xs text-amber-700 dark:text-amber-400">
+        <p className="text-xs text-warning">
           El kit activo no tiene piezas de ejemplo, y el diseño con inteligencia las necesita para mirar cómo diseña la
           marca: hasta que las tenga, las piezas salen con las plantillas del kit.
         </p>

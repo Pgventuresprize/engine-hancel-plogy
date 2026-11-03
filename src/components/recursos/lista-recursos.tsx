@@ -152,7 +152,7 @@ function Fila({ fila: f, onAbrir }: { fila: FilaRecurso; onAbrir: () => void }) 
           </Badge>
         ) : null}
         {f.enCurso && f.estado !== "en_curso" ? (
-          <Badge variant="outline" className="border-sky-300 text-sky-700 dark:text-sky-400">
+          <Badge variant="outline" className="border-info/40 text-info">
             <LoaderCircleIcon className="size-3 animate-spin" />
             Nueva versión: {f.enCurso}
           </Badge>
@@ -168,7 +168,7 @@ function Fila({ fila: f, onAbrir }: { fila: FilaRecurso; onAbrir: () => void }) 
 }
 
 function Detalle({ fila: f }: { fila: FilaRecurso }) {
-  if (f.estado === "en_curso") return <p className="text-xs text-sky-700 dark:text-sky-400">El agente va {f.enCurso}.</p>
+  if (f.estado === "en_curso") return <p className="text-xs text-info">El agente va {f.enCurso}.</p>
   if (f.estado === "fallido") return <p className="text-destructive line-clamp-2 text-xs">{f.error ?? "El agente no pudo escribirlo."}</p>
   const partes = [
     f.veredicto ? `Revisor: ${VEREDICTOS[f.veredicto]}` : null,
@@ -186,14 +186,14 @@ function Detalle({ fila: f }: { fila: FilaRecurso }) {
 function EstadoBadge({ estado }: { estado: EstadoFila }) {
   if (estado === "en_la_web")
     return (
-      <Badge className="bg-emerald-600 text-white">
+      <Badge variant="success">
         <CheckIcon className="size-3" />
         En la web
       </Badge>
     )
   if (estado === "en_curso")
     return (
-      <Badge variant="outline" className="border-sky-300 text-sky-700 dark:text-sky-400">
+      <Badge variant="outline" className="border-info/40 text-info">
         <LoaderCircleIcon className="size-3 animate-spin" />
         Escribiéndose
       </Badge>

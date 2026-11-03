@@ -34,7 +34,7 @@ export function PromptFinal({ prompt }: { prompt: string }) {
           y el formato de respuesta, que no se edita. En cada llamada recibe además el material de la pieza.
         </p>
         {caracteres > TOPE_PROMPT ? (
-          <p className="text-xs text-amber-600">
+          <p className="text-xs text-warning">
             Es largo: pasa de {miles(TOPE_PROMPT)} caracteres y cada llamada lo paga entero. Revisa si sobra algo en la
             marca o en el oficio.
           </p>

@@ -261,7 +261,7 @@ export function ConfigVideos({ ajustes, opciones }: { ajustes: AjustesVideo; opc
         </CardContent>
       </Card>
 
-      {aviso ? <p className={`text-sm ${aviso.ok ? "text-emerald-600" : "text-destructive"}`}>{aviso.texto}</p> : null}
+      {aviso ? <p className={`text-sm ${aviso.ok ? "text-success" : "text-destructive"}`}>{aviso.texto}</p> : null}
       <div>
         <Button onClick={guardar} disabled={pending}>
           Guardar configuración

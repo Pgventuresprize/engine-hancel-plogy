@@ -98,7 +98,7 @@ export function TableroVideos({ videos, ajustes }: { videos: VideoVista[]; ajust
         </Button>
       </div>
 
-      {aviso ? <p className={`text-sm ${aviso.ok ? "text-emerald-600" : "text-destructive"}`}>{aviso.texto}</p> : null}
+      {aviso ? <p className={`text-sm ${aviso.ok ? "text-success" : "text-destructive"}`}>{aviso.texto}</p> : null}
       {trabajando && trabajando !== "Escribiendo guion…" ? <p className="text-muted-foreground text-sm">{trabajando}</p> : null}
 
       <div className="flex gap-3 overflow-x-auto pb-2">
@@ -252,7 +252,7 @@ function EstadoTarjeta({ v }: { v: VideoVista }) {
     )
   if (v.status === "escenas" && v.guion) return <span className="text-muted-foreground text-xs">{v.guion.escenas.length} escenas</span>
   if (v.status === "video") {
-    if (v.exportStatus === "listo") return <Badge className="bg-emerald-600 text-white">Listo para publicar</Badge>
+    if (v.exportStatus === "listo") return <Badge variant="success">Listo para publicar</Badge>
     if (v.exportStatus === "error") return <Badge variant="destructive" title={v.error ?? ""}>Error al exportar</Badge>
     return <Badge variant="secondary">Exportando de Canva…</Badge>
   }
@@ -271,7 +271,7 @@ function EstadoTarjeta({ v }: { v: VideoVista }) {
 }
 
 function EstadoRed({ status, hora, error }: { status: string; hora: string | null; error: string | null }) {
-  if (status === "publicada") return <Badge className="bg-emerald-600 text-white">Publicada{hora ? ` · ${hora}` : ""}</Badge>
+  if (status === "publicada") return <Badge variant="success">Publicada{hora ? ` · ${hora}` : ""}</Badge>
   if (status === "programada") return <Badge variant="secondary">Programada{hora ? ` · ${hora}` : ""}</Badge>
   if (status === "programando") return <Badge variant="outline">Programando…</Badge>
   return <Badge variant="destructive" title={error ?? ""}>Error</Badge>

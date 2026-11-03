@@ -53,7 +53,7 @@ export function ClaudeConnection({ estado }: { estado: EstadoTokenClaude }) {
             ) : null}
           </p>
         ) : (
-          <p className="text-amber-700 dark:text-amber-400 text-sm">
+          <p className="text-warning text-sm">
             Sin token: la IA no funcionara hasta que pegues uno.
           </p>
         )}
@@ -103,12 +103,12 @@ export function ClaudeConnection({ estado }: { estado: EstadoTokenClaude }) {
             {probando ? "Probando…" : "Probar conexion"}
           </Button>
 
-          {guardado?.ok ? <span className="text-sm text-emerald-600">Token guardado.</span> : null}
+          {guardado?.ok ? <span className="text-sm text-success">Token guardado.</span> : null}
           {guardado && !guardado.ok ? (
             <span className="text-destructive text-sm">{guardado.error}</span>
           ) : null}
           {prueba?.ok ? (
-            <span className="text-sm text-emerald-600">Conexion OK ({prueba.modelo}).</span>
+            <span className="text-sm text-success">Conexion OK ({prueba.modelo}).</span>
           ) : null}
           {prueba && !prueba.ok ? (
             <span className="text-destructive text-sm">{prueba.error}</span>

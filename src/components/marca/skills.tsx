@@ -124,7 +124,7 @@ export function PestanaSkills({ skills, pilares }: { skills: Skill[]; pilares: P
                   {s.descripcion ? <span className="text-muted-foreground text-xs">{s.descripcion}</span> : null}
                   <span className="flex flex-wrap gap-1">
                     {s.agentes.length === 0 ? (
-                      <Badge variant="outline" className="font-normal text-amber-600">
+                      <Badge variant="outline" className="font-normal text-warning">
                         Sin agentes: no entra en ningún prompt
                       </Badge>
                     ) : (
@@ -326,7 +326,7 @@ function EditorSkill({
           <div className="flex items-baseline justify-between gap-3">
             <Label htmlFor={id("texto")}>Texto operativo</Label>
             <span
-              className={`text-xs tabular-nums ${v.texto.length > TOPES_SKILL.texto * 0.9 ? "text-amber-600" : "text-muted-foreground"}`}
+              className={`text-xs tabular-nums ${v.texto.length > TOPES_SKILL.texto * 0.9 ? "text-warning" : "text-muted-foreground"}`}
             >
               {v.texto.length} / {TOPES_SKILL.texto}
             </span>
@@ -409,7 +409,7 @@ function EditorSkill({
             Cancelar
           </Button>
         ) : null}
-        {f.resultado?.ok && !f.dirty ? <span className="text-sm text-emerald-600">Guardada.</span> : null}
+        {f.resultado?.ok && !f.dirty ? <span className="text-sm text-success">Guardada.</span> : null}
         {f.resultado && !f.resultado.ok ? <span className="text-destructive text-sm">{f.resultado.error}</span> : null}
         {onBorrar ? (
           <Button

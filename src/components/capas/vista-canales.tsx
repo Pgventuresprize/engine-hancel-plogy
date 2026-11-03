@@ -58,7 +58,7 @@ export function VistaCanales({
               <span className="size-2.5 rounded-full" style={{ background: c.color }} />
               <span className="font-medium">{c.nombre}</span>
               {activo ? (
-                <CheckCircle2Icon className="size-4 text-emerald-500" />
+                <CheckCircle2Icon className="size-4 text-success" />
               ) : (
                 <span className="text-muted-foreground text-xs">sin conectar</span>
               )}
@@ -77,7 +77,7 @@ export function VistaCanales({
                 <span className="font-semibold">{c.nombre}</span>
                 {conectados[c.conexion] ? (
                   <Badge variant="secondary" className="gap-1">
-                    <CheckCircle2Icon className="size-3 text-emerald-500" /> Conectado
+                    <CheckCircle2Icon className="size-3 text-success" /> Conectado
                   </Badge>
                 ) : null}
               </div>

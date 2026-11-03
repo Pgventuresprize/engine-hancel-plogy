@@ -95,7 +95,7 @@ export function PanelPilar({ pilar }: { pilar: PilarConIdeas }) {
 
       <CardContent>
         {aviso ? (
-          <p className={`mb-3 text-sm ${aviso.ok ? "text-emerald-600" : "text-destructive"}`}>
+          <p className={`mb-3 text-sm ${aviso.ok ? "text-success" : "text-destructive"}`}>
             {aviso.texto}
           </p>
         ) : null}

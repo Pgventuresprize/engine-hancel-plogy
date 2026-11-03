@@ -128,7 +128,7 @@ export function SeleccionDeNoticias({
           <Button onClick={save} disabled={pending || !dirty}>
             {pending ? "Guardando…" : "Guardar"}
           </Button>
-          {result?.ok ? <span className="text-sm text-emerald-600">Guardado.</span> : null}
+          {result?.ok ? <span className="text-sm text-success">Guardado.</span> : null}
           {result && !result.ok ? (
             <span className="text-destructive text-sm">{result.error}</span>
           ) : null}

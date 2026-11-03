@@ -73,7 +73,7 @@ export function SerperConnection({ estado }: { estado: EstadoSerper }) {
           <Button onClick={guardar} disabled={pending}>
             {pending ? "Guardando…" : "Guardar"}
           </Button>
-          {result?.ok ? <span className="text-sm text-emerald-600">Clave guardada.</span> : null}
+          {result?.ok ? <span className="text-sm text-success">Clave guardada.</span> : null}
           {result && !result.ok ? (
             <span className="text-destructive text-sm">{result.error}</span>
           ) : null}

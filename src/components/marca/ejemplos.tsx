@@ -278,7 +278,7 @@ function EditorEjemplo({
         <div className="flex items-baseline justify-between gap-3">
           <Label htmlFor={id("texto")}>La pieza</Label>
           <span
-            className={`text-xs tabular-nums ${v.texto.length > topeDeTexto(v.red) * 0.9 ? "text-amber-600" : "text-muted-foreground"}`}
+            className={`text-xs tabular-nums ${v.texto.length > topeDeTexto(v.red) * 0.9 ? "text-warning" : "text-muted-foreground"}`}
           >
             {v.texto.length} / {topeDeTexto(v.red)}
           </span>
@@ -311,7 +311,7 @@ function EditorEjemplo({
             Cancelar
           </Button>
         ) : null}
-        {f.resultado?.ok && !f.dirty ? <span className="text-sm text-emerald-600">Guardado.</span> : null}
+        {f.resultado?.ok && !f.dirty ? <span className="text-sm text-success">Guardado.</span> : null}
         {f.resultado && !f.resultado.ok ? <span className="text-destructive text-sm">{f.resultado.error}</span> : null}
         {onBorrar ? (
           <Button

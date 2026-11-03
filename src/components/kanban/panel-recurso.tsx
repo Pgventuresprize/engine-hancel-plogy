@@ -50,10 +50,10 @@ const NOMBRE_ESTADO_DATO: Record<string, string> = {
 const CLASE_ROTULO: Record<Rotulo, string> = {
   hecho: "border-transparent bg-muted text-muted-foreground",
   lectura: "border-transparent bg-primary/10 text-primary",
-  hipotesis: "border-amber-400 text-amber-700 dark:text-amber-400",
-  calculo: "border-sky-400 text-sky-700 dark:text-sky-400",
-  traduccion: "border-violet-400 text-violet-700 dark:text-violet-400",
-  ejemplo: "border-amber-400 text-amber-700 dark:text-amber-400",
+  hipotesis: "border-warning/40 text-warning",
+  calculo: "border-info/40 text-info",
+  traduccion: "border-brand/40 text-brand-text",
+  ejemplo: "border-warning/40 text-warning",
 }
 
 export function PanelRecurso({ angleId }: { angleId: string }) {
@@ -79,13 +79,13 @@ export function PanelRecurso({ angleId }: { angleId: string }) {
   return (
     <div className="flex flex-col gap-4 text-sm">
       {estado.enCurso ? (
-        <p className="rounded-md border border-sky-300 bg-sky-50 p-2.5 text-xs text-sky-800 dark:bg-sky-950/40 dark:text-sky-300">
+        <p className="rounded-md border border-info/40 bg-info-soft p-2.5 text-xs text-info">
           El agente de recursos está trabajando: <strong>{estado.enCurso.etapa}</strong> (pedido {formatDateTime(estado.enCurso.desde)}). Va por
           etapas entre pasadas y tarda unos minutos.
         </p>
       ) : null}
       {estado.error && !estado.enCurso ? (
-        <p className="rounded-md border border-red-300 bg-red-50 p-2.5 text-xs text-red-800 dark:bg-red-950/40 dark:text-red-300">
+        <p className="rounded-md border border-destructive/40 bg-destructive/10 p-2.5 text-xs text-destructive">
           La última vez falló: {estado.error}
         </p>
       ) : null}
@@ -306,7 +306,7 @@ function Recurso({
       </details>
 
       <div className="flex flex-col gap-2 border-t pt-3">
-        {r.web.error ? <p className="text-xs text-amber-700 dark:text-amber-400">{r.web.error}</p> : null}
+        {r.web.error ? <p className="text-xs text-warning">{r.web.error}</p> : null}
         {r.web.url ? (
           <p className="text-xs">
             En la web:{" "}
@@ -393,7 +393,7 @@ function Imagenes({ figuras: g, ocupado, onRehacer }: { figuras: FigurasGuardada
         </Button>
       </div>
       {g.avisos.length ? (
-        <ul className="list-disc pl-4 text-amber-700 dark:text-amber-400">
+        <ul className="list-disc pl-4 text-warning">
           {g.avisos.map((a, i) => (
             <li key={i}>{a}</li>
           ))}
@@ -436,7 +436,7 @@ function EstadoBadge({ recurso: r }: { recurso: RecursoDeLaFicha }) {
   if (r.status === "descartado") return <Badge variant="outline">Descartado</Badge>
   if (r.status === "aprobado" && r.web.url)
     return (
-      <Badge className="bg-emerald-600 text-white">
+      <Badge variant="success">
         <CheckIcon className="size-3" />
         En la web
       </Badge>
@@ -446,7 +446,7 @@ function EstadoBadge({ recurso: r }: { recurso: RecursoDeLaFicha }) {
 }
 
 function RotuloChip({ rotulo }: { rotulo: Rotulo | null }) {
-  if (!rotulo) return <Badge variant="outline" className="border-red-400 px-1.5 py-0 text-[10px] font-normal text-red-700">sin rótulo</Badge>
+  if (!rotulo) return <Badge variant="outline" className="border-destructive/40 px-1.5 py-0 text-[10px] font-normal text-destructive">sin rótulo</Badge>
   return (
     <Badge variant="outline" className={`px-1.5 py-0 text-[10px] font-normal ${CLASE_ROTULO[rotulo]}`}>
       {NOMBRE_ROTULO[rotulo]}
@@ -551,7 +551,7 @@ function RevisionRecurso({ revision }: { revision: NonNullable<RecursoDeLaFicha[
         {revision.veredicto ? (
           <Badge variant={revision.veredicto === "publicar" ? "secondary" : "outline"}>{VEREDICTOS[revision.veredicto]}</Badge>
         ) : null}
-        {revision.claude?.estado === "fallo" ? <span className="text-amber-700 dark:text-amber-400">El revisor con Claude no pudo leerlo.</span> : null}
+        {revision.claude?.estado === "fallo" ? <span className="text-warning">El revisor con Claude no pudo leerlo.</span> : null}
         {revision.correcciones.length ? (
           <span className="text-muted-foreground">
             {revision.correcciones.length === 1 ? "1 vuelta de corrección" : `${revision.correcciones.length} vueltas de corrección`}
@@ -568,9 +568,9 @@ function RevisionRecurso({ revision }: { revision: NonNullable<RecursoDeLaFicha[
           ))}
         </ul>
       ) : null}
-      {frenos.length ? <Hallazgos titulo="Frena" clase="text-red-700 dark:text-red-400" hallazgos={frenos} /> : null}
-      {avisos.length ? <Hallazgos titulo="Avisos" clase="text-amber-700 dark:text-amber-400" hallazgos={avisos} /> : null}
-      {!frenos.length && !avisos.length ? <p className="text-emerald-700 dark:text-emerald-400">Sin hallazgos.</p> : null}
+      {frenos.length ? <Hallazgos titulo="Frena" clase="text-destructive" hallazgos={frenos} /> : null}
+      {avisos.length ? <Hallazgos titulo="Avisos" clase="text-warning" hallazgos={avisos} /> : null}
+      {!frenos.length && !avisos.length ? <p className="text-success">Sin hallazgos.</p> : null}
     </div>
   )
 }

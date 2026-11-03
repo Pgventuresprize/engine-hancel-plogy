@@ -36,7 +36,7 @@ export function ConfigEstudio({ config }: { config: Config }) {
   return (
     <div className="flex flex-col gap-4">
       {aviso ? (
-        <p className={`text-sm ${aviso.ok ? "text-emerald-600" : "text-destructive"}`}>{aviso.texto}</p>
+        <p className={`text-sm ${aviso.ok ? "text-success" : "text-destructive"}`}>{aviso.texto}</p>
       ) : null}
 
       <Card>
@@ -98,7 +98,7 @@ export function ConfigEstudio({ config }: { config: Config }) {
           </p>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-3">
-          <span className={`text-sm ${config.canvaConectado ? "text-emerald-600" : "text-muted-foreground"}`}>
+          <span className={`text-sm ${config.canvaConectado ? "text-success" : "text-muted-foreground"}`}>
             {config.canvaConectado ? "Conectado." : "Sin conectar."}
           </span>
           <Button variant="outline" render={<Link href="/configuracion/conexiones" />}>

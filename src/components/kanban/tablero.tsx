@@ -458,7 +458,7 @@ function Tarjeta({
               es la discrepancia entre el analisis y el criterio de quien
               publica, y se marca para poder buscarla despues. */}
           {ficha.bajoUmbral ? (
-            <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-400">
+            <Badge variant="outline" className="border-warning/40 text-warning">
               Bajo umbral
             </Badge>
           ) : null}
@@ -466,7 +466,7 @@ function Tarjeta({
           {/* Mientras no haya contenido: despues ya no se puede hacer nada con
               ello y solo seria ruido en la tarjeta. */}
           {ficha.analizada && ficha.piezas.length === 0 && conPocoMaterial(ficha.estadoContenido) ? (
-            <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-400">
+            <Badge variant="outline" className="border-warning/40 text-warning">
               {nombreMaterial(ficha.estadoContenido)}
             </Badge>
           ) : null}
@@ -504,14 +504,14 @@ function AvisoRevision({ ficha }: { ficha: Ficha }) {
 
   if (frenada) {
     return (
-      <Badge variant="outline" className="border-red-400 text-red-700 dark:text-red-400">
+      <Badge variant="outline" className="border-destructive/40 text-destructive">
         Frenada
       </Badge>
     )
   }
   if (avisos === 0) return null
   return (
-    <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-400">
+    <Badge variant="outline" className="border-warning/40 text-warning">
       {avisos === 1 ? "1 aviso" : `${avisos} avisos`}
     </Badge>
   )

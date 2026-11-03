@@ -44,7 +44,7 @@ export function CampoTexto({
     <div className="grid gap-1.5">
       <div className="flex items-baseline justify-between gap-3">
         <Label htmlFor={id}>{label}</Label>
-        <span className={`text-xs tabular-nums ${cerca ? "text-amber-600" : "text-muted-foreground"}`}>
+        <span className={`text-xs tabular-nums ${cerca ? "text-warning" : "text-muted-foreground"}`}>
           {valor.length} / {tope}
         </span>
       </div>
@@ -202,7 +202,7 @@ export function BarraGuardar({
       <Button onClick={onGuardar} disabled={pending || !dirty}>
         {pending ? "Guardando…" : texto}
       </Button>
-      {resultado?.ok && !dirty ? <span className="text-sm text-emerald-600">Guardado.</span> : null}
+      {resultado?.ok && !dirty ? <span className="text-sm text-success">Guardado.</span> : null}
       {resultado && !resultado.ok ? <span className="text-destructive text-sm">{resultado.error}</span> : null}
     </div>
   )

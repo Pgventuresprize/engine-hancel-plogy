@@ -194,7 +194,7 @@ function VisorPieza({ pieza }: { pieza: PiezaEstudio }) {
           ) : (
             <div className="flex flex-col gap-3 rounded-lg border p-4">
               {pieza.status === "failed" ? <p className="text-destructive text-sm">{pieza.error}</p> : null}
-              {pieza.aviso ? <p className="text-sm text-amber-600">{pieza.aviso}</p> : null}
+              {pieza.aviso ? <p className="text-sm text-warning">{pieza.aviso}</p> : null}
               {pieza.laminas.map((l, k) => (
                 <div key={k}>
                   <p className="text-sm font-semibold">{l.titulo}</p>

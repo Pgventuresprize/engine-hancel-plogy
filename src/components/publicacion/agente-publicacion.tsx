@@ -85,7 +85,7 @@ export function Publicacion({ vista }: { vista: PublicacionVista }) {
               </div>
             </div>
           </div>
-          {aviso ? <p className={`text-sm ${aviso.ok ? "text-emerald-600" : "text-destructive"}`}>{aviso.texto}</p> : null}
+          {aviso ? <p className={`text-sm ${aviso.ok ? "text-success" : "text-destructive"}`}>{aviso.texto}</p> : null}
           <div>
             <Button onClick={guardar} disabled={pending}>
               Guardar
@@ -128,7 +128,7 @@ export function Publicacion({ vista }: { vista: PublicacionVista }) {
                     <TableCell className="max-w-56 text-xs" title={h.pieza ?? ""}>
                       {h.pieza ? <span className="line-clamp-2">{h.pieza}</span> : null}
                       {h.pendiente?.tipo === "sinPieza" ? (
-                        <span className="text-amber-600">Sin pieza: la receta genera a las {h.pendiente.generaA}</span>
+                        <span className="text-warning">Sin pieza: la receta genera a las {h.pendiente.generaA}</span>
                       ) : null}
                     </TableCell>
                     {h.pendiente?.tipo === "prevista" ? (
@@ -158,7 +158,7 @@ export function Publicacion({ vista }: { vista: PublicacionVista }) {
 
 function Estado({ e }: { e: EstadoRed }) {
   if (!e) return <span className="text-muted-foreground text-xs">—</span>
-  if (e.status === "publicada") return <Badge className="bg-emerald-600 text-white">Publicada</Badge>
+  if (e.status === "publicada") return <Badge variant="success">Publicada</Badge>
   if (e.status === "programada") return <Badge variant="secondary">Programada</Badge>
   if (e.status === "programando") return <Badge variant="outline">Programando…</Badge>
   return (

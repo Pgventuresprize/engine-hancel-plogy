@@ -14,10 +14,10 @@ import type { ConsumoDia, Grupo } from "@/lib/consumo-data"
  * eso hay leyenda, tooltip y la tabla por paso debajo.
  */
 const SERIES: { clave: Grupo; etiqueta: string; color: string }[] = [
-  { clave: "analisis", etiqueta: "Análisis", color: "bg-[#2a78d6] dark:bg-[#3987e5]" },
-  { clave: "guion", etiqueta: "Guion", color: "bg-[#eb6834] dark:bg-[#d95926]" },
-  { clave: "diseno", etiqueta: "Diseño", color: "bg-[#1baf7a] dark:bg-[#199e70]" },
-  { clave: "otros", etiqueta: "Otros", color: "bg-[#eda100] dark:bg-[#c98500]" },
+  { clave: "analisis", etiqueta: "Análisis", color: "bg-chart-4" },
+  { clave: "guion", etiqueta: "Guion", color: "bg-chart-1" },
+  { clave: "diseno", etiqueta: "Diseño", color: "bg-chart-3" },
+  { clave: "otros", etiqueta: "Otros", color: "bg-chart-5" },
 ]
 
 const ALTO = 180

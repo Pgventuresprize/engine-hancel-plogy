@@ -69,7 +69,7 @@ export function EmpresaAdmin({
 
   return (
     <div className="flex max-w-3xl flex-col gap-4">
-      {aviso ? <p className={`text-sm ${aviso.ok ? "text-emerald-600" : "text-destructive"}`}>{aviso.texto}</p> : null}
+      {aviso ? <p className={`text-sm ${aviso.ok ? "text-success" : "text-destructive"}`}>{aviso.texto}</p> : null}
 
       <Card>
         <CardHeader className="pb-3">

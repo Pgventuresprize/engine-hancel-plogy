@@ -200,7 +200,7 @@ export function CronEditor({
           </p>
         ) : null}
 
-        {result?.ok ? <span className="text-sm text-emerald-600">Guardado.</span> : null}
+        {result?.ok ? <span className="text-sm text-success">Guardado.</span> : null}
         {result && !result.ok ? (
           <span className="text-destructive text-sm">{result.error}</span>
         ) : null}

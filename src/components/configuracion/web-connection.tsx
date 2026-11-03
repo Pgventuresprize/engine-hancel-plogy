@@ -65,7 +65,7 @@ export function WebConnection({ url, conectado, esOwner }: { url: string | null;
         </div>
 
         {secreto ? (
-          <div className="grid gap-1.5 rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/30">
+          <div className="grid gap-1.5 rounded-md border border-warning/40 bg-warning-soft p-3">
             <Label>Secreto (cópialo en HANCEL_WEBHOOK_SECRET del portal)</Label>
             <div className="flex items-center gap-2">
               <code className="min-w-0 flex-1 truncate text-xs">{secreto}</code>
@@ -108,7 +108,7 @@ export function WebConnection({ url, conectado, esOwner }: { url: string | null;
             ) : null}
           </div>
         ) : null}
-        {aviso ? <p className={`text-sm ${aviso.ok ? "text-emerald-600" : "text-destructive"}`}>{aviso.texto}</p> : null}
+        {aviso ? <p className={`text-sm ${aviso.ok ? "text-success" : "text-destructive"}`}>{aviso.texto}</p> : null}
       </CardContent>
     </Card>
   )

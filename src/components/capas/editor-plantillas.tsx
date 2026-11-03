@@ -73,7 +73,7 @@ export function EditorPlantillas({ plantillas }: { plantillas: PlantillaVista[] 
         </p>
       </div>
 
-      {aviso ? <p className={`text-sm ${aviso.ok ? "text-emerald-600" : "text-destructive"}`}>{aviso.texto}</p> : null}
+      {aviso ? <p className={`text-sm ${aviso.ok ? "text-success" : "text-destructive"}`}>{aviso.texto}</p> : null}
 
       <div className="grid gap-3 lg:grid-cols-2">
         {plantillas.map((p) => {

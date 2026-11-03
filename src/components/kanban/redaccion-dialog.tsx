@@ -267,7 +267,7 @@ function PanelRedaccion({ ficha, datos, cargando }: { ficha: FichaRedaccion; dat
         <span className="flex w-full flex-wrap items-center gap-2 text-xs">
           <span className="text-muted-foreground">Portal de noticias:</span>
           {web.web_status === "enviada" ? (
-            <Badge className="bg-emerald-600 text-white">Publicada{web.web_version > 1 ? ` (v${web.web_version})` : ""}</Badge>
+            <Badge variant="success">Publicada{web.web_version > 1 ? ` (v${web.web_version})` : ""}</Badge>
           ) : web.web_status === "pendiente" || web.web_status === "enviando" ? (
             <Badge variant="secondary">Enviando…</Badge>
           ) : web.web_status === "error" ? (

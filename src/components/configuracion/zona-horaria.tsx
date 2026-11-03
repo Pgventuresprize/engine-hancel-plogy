@@ -55,7 +55,7 @@ export function ZonaHoraria({ timezone, horaActual }: { timezone: string; horaAc
           <Button onClick={guardar} disabled={pending || valor === timezone}>
             {pending ? "Guardando…" : "Guardar"}
           </Button>
-          {result?.ok ? <span className="text-sm text-emerald-600">Guardado.</span> : null}
+          {result?.ok ? <span className="text-sm text-success">Guardado.</span> : null}
           {result && !result.ok ? (
             <span className="text-destructive text-sm">{result.error}</span>
           ) : null}

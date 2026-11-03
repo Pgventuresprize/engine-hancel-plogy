@@ -154,7 +154,7 @@ function Resultado({ fijo, resto, receta }: { fijo: string; resto: string; recet
     <div className="flex flex-col gap-3">
       <RecetaDelPrompt receta={receta} />
       {receta.caracteres > TOPE_PROMPT ? (
-        <p className="text-xs text-amber-600">
+        <p className="text-xs text-warning">
           Pasa de {miles(TOPE_PROMPT)} caracteres. Revisa si sobra algo en la marca, el oficio o las skills.
         </p>
       ) : null}

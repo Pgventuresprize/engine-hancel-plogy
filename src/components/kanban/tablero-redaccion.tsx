@@ -258,7 +258,7 @@ function Columna({
                   </Badge>
                   {f.analizada && f.score !== null ? <Badge variant={f.score >= 8 ? "default" : "secondary"}>{f.score}/10</Badge> : null}
                   {f.bajoUmbral ? (
-                    <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-400">
+                    <Badge variant="outline" className="border-warning/40 text-warning">
                       Bajo umbral
                     </Badge>
                   ) : null}

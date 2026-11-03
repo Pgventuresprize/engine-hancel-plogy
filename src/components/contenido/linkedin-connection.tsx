@@ -54,14 +54,14 @@ export function LinkedinConnection({
 
       <CardContent className="space-y-4">
         {resultado === "ok" ? (
-          <p className="text-sm text-emerald-600">Cuenta conectada: {motivo}.</p>
+          <p className="text-sm text-success">Cuenta conectada: {motivo}.</p>
         ) : null}
         {resultado === "error" ? (
           <p className="text-destructive text-sm">No se pudo conectar: {motivo}</p>
         ) : null}
 
         {!status.configured ? (
-          <p className="text-sm text-amber-700 dark:text-amber-400">
+          <p className="text-sm text-warning">
             Faltan <code className="text-xs">LINKEDIN_CLIENT_ID</code>,{" "}
             <code className="text-xs">LINKEDIN_CLIENT_SECRET</code> y{" "}
             <code className="text-xs">LINKEDIN_REDIRECT_URI</code> en el entorno. Sin ellas no se

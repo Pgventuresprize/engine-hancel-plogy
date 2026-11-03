@@ -41,7 +41,7 @@ export function CanvaConnection({ estado, recienConectado }: { estado: EstadoCan
           {pending ? "Abriendo Canva…" : estado.conectado ? "Reconectar" : "Conectar Canva"}
         </Button>
         {recienConectado && estado.conectado ? (
-          <span className="text-sm text-emerald-600">Canva quedo conectado.</span>
+          <span className="text-sm text-success">Canva quedo conectado.</span>
         ) : null}
         {recienConectado && !estado.conectado ? (
           <span className="text-destructive text-sm">

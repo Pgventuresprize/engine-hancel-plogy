@@ -62,14 +62,14 @@ export default async function ContenidoPage({
     <DashboardShell title="Estudio">
       <div className="flex min-w-0 flex-col gap-4">
         {!ia.tokenConfigurado ? (
-          <Card className="border-amber-300 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30">
+          <Card className="border-warning/40 bg-warning-soft">
             <CardContent className="flex gap-3 py-4">
-              <AlertTriangleIcon className="mt-0.5 size-4 shrink-0 text-amber-600" />
+              <AlertTriangleIcon className="mt-0.5 size-4 shrink-0 text-warning" />
               <div className="min-w-0 text-sm">
-                <p className="font-medium text-amber-900 dark:text-amber-200">
+                <p className="font-medium text-warning">
                   Falta conectar Claude
                 </p>
-                <p className="mt-1 text-amber-800 dark:text-amber-300/90">
+                <p className="mt-1 text-warning">
                   Sin token no se analiza ni se genera nada: lo que envies se queda esperando.
                   Pegalo en la tarjeta <strong>Conexion con Claude</strong> de la configuracion.
                 </p>

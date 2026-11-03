@@ -122,7 +122,7 @@ export function ImportarEjemplos({ pilares, onCerrar }: { pilares: Pilar[]; onCe
         {error ? <p className="text-destructive text-sm">{error}</p> : null}
 
         {avisos.length ? (
-          <ul className="text-sm text-amber-700 dark:text-amber-500">
+          <ul className="text-sm text-warning">
             {avisos.map((a) => (
               <li key={a}>{a}</li>
             ))}
@@ -161,7 +161,7 @@ export function ImportarEjemplos({ pilares, onCerrar }: { pilares: Pilar[]; onCe
                 Descartar
               </Button>
               {sinRevisar.length ? (
-                <span className="text-sm text-amber-700 dark:text-amber-500">
+                <span className="text-sm text-warning">
                   Falta marcar «Lo revisé» en {sinRevisar.length === 1 ? "1 ejemplo" : `${sinRevisar.length} ejemplos`}.
                 </span>
               ) : null}
@@ -331,7 +331,7 @@ function Aviso({ tono, titulo, children }: { tono: "rojo" | "ambar" | "gris"; ti
     tono === "rojo"
       ? "border-destructive/40 text-destructive"
       : tono === "ambar"
-        ? "border-amber-500/40 text-amber-700 dark:text-amber-500"
+        ? "border-warning/40 text-warning"
         : "text-muted-foreground"
   return (
     <div className={`rounded-md border px-3 py-2 text-xs ${color}`}>

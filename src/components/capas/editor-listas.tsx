@@ -62,7 +62,7 @@ export function EditorListas({ listas }: { listas: ListaSubtemas[] }) {
       </div>
 
       {error ? <p className="text-destructive text-sm">{error}</p> : null}
-      {aviso ? <p className="text-sm text-emerald-600">{aviso}</p> : null}
+      {aviso ? <p className="text-sm text-success">{aviso}</p> : null}
 
       {listas.map((l) => (
         <ListaCard key={l.id} lista={l} disabled={pending} accion={accion} />

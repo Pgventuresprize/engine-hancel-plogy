@@ -110,9 +110,9 @@ export function MetaConnection({
               Desconectar
             </Button>
           ) : null}
-          {recienConectado && conectado ? <span className="text-sm text-emerald-600">{nombre} quedó conectado.</span> : null}
+          {recienConectado && conectado ? <span className="text-sm text-success">{nombre} quedó conectado.</span> : null}
           {recienConectado && !conectado ? <span className="text-destructive text-sm">No se completó la conexión. Vuelve a intentarlo.</span> : null}
-          {aviso ? <span className="text-sm text-emerald-600">{aviso}</span> : null}
+          {aviso ? <span className="text-sm text-success">{aviso}</span> : null}
           {error ? <span className="text-destructive text-sm">{error}</span> : null}
         </div>
       </CardContent>

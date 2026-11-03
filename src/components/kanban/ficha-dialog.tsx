@@ -232,7 +232,7 @@ function PanelNoticia({ ficha }: { ficha: Ficha }) {
       <Campo etiqueta="Snippet">{ficha.snippet ?? "(sin snippet)"}</Campo>
 
       {pocoMaterial ? (
-        <p className="rounded-md border border-amber-400 bg-amber-50 p-2.5 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+        <p className="rounded-md border border-warning/40 bg-warning-soft p-2.5 text-xs text-warning">
           <strong>{nombreMaterial(ficha.estadoContenido)}.</strong> Los agentes solo tendrían el titular y un resumen
           corto, y para llenar las láminas tienden a inventar. En automático no pasa sola; el motivo está en la
           pestaña Análisis.
@@ -272,7 +272,7 @@ function PanelNoticia({ ficha }: { ficha: Ficha }) {
           </span>
         )}
         {error ? <span className="text-destructive text-xs">{error}</span> : null}
-        {aviso ? <span className="text-xs text-amber-700 dark:text-amber-400">{aviso}</span> : null}
+        {aviso ? <span className="text-xs text-warning">{aviso}</span> : null}
       </div>
     </div>
   )
@@ -309,7 +309,7 @@ function PanelAnalisis({ ficha }: { ficha: Ficha }) {
         {ficha.estadoContenido ? (
           <Badge
             variant="outline"
-            className={conPocoMaterial(ficha.estadoContenido) ? "border-amber-400 text-amber-700 dark:text-amber-400" : undefined}
+            className={conPocoMaterial(ficha.estadoContenido) ? "border-warning/40 text-warning" : undefined}
           >
             {nombreMaterial(ficha.estadoContenido)}
           </Badge>
@@ -517,7 +517,7 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
       {/* La marca tiene kit de diseño pero esta pieza no salio con el: que se
           vea antes de publicarla, con el motivo. */}
       {esCarrusel && pieza.payload.respaldo ? (
-        <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+        <p className="rounded-lg border border-warning/40 bg-warning-soft p-3 text-xs text-warning">
           <span className="font-medium">Dibujada con respaldo:</span> no salió con el kit de diseño de la marca.{" "}
           {pieza.payload.respaldo}
         </p>
@@ -762,7 +762,7 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
         ) : null}
 
         {error ? <span className="text-destructive text-xs">{error}</span> : null}
-        {aviso ? <span className="text-xs text-amber-700 dark:text-amber-400">{aviso}</span> : null}
+        {aviso ? <span className="text-xs text-warning">{aviso}</span> : null}
       </div>
 
       {(pieza.network === "instagram" || pieza.network === "linkedin") && !rechazada ? (
@@ -789,7 +789,7 @@ function GuardarComoEjemplo({ pieceId }: { pieceId: string }) {
           <BookmarkPlusIcon />
           Guardar como ejemplo
         </Button>
-        {estado?.ok ? <span className="text-xs text-emerald-700 dark:text-emerald-400">{estado.texto}</span> : null}
+        {estado?.ok ? <span className="text-xs text-success">{estado.texto}</span> : null}
       </div>
     )
   }
@@ -839,7 +839,7 @@ function LineaClaude({ revision }: { revision: Revision }) {
   if (!c) return null
   if (c.estado === "fallo") {
     return (
-      <p className="text-red-700 dark:text-red-400">
+      <p className="text-destructive">
         El revisor con Claude no pudo leer esta versión{c.error ? ` (${c.error})` : ""}. No sale sola: pulsa «Revisar» o apruébala tú.
       </p>
     )
@@ -867,7 +867,7 @@ function PanelRevision({ revision, aprobada }: { revision: Revision | null; apro
 
   if (revision.hallazgos.length === 0 && revision.arreglos.length === 0 && !ultima && revision.claude?.estado !== "fallo") {
     return (
-      <p className="text-xs text-emerald-700 dark:text-emerald-400">
+      <p className="text-xs text-success">
         {revision.claude ? "Ni el revisor automático ni el de Claude encontraron nada." : "El revisor automático no encontró nada."}
       </p>
     )
@@ -879,12 +879,12 @@ function PanelRevision({ revision, aprobada }: { revision: Revision | null; apro
       {frenos.length > 0 ? (
         <ListaHallazgos
           titulo={aprobada ? "Frenaba la publicación (la aprobaste igual)" : "Frena la publicación"}
-          clase="text-red-700 dark:text-red-400"
+          clase="text-destructive"
           hallazgos={frenos}
         />
       ) : null}
       {avisos.length > 0 ? (
-        <ListaHallazgos titulo="Avisos" clase="text-amber-700 dark:text-amber-400" hallazgos={avisos} />
+        <ListaHallazgos titulo="Avisos" clase="text-warning" hallazgos={avisos} />
       ) : null}
 
       {revision.arreglos.length > 0 ? (

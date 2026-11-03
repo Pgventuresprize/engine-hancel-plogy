@@ -386,7 +386,7 @@ function Importando({ kit, onTerminado }: { kit: KitEnLista; onTerminado: () => 
             <li key={p.clave} className="flex items-start gap-2 text-sm">
               <span className="mt-0.5">
                 {hecho ? (
-                  <CheckIcon className="size-4 text-emerald-600" />
+                  <CheckIcon className="size-4 text-success" />
                 ) : ahora ? (
                   <LoaderCircleIcon className="size-4 animate-spin" />
                 ) : (
