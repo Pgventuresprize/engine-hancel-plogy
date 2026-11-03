@@ -416,6 +416,8 @@ async function seguir(t: TrabajoChat): Promise<void> {
   const previos = t.carril === "chat" ? PASOS_PREVIOS : 0
   const delBuzon = avanceDeBuzon(t.agente, b.tabla, b.fila)
   const a = { ...delBuzon, paso: delBuzon.paso + previos, total: delBuzon.total + previos }
+  // Un escritor que se aplaza vuelve a la cola a mitad: la barra no retrocede.
+  if (t.carril === "chat" && a.paso < t.paso) return
   if (a.paso !== t.paso || a.etiqueta !== t.etiqueta) {
     await supabaseAdmin()
       .from("chat_trabajos")
@@ -431,11 +433,13 @@ async function soltarSiToca(t: TrabajoChat, disparar: RedChat[]): Promise<void> 
   if (t.carril === "chat" && t.agente !== "revisor") return
   // El revisor va despues de todas las piezas de su pedido, sean una o seis.
   if (t.agente === "revisor" && t.mensaje_id) {
-    const { data } = await supabaseAdmin()
+    const { data, error } = await supabaseAdmin()
       .from("chat_trabajos")
       .select("estado")
       .eq("mensaje_id", t.mensaje_id)
       .neq("agente", "revisor")
+    // Sin poder leerlos no se sabe nada: dictaminar diria que no salio ninguna.
+    if (error) return
     const hermanos = (data ?? []) as { estado: EstadoTrabajo }[]
     if (hermanos.some((h) => h.estado !== "listo" && h.estado !== "fallo")) return
   } else if (t.despues_de) {

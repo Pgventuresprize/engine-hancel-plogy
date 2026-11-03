@@ -37,6 +37,10 @@ async function main() {
 
   while (Date.now() < hasta) {
     const trabajos = await leer(conversacionId)
+    if (!trabajos.length) {
+      await new Promise((r) => setTimeout(r, CADA_MS))
+      continue
+    }
     for (const t of trabajos) {
       const firma = `${t.estado} · ${t.fase ?? "-"} · ${t.paso}/${t.total} · ${t.etiqueta ?? ""}${t.error ? ` · ERROR ${t.error.slice(0, 100)}` : ""}`
       if (visto.get(t.id) !== firma) {
@@ -74,7 +78,7 @@ async function main() {
     }
     maximo = Math.max(maximo, corriendo.size)
 
-    await actualizarTrabajos({ conversacionId })
+    await actualizarTrabajos({ conversacionId }).catch((e) => console.error("actualizar:", e instanceof Error ? e.message : e))
     const vivos = (await leer(conversacionId)).filter((t) => t.estado === "espera" || t.estado === "trabajando")
     if (!vivos.length && !corriendo.size) break
     await new Promise((r) => setTimeout(r, CADA_MS))

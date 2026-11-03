@@ -141,9 +141,9 @@ async function procesarBuzon(
       procesadas++
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      // Con el limite del plan agotado no fallo el trabajo: vuelve a la cola y
-      // la pasada del chat decide cuando reintentar.
-      const esperar = Boolean(objetivo) && esLimiteDelPlan(msg)
+      // Con el limite del plan agotado o un corte de red no fallo el trabajo:
+      // vuelve a la cola y la pasada del chat decide cuando reintentar.
+      const esperar = Boolean(objetivo) && (esLimiteDelPlan(msg) || esPasajero(msg))
       await supabase
         .from(tabla)
         .update(esperar ? { status: "pending", processed_at: null } : { status: "failed", error: msg.slice(0, 1000), processed_at: new Date().toISOString() })
@@ -182,6 +182,10 @@ async function reclamarColgados(): Promise<void> {
 
 /** El fallo de haber agotado el limite del plan: no es del trabajo y se puede esperar. */
 export const esLimiteDelPlan = (mensaje: string): boolean => /limite de uso de tu plan/i.test(mensaje)
+
+/** Un corte que no dice nada del trabajo: otra pasada lo intenta, hasta agotar sus turnos. */
+export const esPasajero = (mensaje: string): boolean =>
+  /fetch failed|timed? ?out|aborted|socket hang up|ECONNRESET|overloaded|Claude respondio 5\d\d/i.test(mensaje)
 
 /** El plazo de los escritores de piezas: lo pendiente es una pieza a medio corregir. */
 const comoPlazo = (p: PlazoDelBuzon): Plazo => ({ hasta: p.hasta, pendiente: p.pendiente as Plazo["pendiente"] })
