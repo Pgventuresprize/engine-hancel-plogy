@@ -52,6 +52,7 @@ export type TrabajoChat = {
   lease_hasta: string | null
   fallos: number
   vence_at: string | null
+  reintentar_desde: string | null
   mensaje_id: string | null
   agente: RedChat | "revisor"
   tipo: "crear" | "editar" | "revisar"
