@@ -3,43 +3,63 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Los tokens de Plogy Studio, sacados del brand kit 02 (plogy-brand-kit/).
+ * Blanco y tinta dominan; el naranja (`brand`) es solo para la accion
+ * principal y el item activo. `accent` es el fondo de hover de shadcn, no el
+ * color de marca: por eso se queda en un neutro calido.
+ */
 :root {
-  --radius: 0.625rem;
+  --radius: 0.75rem;
 
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --background: #ffffff;
+  --foreground: #171310;
+  --card: #ffffff;
+  --card-foreground: #171310;
+  --popover: #ffffff;
+  --popover-foreground: #171310;
+  --primary: #171310;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f1ef;
+  --secondary-foreground: #171310;
+  --muted: #f4f1ef;
+  --muted-foreground: #625951;
+  --accent: #efe9e5;
+  --accent-foreground: #171310;
+  --destructive: #a62b20;
+  --destructive-foreground: #ffffff;
+  --border: #e7e1dc;
+  --input: #a39486;
+  --ring: #5b286b;
 
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  /* La marca: naranja con texto en tinta (blanco no llega a 4.5:1), y el
+     naranja oscuro para enlaces sobre blanco. */
+  --brand: #ff5b00;
+  --brand-foreground: #171310;
+  --brand-text: #b43d00;
 
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* Estados. Van aparte del color de marca y siempre acompañados de texto. */
+  --success: #2f6b3a;
+  --success-soft: #e9f3eb;
+  --warning: #8a5300;
+  --warning-soft: #fff4e2;
+  --info: #6f3a7c;
+  --info-soft: #f3e9f5;
+
+  --chart-1: #ff5b00;
+  --chart-2: #f75946;
+  --chart-3: #c85981;
+  --chart-4: #9c5aa7;
+  --chart-5: #625951;
+
+  --sidebar: #f4f1ef;
+  --sidebar-foreground: #171310;
+  --sidebar-primary: #171310;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ffffff;
+  --sidebar-accent-foreground: #171310;
+  --sidebar-border: #e7e1dc;
+  --sidebar-ring: #5b286b;
 }
 
 .dark {
@@ -82,6 +102,7 @@
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-plogy-display), "Helvetica Neue", Arial, sans-serif;
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -107,6 +128,16 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-text: var(--brand-text);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
