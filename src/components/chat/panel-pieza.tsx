@@ -215,7 +215,7 @@ export function PanelPieza(props: {
                   }
                 }}
               >
-                <i style={{ background: red ? AG[red].color : "#c4c4c2" }} />
+                <i style={{ background: red ? AG[red].color : "var(--line2)" }} />
                 {red === "instagram" ? "Carrusel" : red === "linkedin" ? "Post" : "Pieza"}
                 <button
                   type="button"

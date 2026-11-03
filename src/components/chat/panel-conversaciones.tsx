@@ -99,7 +99,7 @@ export function PanelConversaciones(props: {
           {c.ocupado ? (
             <span className={s.dot} style={{ background: AG[c.ocupado].color }} />
           ) : c.guardada ? (
-            <Ico d={I.marcador} style={{ marginTop: 2, fill: "#0a0a0a" }} />
+            <Ico d={I.marcador} style={{ marginTop: 2, fill: "var(--ink)" }} />
           ) : null}
           <span className={s.rowtxt}>
             <span className={s.ct}>{c.titulo}</span>
@@ -114,7 +114,7 @@ export function PanelConversaciones(props: {
             title={c.guardada ? "Quitar de guardadas" : "Guardar"}
             onClick={() => props.onGuardar(c.id)}
           >
-            <Ico d={I.marcador} style={c.guardada ? { fill: "#0a0a0a" } : undefined} />
+            <Ico d={I.marcador} style={c.guardada ? { fill: "var(--ink)" } : undefined} />
           </button>
           <button
             type="button"

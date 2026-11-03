@@ -7,12 +7,19 @@ import type { AgenteChat } from "@/lib/chat-tipos"
 
 import s from "./chat.module.css"
 
-/** Los agentes como se ven en el chat: letra, nombre y color (chat.html). */
+/** La esfera del brand kit: el Coordinador habla por todo el equipo. */
+const ESFERA = "linear-gradient(180deg,#f75946 0%,#ee5358 33%,#e1556a 50%,#c85981 67%,#9c5aa7 100%)"
+
+/**
+ * Los agentes como se ven en el chat: letra, nombre y color. Todos en tinta
+ * sobre superficie, sin el color de su red: los distingue la letra y el
+ * nombre. Solo el Coordinador lleva la esfera de Plogy.
+ */
 export const AG: Record<AgenteChat, { letra: string; nombre: string; bg: string; fg: string; color: string }> = {
-  coordinador: { letra: "C", nombre: "Coordinador", bg: "#e6e6e4", fg: "#262626", color: "#0a0a0a" },
-  instagram: { letra: "I", nombre: "Instagram", bg: "#db2777", fg: "#fff", color: "#db2777" },
-  linkedin: { letra: "L", nombre: "LinkedIn", bg: "#2563eb", fg: "#fff", color: "#2563eb" },
-  revisor: { letra: "R", nombre: "Revisor", bg: "#c2410c", fg: "#fff", color: "#c2410c" },
+  coordinador: { letra: "C", nombre: "Coordinador", bg: ESFERA, fg: "#fff", color: "#171310" },
+  instagram: { letra: "I", nombre: "Instagram", bg: "#f4f1ef", fg: "#171310", color: "#171310" },
+  linkedin: { letra: "L", nombre: "LinkedIn", bg: "#f4f1ef", fg: "#171310", color: "#171310" },
+  revisor: { letra: "R", nombre: "Revisor", bg: "#f4f1ef", fg: "#171310", color: "#171310" },
 }
 
 export const ORDEN_AGENTES: AgenteChat[] = ["coordinador", "instagram", "linkedin", "revisor"]
@@ -24,7 +31,7 @@ export function cx(...clases: (string | false | null | undefined)[]): string {
 export function Avatar({ agente, apagado, chico }: { agente: AgenteChat; apagado?: boolean; chico?: boolean }) {
   const a = AG[agente]
   return (
-    <div className={cx(s.av, apagado && s.off, chico && s.sm)} style={{ background: a.bg, color: a.fg }} aria-hidden={apagado || undefined}>
+    <div className={cx(s.av, apagado && s.off, chico && s.sm)} style={{ background: a.bg, color: a.fg, borderRadius: agente === "coordinador" ? 999 : undefined }} aria-hidden={apagado || undefined}>
       {a.letra}
     </div>
   )

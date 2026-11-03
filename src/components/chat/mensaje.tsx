@@ -17,7 +17,7 @@ export function MensajeVista({ m, montado, onAbrirPieza }: { m: MensajeUI; monta
   return (
     <div className={s.msg}>
       {esUsuario ? (
-        <div className={s.av} style={{ background: "#0a0a0a", color: "#fff" }}>
+        <div className={s.av} style={{ background: "var(--ink)", color: "#fff" }}>
           {iniciales(nombre)}
         </div>
       ) : (
