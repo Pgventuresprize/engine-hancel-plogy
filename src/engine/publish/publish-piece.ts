@@ -226,8 +226,9 @@ export async function pendingToPublish(
     .in("status", ["generated", "approved"])
     // El freno del revisor: una pieza que frena no sale sola. Sale si alguien
     // la aprobo, que es decir "la vi y sale igual". Las de antes del revisor no
-    // tienen revision y salen como siempre.
-    .or("status.eq.approved,revision.is.null,revision->>frena.eq.false")
+    // tienen revision y salen como siempre. Lo creado desde el chat es un
+    // borrador que alguien pidio: sin aprobar no sale, ni en una tanda a mano.
+    .or("status.eq.approved,and(carril.eq.general,or(revision.is.null,revision->>frena.eq.false))")
     .is("published_at", null)
     .order("created_at")
     .limit(limite)

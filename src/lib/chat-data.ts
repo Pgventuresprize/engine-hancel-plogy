@@ -158,6 +158,7 @@ export async function noticiasConAngulo(accountId: string): Promise<NoticiaAdjun
     .from("content_angles")
     .select("id, raw_news_id, created_at, raw_news (id, title, source, relevance_score)")
     .eq("account_id", accountId)
+    .eq("carril", "general")
     .eq("status", "angled")
     .order("created_at", { ascending: false })
     .limit(60)

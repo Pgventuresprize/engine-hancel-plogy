@@ -30,6 +30,27 @@ import type {
 /** Tope por pasada, para que un tick no intente encolar el archivo entero. */
 export const MAX_DRENAJE_POR_TICK = 25
 
+/**
+ * Una pasada dirigida: trabaja solo lo de un trabajo del chat, en vez de la cola.
+ *
+ * Tres pasadas normales a la vez no reparten nada: las tres leen la cola del mas
+ * viejo al mas nuevo y se pelean por la misma fila. Con esto cada una va a lo
+ * suyo. Lo que `objetivo` no nombra no se toca en esa pasada.
+ */
+export type Objetivo = { jobAngleId?: string; angleId?: string }
+
+/** Sin objetivo se mira la cola general; con el, solo lo que nombra. */
+export function filtroDeCola<Q>(
+  consulta: Q,
+  objetivo: Objetivo | undefined,
+  columna: "id" | "content_angle_id",
+  valor: string | undefined
+): Q | null {
+  const q = consulta as unknown as { eq: (columna: string, valor: string) => Q }
+  if (!objetivo) return q.eq("carril", "general")
+  return valor ? q.eq(columna, valor) : null
+}
+
 /** Recorta el articulo: el buzon no es sitio para guardar megabytes de texto. */
 const MAX_CONTENIDO = 12_000
 
@@ -82,7 +103,8 @@ function newsInput(news: RawNews): AngleJobInput["raw_news"] {
   return {
     id: news.id,
     title: news.title,
-    link: news.link,
+    // Lo pedido sin investigar no tiene pagina: un `chat://` no le sirve a nadie.
+    link: news.link.startsWith("chat://") ? "" : news.link,
     source: news.source,
     snippet: news.snippet,
     full_content: news.full_content ? news.full_content.slice(0, MAX_CONTENIDO) : null,
@@ -203,6 +225,7 @@ export async function enqueueRecursoJob(
     .insert({
       account_id: angle.account_id,
       content_angle_id: angle.id,
+      carril: angle.carril ?? "general",
       input: { ...buildLinkedinInput(angle, news, mergeVariables(variables, override)), esperan },
     })
     .select("id")
@@ -214,6 +237,7 @@ export async function enqueueRecursoJob(
 /** Un trabajo de recurso tal como esta en `jobs_recurso`. */
 export type JobRecurso = {
   id: string
+  carril?: string
   account_id: string
   content_angle_id: string
   input: LinkedinJobInput & { esperan?: Esperan }
@@ -223,15 +247,16 @@ export type JobRecurso = {
   created_at: string
 }
 
-export async function claimRecursoJobs(limite = MAX_DRENAJE_POR_TICK): Promise<JobRecurso[]> {
+export async function claimRecursoJobs(limite = MAX_DRENAJE_POR_TICK, objetivo?: Objetivo): Promise<JobRecurso[]> {
   const supabase = supabaseAdmin()
-  const { data: candidatos, error: errorLectura } = await supabase
-    .from("jobs_recurso")
-    .select("id")
-    .is("consumed_at", null)
-    .in("status", ["done", "failed"])
-    .order("created_at")
-    .limit(limite)
+  const lectura = filtroDeCola(
+    supabase.from("jobs_recurso").select("id").is("consumed_at", null).in("status", ["done", "failed"]),
+    objetivo,
+    "content_angle_id",
+    objetivo?.angleId
+  )
+  if (!lectura) return []
+  const { data: candidatos, error: errorLectura } = await lectura.order("created_at").limit(limite)
   if (errorLectura) throw new Error(`No se pudieron leer los recursos: ${errorLectura.message}`)
   const ids = (candidatos ?? []).map((row) => (row as { id: string }).id)
   if (ids.length === 0) return []
@@ -257,6 +282,7 @@ export async function enqueueAngleJob(
     .insert({
       account_id: news.account_id,
       raw_news_id: news.id,
+      carril: news.carril ?? "general",
       input: buildAngleInput(news, mergeVariables(variables, override)),
     })
     .select("id")
@@ -302,10 +328,22 @@ export async function enqueueLinkedinJob(
     .insert({
       account_id: angle.account_id,
       content_angle_id: angle.id,
+      carril: angle.carril ?? "general",
       input: buildLinkedinInput(angle, news, mergeVariables(variables, override), recurso),
     })
     .select("id")
     .single()
+
+  // En el carril del chat, el indice de un trabajo vivo por angulo: ya estaba.
+  if (error?.code === "23505") {
+    const { data: vivo } = await supabaseAdmin()
+      .from("jobs_linkedin")
+      .select("id")
+      .eq("content_angle_id", angle.id)
+      .is("consumed_at", null)
+      .maybeSingle()
+    if (vivo) return { buzon: "jobs_linkedin", id: (vivo as { id: string }).id }
+  }
 
   if (error) throw new Error(`No se pudo encolar el post: ${error.message}`)
   return { buzon: "jobs_linkedin", id: (data as { id: string }).id }
@@ -318,16 +356,17 @@ export async function enqueueLinkedinJob(
  * ticks se solapan (el trigger y el cron de respaldo, por ejemplo), solo uno se
  * lleva cada fila y el otro sigue sin duplicar nada.
  */
-export async function claimAngleJobs(limite = MAX_DRENAJE_POR_TICK): Promise<JobAngle[]> {
+export async function claimAngleJobs(limite = MAX_DRENAJE_POR_TICK, objetivo?: Objetivo): Promise<JobAngle[]> {
   const supabase = supabaseAdmin()
 
-  const { data: candidatos, error: errorLectura } = await supabase
-    .from("jobs_angle")
-    .select("id")
-    .is("consumed_at", null)
-    .in("status", ["done", "failed"])
-    .order("created_at")
-    .limit(limite)
+  const lectura = filtroDeCola(
+    supabase.from("jobs_angle").select("id").is("consumed_at", null).in("status", ["done", "failed"]),
+    objetivo,
+    "id",
+    objetivo?.jobAngleId
+  )
+  if (!lectura) return []
+  const { data: candidatos, error: errorLectura } = await lectura.order("created_at").limit(limite)
 
   if (errorLectura) throw new Error(`No se pudieron leer los angulos: ${errorLectura.message}`)
   const ids = (candidatos ?? []).map((row) => (row as { id: string }).id)
@@ -344,16 +383,17 @@ export async function claimAngleJobs(limite = MAX_DRENAJE_POR_TICK): Promise<Job
   return (data ?? []) as JobAngle[]
 }
 
-export async function claimLinkedinJobs(limite = MAX_DRENAJE_POR_TICK): Promise<JobLinkedin[]> {
+export async function claimLinkedinJobs(limite = MAX_DRENAJE_POR_TICK, objetivo?: Objetivo): Promise<JobLinkedin[]> {
   const supabase = supabaseAdmin()
 
-  const { data: candidatos, error: errorLectura } = await supabase
-    .from("jobs_linkedin")
-    .select("id")
-    .is("consumed_at", null)
-    .in("status", ["done", "failed"])
-    .order("created_at")
-    .limit(limite)
+  const lectura = filtroDeCola(
+    supabase.from("jobs_linkedin").select("id").is("consumed_at", null).in("status", ["done", "failed"]),
+    objetivo,
+    "content_angle_id",
+    objetivo?.angleId
+  )
+  if (!lectura) return []
+  const { data: candidatos, error: errorLectura } = await lectura.order("created_at").limit(limite)
 
   if (errorLectura) throw new Error(`No se pudieron leer los posts: ${errorLectura.message}`)
   const ids = (candidatos ?? []).map((row) => (row as { id: string }).id)
@@ -370,20 +410,26 @@ export async function claimLinkedinJobs(limite = MAX_DRENAJE_POR_TICK): Promise<
   return (data ?? []) as JobLinkedin[]
 }
 
-export async function claimInstagramJobs(limite = MAX_DRENAJE_POR_TICK): Promise<JobInstagram[]> {
+export async function claimInstagramJobs(limite = MAX_DRENAJE_POR_TICK, objetivo?: Objetivo): Promise<JobInstagram[]> {
   const supabase = supabaseAdmin()
 
   // Un carrusel con diseño libre a medias queda sin consumir entre pasadas; el
   // que una pasada esta diseñando ahora lleva ocupado_hasta (render/kit-libre-pasos.ts).
   const ahora = new Date().toISOString()
-  const { data: candidatos, error: errorLectura } = await supabase
-    .from("jobs_instagram")
-    .select("id")
-    .is("consumed_at", null)
-    .in("status", ["done", "failed"])
-    .or(`respuesta->diseno_libre->>ocupado_hasta.is.null,respuesta->diseno_libre->>ocupado_hasta.lt.${ahora}`)
-    .order("created_at")
-    .limit(limite)
+  const lectura = filtroDeCola(
+    supabase
+      .from("jobs_instagram")
+      .select("id")
+      .is("consumed_at", null)
+      .is("cancelado_at", null)
+      .in("status", ["done", "failed"])
+      .or(`respuesta->diseno_libre->>ocupado_hasta.is.null,respuesta->diseno_libre->>ocupado_hasta.lt.${ahora}`),
+    objetivo,
+    "content_angle_id",
+    objetivo?.angleId
+  )
+  if (!lectura) return []
+  const { data: candidatos, error: errorLectura } = await lectura.order("created_at").limit(limite)
 
   if (errorLectura) throw new Error(`No se pudieron leer los carruseles: ${errorLectura.message}`)
   const ids = (candidatos ?? []).map((row) => (row as { id: string }).id)
@@ -445,10 +491,22 @@ export async function enqueueInstagramJob(
     .insert({
       account_id: angle.account_id,
       content_angle_id: angle.id,
+      carril: angle.carril ?? "general",
       input: { ...buildLinkedinInput(angle, news, mergeVariables(variables, override), recurso), destinos },
     })
     .select("id")
     .single()
+
+  // En el carril del chat, el indice de un trabajo vivo por angulo: ya estaba.
+  if (error?.code === "23505") {
+    const { data: vivo } = await supabase
+      .from("jobs_instagram")
+      .select("id")
+      .eq("content_angle_id", angle.id)
+      .is("consumed_at", null)
+      .maybeSingle()
+    if (vivo) return { buzon: "jobs_instagram", id: (vivo as { id: string }).id }
+  }
 
   if (error) throw new Error(`No se pudo encolar el carrusel: ${error.message}`)
   return { buzon: "jobs_instagram", id: (data as { id: string }).id }

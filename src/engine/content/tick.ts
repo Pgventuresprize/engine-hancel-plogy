@@ -29,6 +29,7 @@ import {
   getGenerationConfig,
   markJobUnreadable,
   MAX_DRENAJE_POR_TICK,
+  type Objetivo,
 } from "./jobs"
 import { drenarRecursos } from "../recursos/guardar"
 import { procesarWebRecursos } from "../web/recursos"
@@ -161,11 +162,17 @@ export async function runContentTick(
      * Lo que no entra no se pierde: sigue en la cola para la proxima pasada.
      */
     presupuesto?: number
+    /**
+     * Una pasada dirigida a un trabajo del chat: procesa y drena solo lo suyo.
+     * No analiza, ni selecciona, ni encola otras redes, ni publica.
+     */
+    objetivo?: Objetivo
   } = {}
 ): Promise<TickSummary> {
   const trigger = options.trigger ?? "manual"
   const forzados = new Set(options.forzar ?? [])
   const presupuesto = options.presupuesto
+  const objetivo = options.objetivo
   const disparoAngulo = forzados.has("angulo") ? ("manual" as const) : ("auto" as const)
   // Los buzones son tres agentes distintos; forzar cualquiera de ellos abre la
   // pasada para todos. Es una simplificacion consciente: el coste de escribir
@@ -288,7 +295,9 @@ export async function runContentTick(
   // un carrusel de un angulo ya hecho) quede materializado en la misma pasada.
   if (esManual) {
     try {
-      await procesarBuzones(disparoBuzones, presupuesto, started.getTime() + LIMITE_PASADA_MS)
+      const hecho = await procesarBuzones(disparoBuzones, presupuesto, started.getTime() + LIMITE_PASADA_MS, objetivo)
+      // Una pasada dirigida necesita saberlo: es lo que le dice que paso con su trabajo.
+      if (objetivo) errors.push(...hecho.errores)
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error))
     }
@@ -311,7 +320,7 @@ export async function runContentTick(
   // Esto lo recoge: los angulos sin pieza ni buzon de una red cuyo agente si
   // corre solo. Es la misma decision de antes, pero tomada cada pasada en vez
   // de una sola vez.
-  for (const cuenta of cuentas) {
+  for (const cuenta of objetivo ? [] : cuentas) {
     try {
       const redes = await redesQueGeneranSolas(cuenta.id)
       if (redes.length === 0) continue
@@ -325,6 +334,8 @@ export async function runContentTick(
         .from("content_angles")
         .select("*")
         .eq("account_id", cuenta.id)
+        // Lo del chat lleva las redes que pidio la persona, ni una mas.
+        .eq("carril", "general")
         .in("status", ["angled", "pending_generation"])
         .order("created_at", { ascending: true })
         .limit(VENTANA_DE_ANGULOS)
@@ -425,7 +436,7 @@ export async function runContentTick(
   }
 
   // ------------------------------------------------------------ angulos hechos
-  const angleJobs = await claimAngleJobs(presupuesto)
+  const angleJobs = await claimAngleJobs(presupuesto, objetivo)
   angleJobsConsumed = angleJobs.length
 
   for (const job of angleJobs as JobAngle[]) {
@@ -459,6 +470,7 @@ export async function runContentTick(
       account_id: job.account_id,
       raw_news_id: job.raw_news_id,
       job_angle_id: job.id,
+      carril: job.carril ?? "general",
       angle: angulo.angle,
       thesis: angulo.thesis,
       playbook_format: angulo.playbook_format,
@@ -494,7 +506,7 @@ export async function runContentTick(
     // espera a que alguien la pida desde el tablero, que es exactamente lo que
     // significaba sacar esa red de la lista, pero dicho donde se configura.
     const config = await configDe(job.account_id)
-    const redesAutomaticas = await redesQueGeneranSolas(job.account_id)
+    const redesAutomaticas = job.carril === "chat" ? [] : await redesQueGeneranSolas(job.account_id)
     if (creados.length > 0 && redesAutomaticas.length > 0) {
       const primero = creados.reduce((a, b) => (a.position <= b.position ? a : b))
       const news = (await loadNews([job.raw_news_id])).get(job.raw_news_id)
@@ -553,14 +565,14 @@ export async function runContentTick(
   // Antes que los posts: al guardar un recurso se encolan las piezas que lo
   // esperaban, y esas piezas las escribe la siguiente pasada.
   // En su try: que falle el drenaje de recursos no puede parar los posts.
-  const recursos = await drenarRecursos(log, presupuesto).catch((e: unknown) => {
+  const recursos = await drenarRecursos(log, presupuesto, objetivo).catch((e: unknown) => {
     errors.push(`recursos: ${e instanceof Error ? e.message : String(e)}`)
     return { consumidos: 0, creados: 0, errores: [] as string[] }
   })
   errors.push(...recursos.errores)
   // Los aprobados que no salieron a la web (el portal no respondio) se
   // reintentan aqui con sus esperas. Sin portal conectado no hace nada.
-  for (const cuenta of cuentas) {
+  for (const cuenta of objetivo ? [] : cuentas) {
     try {
       const web = await procesarWebRecursos(cuenta.id)
       errors.push(...web.errores)
@@ -570,7 +582,7 @@ export async function runContentTick(
   }
 
   // ------------------------------------------------------------- posts hechos
-  const linkedinJobs = await claimLinkedinJobs(presupuesto)
+  const linkedinJobs = await claimLinkedinJobs(presupuesto, objetivo)
   linkedinJobsConsumed = linkedinJobs.length
 
   for (const job of linkedinJobs as JobLinkedin[]) {
@@ -611,6 +623,7 @@ export async function runContentTick(
     const { data: creadaPost, error } = await supabase.from("content_pieces").insert({
       account_id: job.account_id,
       content_angle_id: job.content_angle_id,
+      carril: job.carril ?? "general",
       raw_news_id: (angleRow as { raw_news_id: string } | null)?.raw_news_id ?? null,
       job_linkedin_id: job.id,
       network: "linkedin",
@@ -654,7 +667,7 @@ export async function runContentTick(
   // que dibujar las imagenes y subirlas. Ese trabajo puede fallar por motivos
   // ajenos al texto —una foto caida, el storage— y por eso va en su propio
   // try/catch: un carrusel roto no puede llevarse por delante la pasada.
-  const instagramJobs = await claimInstagramJobs(presupuesto)
+  const instagramJobs = await claimInstagramJobs(presupuesto, objetivo)
   instagramJobsConsumed = instagramJobs.length
 
   for (const job of instagramJobs) {
@@ -703,6 +716,7 @@ export async function runContentTick(
         const { data: creada, error } = await supabase.from("content_pieces").insert({
           account_id: job.account_id,
           content_angle_id: job.content_angle_id,
+          carril: job.carril ?? "general",
           raw_news_id: news?.id ?? null,
           job_instagram_id: job.id,
           network: "instagram",
@@ -737,6 +751,7 @@ export async function runContentTick(
         const { data: creadaFb, error: errorFacebook } = await supabase.from("content_pieces").insert({
           account_id: job.account_id,
           content_angle_id: job.content_angle_id,
+          carril: job.carril ?? "general",
           raw_news_id: news?.id ?? null,
           job_instagram_id: job.id,
           network: "facebook",
@@ -792,7 +807,7 @@ export async function runContentTick(
   // El tope es por cuenta, no por pasada: si no, la primera cuenta se comeria el
   // cupo entero y las demas no arrancarian hasta que se quedara sin candidatas.
 
-  for (const cuenta of cuentas) {
+  for (const cuenta of objetivo ? [] : cuentas) {
     const config = await configDe(cuenta.id)
     if (config.score_threshold === null) continue
 
@@ -855,6 +870,8 @@ export async function runContentTick(
         .from("raw_news")
         .select("id, title, content_angles!inner(id)")
         .eq("account_id", cuenta.id)
+        // Un tema pedido en el chat no es un hecho cubierto: puede que ni se publique.
+        .eq("carril", "general")
         .gte("created_at", desde)
         .limit(120)
 
@@ -917,7 +934,7 @@ export async function runContentTick(
   // quien decide si a esta red le toca ahora.
   //
 
-  for (const cuenta of cuentas) {
+  for (const cuenta of objetivo ? [] : cuentas) {
     try {
       // La zona horaria es de la cuenta: dos cuentas pueden publicar "a las
       // nueve" y no ser el mismo momento.
@@ -995,7 +1012,7 @@ export async function runContentTick(
 
   try {
     const res =
-      gastado > MARGEN_PARA_GENERAR
+      objetivo || gastado > MARGEN_PARA_GENERAR
         ? { procesadas: 0, fallidas: 0, errores: [] as string[] }
         : await procesarBuzones(disparoBuzones, presupuesto, started.getTime() + LIMITE_PASADA_MS)
     if (res.procesadas > 0 || res.fallidas > 0) {
@@ -1012,8 +1029,9 @@ export async function runContentTick(
   // El chat sigue las piezas que pidio: su avance, el mensaje al terminar y el
   // agente que esperaba su turno. Lo que suelte aqui lo recoge la proxima
   // pasada, o la que dispara el propio chat al consultar el estado.
+  // Una pasada dirigida se pone al dia ella misma, solo con su trabajo.
   try {
-    await actualizarTrabajos()
+    if (!objetivo) await actualizarTrabajos()
   } catch (error) {
     errors.push(`[chat] ${error instanceof Error ? error.message : String(error)}`)
   }

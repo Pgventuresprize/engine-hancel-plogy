@@ -183,6 +183,7 @@ async function noticiasListas(accountId: string): Promise<string> {
     .from("content_angles")
     .select("angle, raw_news (title, relevance_score)")
     .eq("account_id", accountId)
+    .eq("carril", "general")
     .eq("status", "angled")
     .order("created_at", { ascending: false })
     .limit(8)
