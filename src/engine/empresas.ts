@@ -12,7 +12,8 @@ import type { Plan } from "./accounts"
  */
 
 export type Rol = "owner" | "member"
-export type Miembro = { userId: string; email: string; rol: Rol; desde: string }
+/** `pendiente`: todavia no confirmo el correo (no abrio la invitacion o el registro). */
+export type Miembro = { userId: string; email: string; rol: Rol; desde: string; pendiente: boolean }
 
 export async function miembrosDe(accountId: string): Promise<Miembro[]> {
   const supabase = supabaseAdmin()
@@ -22,7 +23,13 @@ export async function miembrosDe(accountId: string): Promise<Miembro[]> {
   return Promise.all(
     filas.map(async (f) => {
       const { data: u } = await supabase.auth.admin.getUserById(f.user_id)
-      return { userId: f.user_id, email: u.user?.email ?? "(usuario borrado)", rol: f.role, desde: f.created_at }
+      return {
+        userId: f.user_id,
+        email: u.user?.email ?? "(usuario borrado)",
+        rol: f.role,
+        desde: f.created_at,
+        pendiente: Boolean(u.user && !u.user.email_confirmed_at),
+      }
     })
   )
 }
@@ -42,35 +49,82 @@ async function usuarioPorCorreo(email: string): Promise<{ id: string } | null> {
 }
 
 /**
- * Añade un miembro a una empresa por su correo. Si el usuario no existe se
- * crea con la contraseña dada (y ya confirmado, para que pueda entrar). Si ya
- * existe, se le da acceso a esta empresa y conserva su contraseña.
+ * Añade un miembro a una empresa por su correo.
+ *
+ * Si el correo no tiene cuenta, Supabase le manda una invitacion: el enlace
+ * pasa por `/auth/confirm` y la persona elige ahi su contraseña. Nadie mas la
+ * conoce, ni el owner que invita. Si ya tiene cuenta, se le da acceso a esta
+ * empresa y la ve en el selector de marca la proxima vez que entre.
+ *
+ * `volverA` es la ruta de confirmacion del origen desde el que se invito
+ * (`https://host/auth/confirm`), para que el enlace vuelva al mismo sitio.
  */
 export async function agregarMiembro(
   accountId: string,
   email: string,
   rol: Rol,
-  password?: string
-): Promise<{ ok: true; creado: boolean } | { ok: false; error: string }> {
+  volverA: string
+): Promise<{ ok: true; invitado: boolean } | { ok: false; error: string }> {
   const correo = email.trim().toLowerCase()
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) return { ok: false, error: "Ese correo no es válido." }
   const supabase = supabaseAdmin()
   let usuario = await usuarioPorCorreo(correo)
-  let creado = false
+  let invitado = false
   if (!usuario) {
-    if (!password || password.length < 8) {
-      return { ok: false, error: "Ese correo no tiene cuenta todavía: ponle una contraseña de al menos 8 caracteres para crearla." }
-    }
-    const { data, error } = await supabase.auth.admin.createUser({ email: correo, password, email_confirm: true })
-    if (error || !data.user) return { ok: false, error: `No se pudo crear el usuario: ${error?.message ?? "sin respuesta"}` }
+    const { data, error } = await supabase.auth.admin.inviteUserByEmail(correo, { redirectTo: volverA })
+    if (error || !data.user) return { ok: false, error: `No se pudo mandar la invitación: ${error?.message ?? "sin respuesta"}` }
     usuario = { id: data.user.id }
-    creado = true
+    invitado = true
   }
   const { error } = await supabase
     .from("account_members")
     .upsert({ account_id: accountId, user_id: usuario.id, role: rol }, { onConflict: "account_id,user_id" })
   if (error) return { ok: false, error: error.message }
-  return { ok: true, creado }
+  return { ok: true, invitado }
+}
+
+/**
+ * Vuelve a mandar la invitacion a un miembro que todavia no la abrio.
+ *
+ * Supabase reenvia la invitacion a quien existe sin confirmar; a quien ya
+ * confirmo la rechaza, y por eso se comprueba antes: esa persona ya entra.
+ */
+export async function reenviarInvitacion(
+  accountId: string,
+  userId: string,
+  volverA: string
+): Promise<{ ok: true; email: string } | { ok: false; error: string }> {
+  const supabase = supabaseAdmin()
+  const { data: fila } = await supabase.from("account_members").select("user_id").eq("account_id", accountId).eq("user_id", userId).maybeSingle()
+  if (!fila) return { ok: false, error: "Esa persona no es miembro de la empresa." }
+  const { data } = await supabase.auth.admin.getUserById(userId)
+  const email = data.user?.email
+  if (!email) return { ok: false, error: "No se encontró el correo de esa persona." }
+  if (data.user?.email_confirmed_at) return { ok: false, error: `${email} ya confirmó su cuenta: puede entrar con su contraseña.` }
+  const { error } = await supabase.auth.admin.inviteUserByEmail(email, { redirectTo: volverA })
+  if (error) return { ok: false, error: `No se pudo reenviar: ${error.message}` }
+  return { ok: true, email }
+}
+
+/**
+ * La primera empresa de quien se registro solo.
+ *
+ * Se llama al confirmar el correo del registro, y desde /bienvenida si eso
+ * fallo. Si la persona ya pertenece a alguna empresa no hace nada: un invitado
+ * que confirma no recibe ademas una empresa propia. Empieza en basic.
+ */
+export async function asegurarEmpresaPropia(
+  userId: string,
+  nombre: string
+): Promise<{ ok: true; creada: boolean } | { ok: false; error: string }> {
+  const { count, error } = await supabaseAdmin()
+    .from("account_members")
+    .select("account_id", { count: "exact", head: true })
+    .eq("user_id", userId)
+  if (error) return { ok: false, error: `No se pudieron leer tus empresas: ${error.message}` }
+  if (count) return { ok: true, creada: false }
+  const r = await crearEmpresa(nombre.trim() || "Mi empresa", "basic", userId)
+  return r.ok ? { ok: true, creada: true } : r
 }
 
 /** Cuantos owners tiene una empresa: nunca se puede quedar sin ninguno. */

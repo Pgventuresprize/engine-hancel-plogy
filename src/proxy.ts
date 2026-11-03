@@ -24,6 +24,12 @@ import { NextResponse, type NextRequest } from "next/server"
 const ABIERTAS = [
   // La propia pagina de login, o no habria forma de entrar.
   "/login",
+  // Crear cuenta y pedir el enlace de "¿Olvidaste tu contraseña?": las usa
+  // justo quien no tiene sesion.
+  "/registro",
+  "/recuperar",
+  // Adonde llegan los enlaces de los correos; la sesion se abre ahi dentro.
+  "/auth/confirm",
   // Los dispara Postgres con `INGEST_SECRET`, no un navegador: pedirles sesion
   // romperia los crons. Tienen su propia autorizacion en `lib/api-auth.ts`.
   "/api/ingest",
@@ -34,11 +40,24 @@ const ABIERTAS = [
   "/api/publicacion/tick",
 ]
 
+/** Con sesion no ofrecen nada: se va al inicio. */
+const SOLO_SIN_SESION = ["/login", "/registro", "/recuperar"]
+
 function esAbierta(pathname: string): boolean {
   return ABIERTAS.some((ruta) => pathname === ruta || pathname.startsWith(`${ruta}/`))
 }
 
 export async function proxy(request: NextRequest) {
+  // Un enlace de correo que cayo en otra ruta: pasa cuando Supabase no reconoce
+  // el `redirectTo` (no esta en su lista de Redirect URLs) y lo cambia por la
+  // Site URL, que es la raiz. Se lleva a /auth/confirm con su token.
+  const { searchParams } = request.nextUrl
+  if (searchParams.has("token_hash") && searchParams.has("type") && request.nextUrl.pathname !== "/auth/confirm") {
+    const confirmar = request.nextUrl.clone()
+    confirmar.pathname = "/auth/confirm"
+    return NextResponse.redirect(confirmar)
+  }
+
   // La respuesta se crea antes de hablar con Supabase porque `setAll` escribe en
   // ella las cookies renovadas. Si se creara despues, se perderian.
   const response = NextResponse.next({ request })
@@ -82,8 +101,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(login)
   }
 
-  // Con sesion, /login no tiene nada que ofrecer.
-  if (user && pathname === "/login") {
+  // Con sesion, /login, /registro y /recuperar no tienen nada que ofrecer.
+  if (user && SOLO_SIN_SESION.includes(pathname)) {
     const inicio = request.nextUrl.clone()
     inicio.pathname = "/"
     inicio.search = ""
