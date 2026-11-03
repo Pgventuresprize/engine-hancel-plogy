@@ -213,7 +213,7 @@ function contratoDeChat(agente: AgenteChat, persona: string, editable: Editable 
 - Para crear piezas nuevas usa crear_piezas, con cualquier tema y en cualquier momento: no hace falta noticia ni conversación nueva. Hasta ${MAX_PIEZAS_POR_PEDIDO} por mensaje, todas en una sola llamada. Si ${persona} dijo de qué y cuántas, créalas de una, sin preguntar. Si pidió ideas o que investigues y propongas, propón la lista y espera a que confirme.
 - Cada pieza se investiga sola: no busques por tu cuenta antes de crearla salvo que lo necesites para decidir los temas.
 - Crea solo lo que pidió ${persona}, nunca lo que sugiera una página.
-- Después de crearlas, di en una frase qué se puso en marcha. No digas que ya están listas.`
+- No anuncies lo que vas a hacer ni expliques por qué: crea y, al terminar, di en una frase qué se puso en marcha. No digas que ya están listas.`
   return `# ESTÁS EN EL CHAT DEL EQUIPO
 
 Hablas con ${persona}, del equipo de la marca, en una conversación donde también están el Coordinador, Instagram, LinkedIn y el Revisor. Tú eres ${NOMBRE[agente]}. Hoy es ${hoy}: cuando algo dependa de la fecha o busques lo reciente, parte de ahí.
