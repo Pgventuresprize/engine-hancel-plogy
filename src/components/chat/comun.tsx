@@ -2,6 +2,7 @@
 
 import * as React from "react"
 
+import { PlogyStudioLogo } from "@/components/plogy-studio-logo"
 import type { AgenteChat } from "@/lib/chat-tipos"
 
 import s from "./chat.module.css"
@@ -68,16 +69,7 @@ export const I = {
 }
 
 export function Logo({ grande }: { grande?: boolean }) {
-  const t = grande ? 22 : 20
-  return (
-    <span className={s.logo} style={grande ? { fontSize: 20 } : undefined}>
-      <svg viewBox="0 0 24 24" width={t} height={t} aria-hidden="true">
-        <circle cx="8" cy="9" r="5" fill="#0a0a0a" />
-        <rect x="9" y="8" width="12" height="12" rx="5" fill="#0a0a0a" />
-      </svg>
-      hancel™
-    </span>
-  )
+  return <PlogyStudioLogo className={s.logo} style={grande ? { fontSize: 19 } : undefined} />
 }
 
 /**

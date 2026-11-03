@@ -1,13 +1,13 @@
 "use client"
 
 import * as React from "react"
-import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 import type { Cuenta } from "@/engine/accounts"
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
+import { PlogyStudioLogo } from "@/components/plogy-studio-logo"
 import {
   Sidebar,
   SidebarContent,
@@ -174,24 +174,9 @@ export function AppSidebar({
             <SidebarMenuButton size="lg" render={<Link href="/" />}>
               {/* El lockup completo con la sidebar abierta; al colapsarla a
                   ancho de icono no cabe una marca apaisada, asi que se cambia
-                  por el isotipo. Ambas llevan alt vacio y el nombre accesible
-                  lo pone el span de abajo, para que no cambie con el estado. */}
-              <Image
-                src="/hancel-lockup.png"
-                alt=""
-                width={469}
-                height={114}
-                priority
-                className="h-7 w-auto group-data-[collapsible=icon]:hidden"
-              />
-              <Image
-                src="/hancel.png"
-                alt=""
-                width={180}
-                height={180}
-                className="hidden size-8 shrink-0 rounded-lg group-data-[collapsible=icon]:block"
-              />
-              <span className="sr-only">Hancel</span>
+                  por la esfera. La que esta oculta no se anuncia. */}
+              <PlogyStudioLogo className="text-lg group-data-[collapsible=icon]:hidden" />
+              <PlogyStudioLogo forma="simbolo" className="hidden text-2xl group-data-[collapsible=icon]:block" />
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

@@ -1,12 +1,12 @@
 "use client"
 
 import * as React from "react"
-import Image from "next/image"
 
 import { iniciarSesion, type LoginResult } from "@/app/login/actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { PlogyStudioLogo } from "@/components/plogy-studio-logo"
 import { cn } from "@/lib/utils"
 
 /**
@@ -39,17 +39,9 @@ export function LoginForm({
         <div className="flex flex-col gap-6">
           <div className="flex flex-col items-center gap-3">
             {/* El lockup ya lleva el nombre dentro, asi que hace de titulo y no
-                se repite debajo en texto. El alt es el nombre, que es lo que la
-                imagen dice. */}
+                se repite debajo en texto. Su nombre accesible es "Plogy Studio". */}
             <h1 className="flex">
-              <Image
-                src="/hancel-lockup.png"
-                alt="Hancel"
-                width={469}
-                height={114}
-                priority
-                className="h-9 w-auto"
-              />
+              <PlogyStudioLogo className="text-2xl" />
             </h1>
             <div className="text-muted-foreground text-center text-sm">
               Entra para automatizar todo tu contenido.
