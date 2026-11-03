@@ -16,9 +16,10 @@ import type { PedidoPieza, TrabajoChat } from "./trabajos"
  * de donde vino. Investiga con lo mismo que el analisis (Composio y las paginas
  * citadas) y consolida el material en lo que los agentes van a leer.
  *
- * La fila usa el id del trabajo: si la pasada se cae a mitad y se repite, pisa
- * la misma en vez de crear otra. Va con carril 'chat' y estado 'chat', que
- * ninguna seleccion automatica mira.
+ * La fila usa el id del trabajo: si la pasada se repite no crea otra, y si ya
+ * quedo completa no se vuelve a investigar (detener a mitad de esta fase deja la
+ * pasada terminando, y lo que trae no se paga dos veces). Va con carril 'chat' y
+ * estado 'chat', que ninguna seleccion automatica mira.
  *
  * Sin material no sigue: un agente sin datos llena las laminas inventando, y eso
  * se vio una vez con la clave de busqueda caducada. Mejor una tarjeta que dice
@@ -55,8 +56,21 @@ async function dossierDe(t: TrabajoChat, pedido: PedidoPieza, busqueda: Busqueda
   return r.texto.trim().slice(0, MAX_DOSSIER + 2000)
 }
 
+/** La fila de una investigacion anterior, si llego a guardar tambien sus fuentes. */
+async function yaInvestigado(t: TrabajoChat, pedido: PedidoPieza): Promise<RawNews | null> {
+  const supabase = supabaseAdmin()
+  const { data } = await supabase.from("raw_news").select("*").eq("id", t.id).maybeSingle()
+  if (!data) return null
+  if (!pedido.investigar) return data as RawNews
+  const { count } = await supabase.from("news_sources").select("id", { count: "exact", head: true }).eq("raw_news_id", t.id)
+  return count ? (data as RawNews) : null
+}
+
 /** Investiga el tema y deja lista su fila. Devuelve la noticia para encolar el angulo. */
 export async function prepararMaterial(t: TrabajoChat, pedido: PedidoPieza): Promise<RawNews> {
+  const previo = await yaInvestigado(t, pedido)
+  if (previo) return previo
+
   let contenido = pedido.enfoque
   let link = `chat://${t.id}`
   let fuente = "Pedido del chat"

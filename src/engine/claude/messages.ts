@@ -345,6 +345,8 @@ const MAX_VUELTAS = 6
 export async function conversarConHerramientas(
   opciones: LlamadaClaude & {
     alTexto: (trozo: string) => void
+    /** Lo dicho hasta aqui era preambulo a una herramienta: quien lo enseña lo quita. */
+    alDescartar: () => void
     herramientas: Herramienta[]
     ejecutar: (nombre: string, entrada: unknown) => Promise<ResultadoHerramienta>
     /** Desde cuando (ms) ya no se le deja pedir mas: la ruta tiene 300 s. */
@@ -362,7 +364,12 @@ export async function conversarConHerramientas(
     primerMensaje(opciones),
   ]
   const total: UsoClaude = { entrada: 0, salida: 0, deCache: 0 }
-  let acumulado = ""
+  // La respuesta es lo ultimo que dice. Lo de antes de una herramienta es el
+  // agente pensando en voz alta ("voy a buscar", "dijo cuantas, asi que las
+  // creo"), y una regla en el contrato no alcanza para que no lo haga. Queda de
+  // respaldo por si despues de la herramienta no dice nada.
+  let ultimo = ""
+  let dicho = ""
 
   try {
     for (let vuelta = 1; ; vuelta++) {
@@ -383,16 +390,11 @@ export async function conversarConHerramientas(
       if (!response.ok) return { ok: false, error: mensajeDeError(response.status, await response.text()) }
       if (!response.body) return { ok: false, error: "Claude no devolvió respuesta." }
 
-      // Lo de cada vuelta se separa de lo anterior como un parrafo aparte.
-      let empezo = false
-      const datos = await leerStream(response.body, (t) => {
-        if (!empezo && acumulado) opciones.alTexto("\n\n")
-        empezo = true
-        opciones.alTexto(t)
-      })
+      const datos = await leerStream(response.body, opciones.alTexto)
 
       const texto = textoDe(datos.content)
-      if (texto) acumulado = acumulado ? `${acumulado}\n\n${texto}` : texto
+      ultimo = texto
+      if (texto) dicho = dicho ? `${dicho}\n\n${texto}` : texto
       const uso = usoDe(datos.usage)
       total.entrada += uso.entrada
       total.salida += uso.salida
@@ -406,6 +408,7 @@ export async function conversarConHerramientas(
 
       const pedidas = datos.content.filter((b) => b.type === "tool_use")
       if (datos.stop_reason !== "tool_use" || !pedidas.length) break
+      opciones.alDescartar()
 
       const resultados = await Promise.all(
         pedidas.map(async (b) => {
@@ -421,8 +424,8 @@ export async function conversarConHerramientas(
       mensajes.push({ role: "assistant", content: datos.content }, { role: "user", content: resultados })
     }
 
-    if (!acumulado) return { ok: false, error: "Claude respondio sin texto." }
-    return { ok: true, texto: acumulado, uso: total }
+    if (!dicho) return { ok: false, error: "Claude respondio sin texto." }
+    return { ok: true, texto: ultimo || dicho, uso: total }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) }
   }

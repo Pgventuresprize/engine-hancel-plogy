@@ -7,6 +7,7 @@ import { prepararMaterial, TrabajoImposible } from "./investigar"
 import {
   actualizarTrabajos,
   angulosDe,
+  despachar,
   fallar,
   liberarColgados,
   pasarAPieza,
@@ -134,12 +135,4 @@ export async function correrPasada(o: { trabajoId: string; leaseId: string; desp
 
   await supabase.from("chat_trabajos").update(suelta).eq("id", t.id).eq("lease_id", o.leaseId)
   if (o.despachar !== false) await despachar(t.account_id)
-}
-
-/** Reparte los turnos libres de la marca. */
-export async function despachar(accountId: string): Promise<void> {
-  // Probando en local (scripts/pasada-chat.ts) los turnos los reparte el script.
-  if (process.env.CHAT_SIN_DESPACHO) return
-  const { error } = await supabaseAdmin().rpc("chat_despachar", { p_account: accountId })
-  if (error) console.error("[chat] No se pudieron repartir los turnos:", error.message)
 }

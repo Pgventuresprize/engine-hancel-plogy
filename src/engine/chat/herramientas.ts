@@ -2,8 +2,7 @@ import type { Herramienta, ResultadoHerramienta } from "../claude/messages"
 import { investigarEnLaWeb } from "../content/composio"
 import { dominio, leerPaginaConMotivo } from "../redaccion/fuentes"
 import type { ReferenciaFuente } from "./mensajes"
-import { despachar } from "./pasada"
-import { agentesApagados, empezarLote, type PedidoPieza, type RedChat } from "./trabajos"
+import { agentesApagados, despachar, empezarLote, type PedidoPieza, type RedChat } from "./trabajos"
 
 /**
  * Lo que un agente puede hacer en el chat ademas de hablar.

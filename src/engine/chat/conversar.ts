@@ -324,6 +324,8 @@ export async function responder(o: {
   alAplicar?: () => void
   /** Lo que esta haciendo el agente mientras no escribe: "Buscando: ...". */
   alHerramienta?: (detalle: string) => void
+  /** Lo escrito hasta aqui no era la respuesta: se quita de la pantalla. */
+  alDescartar?: () => void
 }): Promise<{ agente: AgenteChat; mensaje: Mensaje; aplicado: (Aplicado & { pieceId: string }) | null }> {
   const supabase = supabaseAdmin()
   const { data, error } = await supabase
@@ -419,6 +421,7 @@ export async function responder(o: {
           ...llamada,
           herramientas: HERRAMIENTAS_CHAT,
           ejecutar: ejecutorDe(turno),
+          alDescartar: o.alDescartar ?? (() => {}),
           hasta: Date.now() + PLAZO_TURNO_MS,
         })
 

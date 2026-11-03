@@ -52,6 +52,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           alTexto: (t) => enviar({ tipo: "texto", t }),
           alAplicar: () => enviar({ tipo: "aplicando" }),
           alHerramienta: (detalle) => enviar({ tipo: "herramienta", detalle }),
+          alDescartar: () => enviar({ tipo: "descartar" }),
         })
         enviar({ tipo: "fin", ...(aplicado ? { pieza: { id: aplicado.pieceId, tocadas: aplicado.tocadas, version: aplicado.version } } : {}) })
       } catch (e) {

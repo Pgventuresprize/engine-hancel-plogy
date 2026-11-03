@@ -310,6 +310,8 @@ export function ChatApp(props: {
           } else if (e.tipo === "texto" && e.t) {
             const t = e.t
             setEnVivo((v) => (v ? { ...v, texto: v.texto + t, herramienta: null } : v))
+          } else if (e.tipo === "descartar") {
+            setEnVivo((v) => (v ? { ...v, texto: "" } : v))
           } else if (e.tipo === "herramienta") {
             const herramienta = e.detalle ?? null
             setEnVivo((v) => (v ? { ...v, herramienta } : v))

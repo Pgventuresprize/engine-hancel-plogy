@@ -43,6 +43,7 @@ async function main() {
     alAgente: (a) => console.log(`[${a}]`),
     alTexto: (t) => process.stdout.write(t),
     alHerramienta: (d) => console.log(`\n  · ${d}`),
+    alDescartar: () => console.log("\n  (preámbulo descartado)"),
   })
 
   const fuentes = mensaje.referencias.filter((r): r is ReferenciaFuente => r.tipo === "fuente")

@@ -357,6 +357,14 @@ export function avanceDeBuzon(agente: RedChat, tabla: Buzon, fila: FilaBuzon): A
  * de los que terminan y el arranque de los que esperaban. Devuelve las redes
  * recien encoladas, para disparar una pasada.
  */
+/** Reparte los turnos libres de la marca. */
+export async function despachar(accountId: string): Promise<void> {
+  // Probando en local (scripts/pasada-chat.ts) los turnos los reparte el script.
+  if (process.env.CHAT_SIN_DESPACHO) return
+  const { error } = await supabaseAdmin().rpc("chat_despachar", { p_account: accountId })
+  if (error) console.error("[chat] No se pudieron repartir los turnos:", error.message)
+}
+
 export async function actualizarTrabajos(filtro: { accountId?: string; conversacionId?: string } = {}): Promise<{ disparar: RedChat[] }> {
   const supabase = supabaseAdmin()
   let q = supabase.from("chat_trabajos").select("*").in("estado", ACTIVOS).order("created_at")
@@ -650,6 +658,6 @@ export async function reanudarConversacion(accountId: string, conversacionId: st
   }
   // Los que esperaban y no tenian buzon arrancan en la siguiente actualizacion.
   const siguiente = await actualizarTrabajos({ accountId, conversacionId })
-  if (detenidos.some((t) => t.carril === "chat")) await supabase.rpc("chat_despachar", { p_account: accountId })
+  if (detenidos.some((t) => t.carril === "chat")) await despachar(accountId)
   return { disparar: [...new Set([...disparar, ...siguiente.disparar])] }
 }
