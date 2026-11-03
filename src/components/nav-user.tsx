@@ -1,10 +1,11 @@
 "use client"
 
 import * as React from "react"
-import { CheckIcon, ChevronsUpDownIcon, LogOutIcon } from "lucide-react"
+import Link from "next/link"
+import { CheckIcon, ChevronsUpDownIcon, KeyRoundIcon, LogOutIcon } from "lucide-react"
 
 import { cambiarCuenta } from "@/app/cuenta/actions"
-import { cerrarSesion } from "@/app/login/actions"
+import { cerrarSesion } from "@/app/(acceso)/actions"
 import type { Cuenta } from "@/engine/accounts"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
@@ -116,6 +117,10 @@ export function NavUser({
 
             <DropdownMenuSeparator />
 
+            <DropdownMenuItem render={<Link href="/contrasena-nueva" />}>
+              <KeyRoundIcon />
+              Cambiar contraseña
+            </DropdownMenuItem>
             <DropdownMenuItem
               disabled={ocupado}
               onClick={() => startTransition(async () => void (await cerrarSesion()))}

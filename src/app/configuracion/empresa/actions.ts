@@ -4,9 +4,10 @@ import { revalidatePath } from "next/cache"
 
 import { cambiarCuenta } from "@/app/cuenta/actions"
 import type { Plan } from "@/engine/accounts"
-import { actualizarEmpresa, agregarMiembro, cambiarRol, crearEmpresa, quitarMiembro, type Rol } from "@/engine/empresas"
+import { actualizarEmpresa, agregarMiembro, cambiarRol, crearEmpresa, quitarMiembro, reenviarInvitacion, type Rol } from "@/engine/empresas"
 import { exigirOwner } from "@/lib/accounts"
 import { usuarioActual } from "@/lib/supabase/auth"
+import { origenDeLaPeticion } from "@/lib/supabase/origen"
 
 /**
  * La gestion de la empresa abierta (nombre, plan, miembros) y la creacion de
@@ -31,11 +32,30 @@ export async function guardarEmpresa(campos: { name: string; plan: Plan }): Prom
   return r.ok ? { ok: true, aviso: "Empresa guardada." } : r
 }
 
-export async function invitarMiembro(email: string, rol: Rol, password: string): Promise<Resultado> {
-  const r = await comoOwner((id) => agregarMiembro(id, email, rol, password || undefined))
+/**
+ * Invita por correo. El owner ya no pone contraseña: quien no tiene cuenta la
+ * elige desde el enlace de la invitacion, y nadie mas la conoce.
+ */
+export async function invitarMiembro(email: string, rol: Rol): Promise<Resultado> {
+  const volverA = `${await origenDeLaPeticion()}/auth/confirm`
+  const r = await comoOwner((id) => agregarMiembro(id, email, rol, volverA))
   revalidatePath("/configuracion/empresa")
   if (!r.ok) return r
-  return { ok: true, aviso: "creado" in r && r.creado ? "Usuario creado y añadido. Ya puede entrar con ese correo y contraseña." : "Añadido a la empresa." }
+  const correo = email.trim().toLowerCase()
+  return {
+    ok: true,
+    aviso:
+      "invitado" in r && r.invitado
+        ? `Le mandamos una invitación a ${correo}. Desde el enlace elige su contraseña y entra a esta empresa.`
+        : `${correo} ya tenía cuenta: ya puede entrar a esta empresa con su contraseña.`,
+  }
+}
+
+export async function reenviarInvitacionMiembro(userId: string): Promise<Resultado> {
+  const volverA = `${await origenDeLaPeticion()}/auth/confirm`
+  const r = await comoOwner((id) => reenviarInvitacion(id, userId, volverA))
+  if (!r.ok) return r
+  return { ok: true, aviso: "email" in r ? `Le volvimos a mandar la invitación a ${r.email}.` : "Invitación reenviada." }
 }
 
 export async function cambiarRolMiembro(userId: string, rol: Rol): Promise<Resultado> {

@@ -49,19 +49,15 @@ export async function cuentasDelUsuario(): Promise<CuentaConRol[]> {
  * La cuenta activa.
  *
  * Redirige a /login si no hay sesion, que es lo mismo que hace el resto del
- * dashboard. Si el usuario no pertenece a ninguna cuenta lanza: es un estado que
- * solo se da si alguien creo el usuario y olvido darle acceso, y fallar en claro
- * es mejor que enseñar un panel vacio que parece roto.
+ * dashboard. Si el usuario no pertenece a ninguna cuenta lo manda a
+ * /bienvenida, donde crea la suya: pasa si fallo crearla al confirmar el
+ * registro o si lo quitaron de la unica que tenia.
  */
 export async function cuentaActual(): Promise<CuentaConRol> {
   const cuentas = await cuentasDelUsuario()
   if (cuentas.length === 0) {
     const usuario = await usuarioActual()
-    if (!usuario) redirect("/login")
-    throw new Error(
-      `El usuario ${usuario.email} no pertenece a ninguna cuenta. ` +
-        "Añadelo a una en account_members."
-    )
+    redirect(usuario ? "/bienvenida" : "/login")
   }
 
   const elegida = (await cookies()).get(COOKIE_CUENTA)?.value

@@ -9,11 +9,11 @@ import {
   invitarMiembro,
   nuevaEmpresa,
   quitarMiembroDeEmpresa,
+  reenviarInvitacionMiembro,
   type Resultado,
 } from "@/app/configuracion/empresa/actions"
 import type { Plan } from "@/engine/accounts"
 import type { Miembro, Rol } from "@/engine/empresas"
-import { CampoContrasena } from "@/components/auth/campo-contrasena"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -47,7 +47,6 @@ export function EmpresaAdmin({
   const [nombre, setNombre] = React.useState(empresa.name)
   const [plan, setPlan] = React.useState<Plan>(empresa.plan)
   const [correo, setCorreo] = React.useState("")
-  const [clave, setClave] = React.useState("")
   const [rol, setRol] = React.useState<Rol>("member")
   const [nuevaNombre, setNuevaNombre] = React.useState("")
   const [nuevaPlan, setNuevaPlan] = React.useState<Plan>("basic")
@@ -117,11 +116,17 @@ export function EmpresaAdmin({
           <div className="flex flex-col divide-y rounded-md border">
             {miembros.map((m) => (
               <div key={m.userId} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
-                <span className="text-sm">
+                <span className="flex flex-wrap items-center gap-2 text-sm">
                   {m.email}
                   {m.userId === yo ? <span className="text-muted-foreground"> (tú)</span> : null}
+                  {m.pendiente ? <Badge variant="outline">Invitación pendiente</Badge> : null}
                 </span>
                 <span className="flex items-center gap-2">
+                  {esOwner && m.pendiente ? (
+                    <Button variant="ghost" size="sm" disabled={pending} onClick={() => correr(() => reenviarInvitacionMiembro(m.userId))}>
+                      Reenviar
+                    </Button>
+                  ) : null}
                   {esOwner ? (
                     <div className="flex gap-1">
                       {(["owner", "member"] as Rol[]).map((r) => (
@@ -158,16 +163,13 @@ export function EmpresaAdmin({
 
           {esOwner ? (
             <div className="flex flex-col gap-3 rounded-md border border-dashed p-3">
-              <p className="text-sm font-medium">Añadir miembro</p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="m-correo">Correo</Label>
-                  <Input id="m-correo" type="email" value={correo} disabled={pending} onChange={(e) => setCorreo(e.target.value)} placeholder="persona@empresa.com" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="m-clave">Contraseña (solo si aún no tiene cuenta)</Label>
-                  <CampoContrasena id="m-clave" value={clave} disabled={pending} onChange={(e) => setClave(e.target.value)} placeholder="Mínimo 8 caracteres" />
-                </div>
+              <p className="text-sm font-medium">Invitar a alguien</p>
+              <p className="text-muted-foreground -mt-2 text-xs">
+                Si no tiene cuenta, le llega un correo para elegir su contraseña. Si ya la tiene, entra a esta empresa con la suya.
+              </p>
+              <div className="flex flex-col gap-1.5 sm:w-80">
+                <Label htmlFor="m-correo">Correo</Label>
+                <Input id="m-correo" type="email" value={correo} disabled={pending} onChange={(e) => setCorreo(e.target.value)} placeholder="persona@empresa.com" />
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {(["member", "owner"] as Rol[]).map((r) => (
@@ -179,15 +181,12 @@ export function EmpresaAdmin({
                   disabled={pending || !correo.trim()}
                   onClick={() =>
                     correr(
-                      () => invitarMiembro(correo, rol, clave),
-                      () => {
-                        setCorreo("")
-                        setClave("")
-                      }
+                      () => invitarMiembro(correo, rol),
+                      () => setCorreo("")
                     )
                   }
                 >
-                  Añadir
+                  Invitar
                 </Button>
               </div>
             </div>

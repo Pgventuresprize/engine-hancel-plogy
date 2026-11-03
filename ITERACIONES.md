@@ -613,3 +613,24 @@ Lo que quedó fuera de la fase 3 (marcar y editar desde el chat, 2026-11-01).
 - **Por qué esperó:** el modo por defecto ahora son las plantillas del kit. Un
   carrusel de diseño libre se marca por lámina entera y, al cambiar su texto,
   vuelve a las plantillas.
+
+## Acceso y cuentas
+
+Hecho en la rama `acceso` (2026-11-03): "¿Olvidaste tu contraseña?", registro con
+empresa propia en basic, invitaciones por correo y `/auth/confirm` para todos los
+enlaces. Lo que quedó para después:
+
+### Captcha en el registro
+- **Qué es:** Turnstile de Cloudflare en `/registro` y `/recuperar` (Supabase lo
+  acepta con `captchaToken`).
+- **Cuándo:** si llega spam. Mientras tanto, `REGISTRO_ABIERTO=no` lo cierra.
+
+### Entrar con un enlace y cambiar el correo
+- **Qué es:** "Entrar con un enlace" (enlace mágico) en el login y un formulario
+  para cambiar el correo desde la cuenta. `/auth/confirm` ya entiende los dos
+  tipos y las plantillas ya están.
+
+### Aviso a quien ya tenía cuenta
+- **Qué es:** cuando un owner agrega a alguien que ya tenía cuenta, hoy no le
+  llega ningún correo: ve la empresa nueva en el selector la próxima vez que
+  entra. Supabase no manda correos sueltos, así que haría falta Resend desde la app.
