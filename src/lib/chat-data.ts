@@ -110,7 +110,7 @@ export async function hiloDe(accountId: string, conversacionId: string): Promise
 
   // Las miniaturas: la portada de cada carrusel que el hilo enseña como tarjeta.
   const lista = (mensajes ?? []) as Mensaje[]
-  const piezas = [...new Set(lista.flatMap((m) => (m.referencias ?? []).filter((r) => r.red === "instagram").map((r) => r.pieceId)))]
+  const piezas = [...new Set(lista.flatMap((m) => (m.referencias ?? []).flatMap((r) => (r.tipo === "pieza" && r.red === "instagram" ? [r.pieceId] : []))))]
   const portada = new Map<string, string>()
   if (piezas.length) {
     const { data: filas } = await supabase.from("content_pieces").select("id, payload").eq("account_id", accountId).in("id", piezas)
@@ -139,7 +139,8 @@ export async function hiloDe(accountId: string, conversacionId: string): Promise
         autor: m.autor ? (autores.get(m.autor) ?? "Alguien del equipo") : null,
         contenido: m.contenido,
         noticia: m.noticia,
-        referencias: (m.referencias ?? []).map((r) => ({ ...r, miniatura: portada.get(r.pieceId) ?? null })),
+        referencias: (m.referencias ?? []).flatMap((r) => (r.tipo === "pieza" ? [{ ...r, miniatura: portada.get(r.pieceId) ?? null }] : [])),
+        fuentes: (m.referencias ?? []).filter((r) => r.tipo === "fuente"),
         marcas: (m.selecciones ?? []).map((x) => x.etiqueta),
         creado: m.created_at,
       })

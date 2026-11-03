@@ -29,6 +29,10 @@ const OAUTH_BETA = "oauth-2025-04-20"
  */
 const IDENTIDAD_CLAUDE_CODE = "You are Claude Code, Anthropic's official CLI for Claude."
 
+const SIN_TOKEN =
+  "No hay token de Claude configurado. Pegalo en la pantalla de configuracion " +
+  "(lo generas con `claude setup-token`)."
+
 /** El timeout es generoso: una generacion larga (un carrusel) puede tardar. */
 const TIMEOUT_MS = 120_000
 const TIMEOUT_MS_BUSQUEDA = 180_000
@@ -119,6 +123,23 @@ export type UsoClaude = { entrada: number; salida: number; deCache?: number }
 
 export type ResultadoClaude = { ok: true; texto: string; uso: UsoClaude } | { ok: false; error: string }
 
+/** Una herramienta propia: la ejecuta el motor, no Anthropic. */
+export type Herramienta = {
+  name: string
+  /** Cuando usarla, no solo que hace: es lo que le dice al modelo si le toca. */
+  description: string
+  input_schema: Record<string, unknown>
+  strict?: boolean
+}
+
+/** Lo que devuelve una herramienta. `error` le dice al modelo que no salio. */
+export type ResultadoHerramienta = { contenido: string; error?: boolean }
+
+/** Un bloque de la respuesta, tal como lo manda la API. Se reenvia sin tocarlo. */
+type BloqueApi = Record<string, unknown> & { type: string }
+
+type RespuestaApi = { content: BloqueApi[]; usage?: UsoApi; stop_reason?: string | null }
+
 /**
  * El token de Claude de una empresa. `null` si nadie lo ha pegado todavia.
  * Cada empresa usa el suyo: lo que gasta una no sale de la cuenta de otra.
@@ -156,21 +177,8 @@ async function anotarUso(
   }
 }
 
-/**
- * Pide una respuesta a Claude. No lanza: el fallo viaja en el resultado, igual
- * de sobra, para que un tropiezo no tumbe la pasada que ya hizo trabajo.
- */
-export async function llamarClaude(opciones: LlamadaClaude): Promise<ResultadoClaude> {
-  const token = await tokenClaude(opciones.accountId)
-  if (!token) {
-    return {
-      ok: false,
-      error:
-        "No hay token de Claude configurado. Pegalo en la pantalla de configuracion " +
-        "(lo generas con `claude setup-token`).",
-    }
-  }
-
+/** Las cabeceras y el sistema de una llamada: lo que no cambia entre vueltas. */
+function armarPeticion(opciones: LlamadaClaude, token: string) {
   // La API key de consola va por su cabecera propia; el token de suscripcion,
   // como Bearer con la beta de OAuth.
   const esApiKey = token.startsWith("sk-ant-api")
@@ -212,43 +220,74 @@ export async function llamarClaude(opciones: LlamadaClaude): Promise<ResultadoCl
   // de salida donde Sonnet usa 900).
   const piensaSiempre = opciones.model.includes("opus-5-5")
 
+  const cuerpo: Record<string, unknown> = {
+    model: opciones.model,
+    max_tokens: piensaSiempre ? Math.max(opciones.maxTokens * 2, 8000) : opciones.maxTokens,
+    // Sin razonamiento extendido. No es un ahorro cualquiera: el presupuesto
+    // de salida lo comparten el pensamiento y la respuesta, asi que un modelo
+    // que se pone a pensar largo agota el limite y devuelve el JSON cortado, o
+    // directamente ningun texto. Le paso eso al carrusel: gastaba los 3600
+    // tokens pensando y no escribia ni un caracter. Apagado, el mismo trabajo
+    // sale en 764 y el JSON llega entero. Estos agentes piden formato estricto
+    // a partir de material ya recolectado, que es justo lo que no necesita
+    // deliberacion larga.
+    //
+    // La familia 5.5 no acepta "disabled": ahi apagarlo se dice
+    // "between_tools" (no piensa antes de responder). Opus 5.5 tampoco acepta
+    // eso y va sin el campo (ver arriba).
+    ...(piensaSiempre
+      ? {}
+      : { thinking: opciones.model.includes("-5-5") ? { type: "between_tools" } : { type: "disabled" } }),
+    ...(opciones.esfuerzo ? { output_config: { effort: opciones.esfuerzo } } : {}),
+    system,
+  }
+  return { headers, cuerpo }
+}
+
+/** La vuelta del usuario: el prompt, con lo que tenga que mirar antes. */
+function primerMensaje(opciones: LlamadaClaude) {
+  return {
+    role: "user",
+    content:
+      opciones.imagenes?.length || opciones.bloques?.length
+        ? [
+            ...(opciones.imagenes ?? []).map((url) => ({ type: "image", source: { type: "url", url } })),
+            ...(opciones.bloques ?? []).map(aContenido),
+            { type: "text", text: opciones.prompt },
+          ]
+        : opciones.prompt,
+  }
+}
+
+const usoDe = (usage: UsoApi | undefined): UsoClaude => ({
+  entrada:
+    (usage?.input_tokens ?? 0) + (usage?.cache_creation_input_tokens ?? 0) + (usage?.cache_read_input_tokens ?? 0),
+  salida: usage?.output_tokens ?? 0,
+  deCache: usage?.cache_read_input_tokens ?? 0,
+})
+
+const textoDe = (bloques: BloqueApi[]): string =>
+  bloques
+    .filter((b) => b.type === "text" && typeof b.text === "string" && b.text)
+    .map((b) => b.text as string)
+    .join("")
+    .trim()
+
+/**
+ * Pide una respuesta a Claude. No lanza: el fallo viaja en el resultado, igual
+ * de sobra, para que un tropiezo no tumbe la pasada que ya hizo trabajo.
+ */
+export async function llamarClaude(opciones: LlamadaClaude): Promise<ResultadoClaude> {
+  const token = await tokenClaude(opciones.accountId)
+  if (!token) return { ok: false, error: SIN_TOKEN }
+
+  const { headers, cuerpo } = armarPeticion(opciones, token)
   const inicio = Date.now()
   try {
     const body: Record<string, unknown> = {
-      model: opciones.model,
-      max_tokens: piensaSiempre ? Math.max(opciones.maxTokens * 2, 8000) : opciones.maxTokens,
-      // Sin razonamiento extendido. No es un ahorro cualquiera: el presupuesto
-      // de salida lo comparten el pensamiento y la respuesta, asi que un modelo
-      // que se pone a pensar largo agota el limite y devuelve el JSON cortado, o
-      // directamente ningun texto. Le paso eso al carrusel: gastaba los 3600
-      // tokens pensando y no escribia ni un caracter. Apagado, el mismo trabajo
-      // sale en 764 y el JSON llega entero. Estos agentes piden formato estricto
-      // a partir de material ya recolectado, que es justo lo que no necesita
-      // deliberacion larga.
-      //
-      // La familia 5.5 no acepta "disabled": ahi apagarlo se dice
-      // "between_tools" (no piensa antes de responder). Opus 5.5 tampoco acepta
-      // eso y va sin el campo (ver arriba).
-      ...(piensaSiempre
-        ? {}
-        : { thinking: opciones.model.includes("-5-5") ? { type: "between_tools" } : { type: "disabled" } }),
-      ...(opciones.esfuerzo ? { output_config: { effort: opciones.esfuerzo } } : {}),
-      system,
+      ...cuerpo,
       ...(opciones.alTexto ? { stream: true } : {}),
-      messages: [
-        ...(opciones.historial ?? []).map((v) => ({ role: v.rol, content: v.texto })),
-        {
-          role: "user",
-          content:
-            opciones.imagenes?.length || opciones.bloques?.length
-              ? [
-                  ...(opciones.imagenes ?? []).map((url) => ({ type: "image", source: { type: "url", url } })),
-                  ...(opciones.bloques ?? []).map(aContenido),
-                  { type: "text", text: opciones.prompt },
-                ]
-              : opciones.prompt,
-        },
-      ],
+      messages: [...(opciones.historial ?? []).map((v) => ({ role: v.rol, content: v.texto })), primerMensaje(opciones)],
     }
     if (opciones.buscarWeb) {
       body.tools = [{ type: "web_search_20250305", name: "web_search", max_uses: opciones.maxBusquedas ?? 4 }]
@@ -267,24 +306,12 @@ export async function llamarClaude(opciones: LlamadaClaude): Promise<ResultadoCl
       return { ok: false, error: mensajeDeError(response.status, await response.text()) }
     }
 
-    const datos: { content?: { type: string; text?: string }[]; usage?: UsoApi } =
+    const datos: RespuestaApi =
       opciones.alTexto && response.body
         ? await leerStream(response.body, opciones.alTexto)
         : JSON.parse(await response.text())
-    const texto = (datos.content ?? [])
-      .filter((bloque) => bloque.type === "text" && bloque.text)
-      .map((bloque) => bloque.text)
-      .join("")
-      .trim()
-
-    const uso: UsoClaude = {
-      entrada:
-        (datos.usage?.input_tokens ?? 0) +
-        (datos.usage?.cache_creation_input_tokens ?? 0) +
-        (datos.usage?.cache_read_input_tokens ?? 0),
-      salida: datos.usage?.output_tokens ?? 0,
-      deCache: datos.usage?.cache_read_input_tokens ?? 0,
-    }
+    const texto = textoDe(datos.content ?? [])
+    const uso = usoDe(datos.usage)
     // Se anota aunque no haya texto: los tokens se gastaron igual.
     await anotarUso(opciones, uso, {
       cacheEscrita: datos.usage?.cache_creation_input_tokens ?? 0,
@@ -301,6 +328,106 @@ export async function llamarClaude(opciones: LlamadaClaude): Promise<ResultadoCl
   }
 }
 
+/** Cuantas vueltas puede dar un agente con herramientas antes de tener que responder. */
+const MAX_VUELTAS = 6
+
+/**
+ * Una respuesta con herramientas propias, en streaming: el modelo pide una
+ * herramienta, el motor la ejecuta y se le devuelve el resultado, hasta que
+ * responde. El texto de todas las vueltas se entrega seguido por `alTexto`.
+ *
+ * Lo que dijo el modelo se reenvia sin tocarlo, con su razonamiento y su firma:
+ * la API invalida el historial si cambia algo. Con la ultima vuelta o el plazo
+ * ya gastados se le quitan las herramientas (`tool_choice: none`), asi que
+ * siempre acaba respondiendo. Si la respuesta se corta, lo que pidio no se
+ * ejecuta: una herramienta con la entrada a medias podria crear lo que no es.
+ */
+export async function conversarConHerramientas(
+  opciones: LlamadaClaude & {
+    alTexto: (trozo: string) => void
+    herramientas: Herramienta[]
+    ejecutar: (nombre: string, entrada: unknown) => Promise<ResultadoHerramienta>
+    /** Desde cuando (ms) ya no se le deja pedir mas: la ruta tiene 300 s. */
+    hasta: number
+    maxVueltas?: number
+  }
+): Promise<ResultadoClaude> {
+  const token = await tokenClaude(opciones.accountId)
+  if (!token) return { ok: false, error: SIN_TOKEN }
+
+  const { headers, cuerpo } = armarPeticion(opciones, token)
+  const tope = opciones.maxVueltas ?? MAX_VUELTAS
+  const mensajes: unknown[] = [
+    ...(opciones.historial ?? []).map((v) => ({ role: v.rol, content: v.texto })),
+    primerMensaje(opciones),
+  ]
+  const total: UsoClaude = { entrada: 0, salida: 0, deCache: 0 }
+  let acumulado = ""
+
+  try {
+    for (let vuelta = 1; ; vuelta++) {
+      const ultima = vuelta >= tope || Date.now() >= opciones.hasta
+      const inicio = Date.now()
+      const response = await fetch(MESSAGES_URL, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          ...cuerpo,
+          stream: true,
+          tools: opciones.herramientas,
+          ...(ultima ? { tool_choice: { type: "none" } } : {}),
+          messages: mensajes,
+        }),
+        signal: AbortSignal.timeout(opciones.timeoutMs ?? TIMEOUT_MS),
+      })
+      if (!response.ok) return { ok: false, error: mensajeDeError(response.status, await response.text()) }
+      if (!response.body) return { ok: false, error: "Claude no devolvió respuesta." }
+
+      // Lo de cada vuelta se separa de lo anterior como un parrafo aparte.
+      let empezo = false
+      const datos = await leerStream(response.body, (t) => {
+        if (!empezo && acumulado) opciones.alTexto("\n\n")
+        empezo = true
+        opciones.alTexto(t)
+      })
+
+      const texto = textoDe(datos.content)
+      if (texto) acumulado = acumulado ? `${acumulado}\n\n${texto}` : texto
+      const uso = usoDe(datos.usage)
+      total.entrada += uso.entrada
+      total.salida += uso.salida
+      total.deCache = (total.deCache ?? 0) + (uso.deCache ?? 0)
+      await anotarUso(opciones, uso, {
+        cacheEscrita: datos.usage?.cache_creation_input_tokens ?? 0,
+        busquedas: 0,
+        ms: Date.now() - inicio,
+        sinTexto: !texto,
+      })
+
+      const pedidas = datos.content.filter((b) => b.type === "tool_use")
+      if (datos.stop_reason !== "tool_use" || !pedidas.length) break
+
+      const resultados = await Promise.all(
+        pedidas.map(async (b) => {
+          let r: ResultadoHerramienta
+          try {
+            r = await opciones.ejecutar(String(b.name), b.input)
+          } catch (e) {
+            r = { contenido: e instanceof Error ? e.message : String(e), error: true }
+          }
+          return { type: "tool_result", tool_use_id: b.id, content: r.contenido, ...(r.error ? { is_error: true } : {}) }
+        })
+      )
+      mensajes.push({ role: "assistant", content: datos.content }, { role: "user", content: resultados })
+    }
+
+    if (!acumulado) return { ok: false, error: "Claude respondio sin texto." }
+    return { ok: true, texto: acumulado, uso: total }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
 /** El uso tal como lo cuenta la API. */
 type UsoApi = {
   input_tokens?: number
@@ -312,18 +439,20 @@ type UsoApi = {
 
 /**
  * Lee una respuesta en streaming (eventos SSE de la API) y la devuelve con la
- * misma forma que la respuesta entera: el texto junto y el uso sumado. Cada
- * trozo de texto se entrega a `alTexto` en cuanto llega.
+ * misma forma que la respuesta entera: los bloques armados, el uso sumado y por
+ * que paro. Cada trozo de texto se entrega a `alTexto` en cuanto llega.
+ *
+ * Se conservan todos los bloques, no solo el texto: una herramienta necesita su
+ * entrada, y la vuelta siguiente tiene que devolver el razonamiento con su firma.
  */
-async function leerStream(
-  body: ReadableStream<Uint8Array>,
-  alTexto: (trozo: string) => void
-): Promise<{ content: { type: string; text: string }[]; usage: UsoApi }> {
+async function leerStream(body: ReadableStream<Uint8Array>, alTexto: (trozo: string) => void): Promise<RespuestaApi> {
   const lector = body.getReader()
   const decodificador = new TextDecoder()
   let pendiente = ""
-  let texto = ""
+  const bloques: BloqueApi[] = []
+  const entradas = new Map<number, string>()
   let usage: UsoApi = {}
+  let stop_reason: string | null = null
 
   const evento = (linea: string) => {
     if (!linea.startsWith("data:")) return
@@ -331,17 +460,30 @@ async function leerStream(
     if (!dato) return
     const e = JSON.parse(dato) as {
       type: string
+      index?: number
       message?: { usage?: UsoApi }
-      delta?: { type?: string; text?: string }
+      content_block?: BloqueApi
+      delta?: { type?: string; text?: string; partial_json?: string; thinking?: string; signature?: string; stop_reason?: string }
       usage?: UsoApi
       error?: { message?: string }
     }
+    const i = e.index ?? 0
     if (e.type === "message_start") usage = { ...e.message?.usage }
-    else if (e.type === "content_block_delta" && e.delta?.type === "text_delta" && e.delta.text) {
-      texto += e.delta.text
-      alTexto(e.delta.text)
-    } else if (e.type === "message_delta" && e.usage) usage = { ...usage, ...e.usage }
-    else if (e.type === "error") throw new Error(e.error?.message ?? "Claude cortó la respuesta.")
+    else if (e.type === "content_block_start" && e.content_block) bloques[i] = { ...e.content_block }
+    else if (e.type === "content_block_delta" && e.delta) {
+      const b = bloques[i]
+      if (e.delta.type === "text_delta" && e.delta.text) {
+        // Por si el arranque del bloque no llego: el texto no se puede perder.
+        if (b) b.text = `${(b.text as string | undefined) ?? ""}${e.delta.text}`
+        else bloques[i] = { type: "text", text: e.delta.text }
+        alTexto(e.delta.text)
+      } else if (e.delta.type === "input_json_delta") entradas.set(i, `${entradas.get(i) ?? ""}${e.delta.partial_json ?? ""}`)
+      else if (b && e.delta.type === "thinking_delta") b.thinking = `${(b.thinking as string | undefined) ?? ""}${e.delta.thinking ?? ""}`
+      else if (b && e.delta.type === "signature_delta") b.signature = `${(b.signature as string | undefined) ?? ""}${e.delta.signature ?? ""}`
+    } else if (e.type === "message_delta") {
+      if (e.usage) usage = { ...usage, ...e.usage }
+      stop_reason = e.delta?.stop_reason ?? stop_reason
+    } else if (e.type === "error") throw new Error(e.error?.message ?? "Claude cortó la respuesta.")
   }
 
   for (;;) {
@@ -357,7 +499,17 @@ async function leerStream(
   }
   if (pendiente) evento(pendiente)
 
-  return { content: [{ type: "text", text: texto }], usage }
+  for (const [i, json] of entradas) {
+    const b = bloques[i]
+    if (!b) continue
+    try {
+      b.input = JSON.parse(json || "{}")
+    } catch {
+      // Quien la ejecuta valida la entrada y le dice al modelo que no servia.
+      b.input = {}
+    }
+  }
+  return { content: bloques.filter(Boolean), usage, stop_reason }
 }
 
 /**

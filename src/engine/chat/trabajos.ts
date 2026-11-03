@@ -2,7 +2,7 @@ import { pedirPiezaDeAngulo } from "../content/pedir"
 import type { Revision } from "../content/revisor"
 import { parseEstadoLibre, type PasoLibre } from "../render/kit-libre-pasos"
 import { supabaseAdmin } from "../supabase-admin"
-import { escribirMensaje, type Referencia } from "./mensajes"
+import { escribirMensaje, type ReferenciaPieza } from "./mensajes"
 
 /**
  * Los trabajos del chat: lo que se ve como tarjeta de trabajo mientras un
@@ -325,7 +325,7 @@ async function fallar(t: TrabajoChat, motivo: string): Promise<TrabajoChat> {
 }
 
 /** Lo que dice el agente al terminar, con la tarjeta de su pieza. */
-export async function anuncioDePieza(accountId: string, pieceId: string, red: RedChat): Promise<{ texto: string; referencia: Referencia }> {
+export async function anuncioDePieza(accountId: string, pieceId: string, red: RedChat): Promise<{ texto: string; referencia: ReferenciaPieza }> {
   const supabase = supabaseAdmin()
   const [{ data: pieza }, { data: ultima }] = await Promise.all([
     supabase.from("content_pieces").select("payload").eq("id", pieceId).eq("account_id", accountId).maybeSingle(),

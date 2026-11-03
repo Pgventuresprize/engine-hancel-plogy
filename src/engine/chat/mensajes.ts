@@ -33,7 +33,7 @@ export type Seleccion = {
 }
 
 /** Lo que un mensaje enseña como tarjeta: una pieza lista, en una version. */
-export type Referencia = {
+export type ReferenciaPieza = {
   tipo: "pieza"
   pieceId: string
   red: "instagram" | "linkedin"
@@ -41,6 +41,11 @@ export type Referencia = {
   meta: string
   version: number | null
 }
+
+/** Una pagina de donde salio lo que dice el mensaje. */
+export type ReferenciaFuente = { tipo: "fuente"; url: string; titulo: string; medio: string }
+
+export type Referencia = ReferenciaPieza | ReferenciaFuente
 
 export type Mensaje = {
   id: string
