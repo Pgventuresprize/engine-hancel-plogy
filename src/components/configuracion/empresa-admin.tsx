@@ -13,6 +13,7 @@ import {
 } from "@/app/configuracion/empresa/actions"
 import type { Plan } from "@/engine/accounts"
 import type { Miembro, Rol } from "@/engine/empresas"
+import { CampoContrasena } from "@/components/auth/campo-contrasena"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -165,7 +166,7 @@ export function EmpresaAdmin({
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="m-clave">Contraseña (solo si aún no tiene cuenta)</Label>
-                  <Input id="m-clave" type="password" value={clave} disabled={pending} onChange={(e) => setClave(e.target.value)} placeholder="Mínimo 8 caracteres" />
+                  <CampoContrasena id="m-clave" value={clave} disabled={pending} onChange={(e) => setClave(e.target.value)} placeholder="Mínimo 8 caracteres" />
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">

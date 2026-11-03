@@ -3,6 +3,7 @@
 import * as React from "react"
 
 import { iniciarSesion, type LoginResult } from "@/app/login/actions"
+import { CampoContrasena } from "@/components/auth/campo-contrasena"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -65,10 +66,9 @@ export function LoginForm({
 
             <div className="grid gap-2">
               <Label htmlFor="password">Contraseña</Label>
-              <Input
+              <CampoContrasena
                 id="password"
                 name="password"
-                type="password"
                 autoComplete="current-password"
                 required
                 className="h-11 bg-white/85"
