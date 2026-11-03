@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic"
 // Generar la muestra de un estilo en Canva corre dentro de la accion y tarda.
 export const maxDuration = 300
 
-export const metadata = { title: "Capas · Engine Hancel" }
+export const metadata = { title: "Capas · Plogy Studio" }
 
 /**
  * Las capas del bloque 1: de que puede hablar el contenido y como.

@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic"
 // "Generar ahora" corre el agente de contenido dentro de la accion.
 export const maxDuration = 300
 
-export const metadata = { title: "Recetas · Engine Hancel" }
+export const metadata = { title: "Recetas · Plogy Studio" }
 
 /**
  * El bloque 2: que se produce con los cartuchos, y como se configuran los

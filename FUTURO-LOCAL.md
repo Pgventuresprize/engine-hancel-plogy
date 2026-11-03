@@ -1,7 +1,7 @@
 # Futuro local
 
 Notas de exploración (2026-10-19). **No hay nada implementado**: es lo que se
-entendió al comparar Hancel con `pomelli chimbo` (Content HB) y las preguntas que
+entendió al comparar Plogy Studio con `pomelli chimbo` (Content HB) y las preguntas que
 salieron. Sirve para retomar la decisión.
 
 ---
@@ -31,7 +31,7 @@ quiere, que todo corra en local.
   carpeta de datos, y `Job.result.paid` para no pagar dos veces.
 - Es de **una sola persona**, escucha en 127.0.0.1.
 
-## Cómo está Hancel hoy
+## Cómo está Plogy Studio hoy
 
 - `llamarClaude` (`src/engine/claude/messages.ts`) hace `fetch` a la Messages API
   con el token OAuth de la suscripción y le inyecta "You are Claude Code…".
@@ -73,7 +73,7 @@ extrae, analiza, genera ni publica a las horas programadas.
 - Base local → solo tú (127.0.0.1), salvo un túnel (cloudflared está instalado) y
   entonces el computador debe estar prendido.
 - Base en la nube → el equipo lo ve desde cualquier lado; el computador solo genera.
-- Pomelli es de un usuario; Hancel ya tiene cuentas, miembros y roles.
+- Pomelli es de un usuario; Plogy Studio ya tiene cuentas, miembros y roles.
 
 **¿Se puede usar el CLI con la app desplegada en Vercel?** No directamente: no hay
 `claude` ni sesión en las funciones, el disco no es persistente, hay límites de
@@ -83,7 +83,7 @@ extrae, analiza, genera ni publica a las horas programadas.
 Vercel (dashboard)  ──►  Base en la nube  ◄──  Máquina con el CLI (worker)
 ```
 
-Es el patrón buzón que Hancel ya tiene (`jobs_angle`, `jobs_linkedin`,
+Es el patrón buzón que Plogy Studio ya tiene (`jobs_angle`, `jobs_linkedin`,
 `jobs_instagram`), con el worker local en el papel que hacía la rutina en la nube.
 Costos: un solo ejecutor (apagar los crons de Vercel para los pasos de IA), los
 botones "generar ahora" del dashboard tendrían que encolar y esperar al worker, y el

@@ -1,4 +1,4 @@
-# Engine Hancel
+# Plogy Studio
 
 Motor de investigacion de contenido sobre tecnologia, IA, startups y venture
 capital. Investiga multiples fuentes, guarda los hechos en Supabase y produce
@@ -174,7 +174,7 @@ content_pieces        listo para revisar en /contenido
 ```
 
 La publicacion a LinkedIn **no** es parte de esta etapa: el pipeline termina en
-`generated` y la revision ocurre dentro de Hancel.
+`generated` y la revision ocurre dentro de Plogy Studio.
 
 ### El patron buzon
 

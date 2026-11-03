@@ -32,7 +32,7 @@ const mismaMarca = (a: Marca, b: Marca) =>
   a.pieceId === b.pieceId && a.lamina === b.lamina && (a.campo ?? null) === (b.campo ?? null) && (a.item ?? null) === (b.item ?? null)
 
 /**
- * La pantalla del chat con los agentes, el inicio de Hancel. Se ve y funciona
+ * La pantalla del chat con los agentes, el inicio de Plogy Studio. Se ve y funciona
  * como chat.html: barra superior, menu de funciones, panel de Conversaciones,
  * la portada "¿Que armamos hoy?" y la conversacion abierta.
  *

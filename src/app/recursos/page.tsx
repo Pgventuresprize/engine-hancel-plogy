@@ -5,7 +5,7 @@ import { getRecursos } from "@/lib/recursos-data"
 export const dynamic = "force-dynamic"
 export const maxDuration = 300
 
-export const metadata = { title: "Recursos · Engine Hancel" }
+export const metadata = { title: "Recursos · Plogy Studio" }
 
 /**
  * Los reportes y guias que promete el cierre de las piezas, todos juntos.
@@ -24,7 +24,7 @@ export default async function RecursosPage() {
           <h2 className="text-base font-medium">Reportes y guías</h2>
           <p className="text-muted-foreground text-sm">
             Lo que reciben por DM quienes comentan la palabra de una pieza. El agente de recursos los escribe antes que el carrusel cuando el CTA
-            tiene encendido «Hancel escribe el recurso de cada pieza» (Marca → CTA). Ninguna pieza que promete uno se publica antes que él.
+            tiene encendido «Plogy Studio escribe el recurso de cada pieza» (Marca → CTA). Ninguna pieza que promete uno se publica antes que él.
           </p>
         </div>
         {filas.length === 0 ? (

@@ -8,7 +8,7 @@ import { formatTokens } from "@/lib/format"
 
 export const dynamic = "force-dynamic"
 
-export const metadata = { title: "Consumo · Engine Hancel" }
+export const metadata = { title: "Consumo · Plogy Studio" }
 
 const RED: Record<string, string> = { instagram: "Carrusel", linkedin: "LinkedIn" }
 

@@ -48,7 +48,7 @@ export type CamposExtra = {
   tipo?: (typeof TIPOS_CTA)[number]
   requiere_recurso?: boolean
   recurso_listo?: boolean
-  /** El recurso lo escribe Hancel para cada pieza (agente de recursos). */
+  /** El recurso lo escribe Plogy Studio para cada pieza (agente de recursos). */
   recurso_por_pieza?: boolean
   activo?: boolean
 }

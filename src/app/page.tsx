@@ -9,7 +9,7 @@ import { usuarioActual } from "@/lib/supabase/auth"
 export const dynamic = "force-dynamic"
 
 /**
- * El inicio de Hancel: el chat con el equipo de agentes (chat.html). Va a
+ * El inicio de Plogy Studio: el chat con el equipo de agentes (chat.html). Va a
  * pantalla completa, sin el marco del dashboard: el resto de funciones se abre
  * desde su propio menu. La conversacion abierta va en `?c=`.
  */

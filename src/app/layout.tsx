@@ -24,8 +24,8 @@ const plogyDisplay = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Engine Hancel",
-  description: "Dashboard del research engine de noticias",
+  title: "Plogy Studio",
+  description: "El estudio de contenido de Plogy: agentes que investigan, escriben, diseñan y publican.",
 };
 
 export default function RootLayout({

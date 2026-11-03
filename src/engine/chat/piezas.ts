@@ -174,7 +174,7 @@ export async function vistaDePieza(accountId: string, pieceId: string): Promise<
     versiones: versiones.map((v) => ({
       n: v.n,
       motivo: v.motivo,
-      autor: v.autor_usuario ? (nombres.get(v.autor_usuario) ?? "Alguien del equipo") : AGENTE[v.autor_agente ?? ""] ?? "Hancel",
+      autor: v.autor_usuario ? (nombres.get(v.autor_usuario) ?? "Alguien del equipo") : AGENTE[v.autor_agente ?? ""] ?? "Plogy Studio",
       creada: v.created_at,
     })),
     restaurable: !f.published_at,

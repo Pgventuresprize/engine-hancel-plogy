@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic"
  */
 export const maxDuration = 60
 
-export const metadata = { title: "General · Engine Hancel" }
+export const metadata = { title: "General · Plogy Studio" }
 
 /**
  * Lo que vale para toda la cuenta y no pertenece a ningun agente.

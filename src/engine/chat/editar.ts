@@ -142,7 +142,7 @@ export async function modoDeEdicion(accountId: string, pieceId: string): Promise
 function porqueGuion(payload: Record<string, unknown>, kc: KitCargado | null): string {
   if (payload.modoDiseno === "inteligencia")
     return "Es de diseño con inteligencia: al cambiar el texto se vuelve a maquetar con las plantillas del kit."
-  if (!payload.maqueta) return "Es de antes de que Hancel guardara cómo se maquetó: al cambiar el texto se vuelve a maquetar y puede cambiar alguna plantilla o foto."
+  if (!payload.maqueta) return "Es de antes de que Plogy Studio guardara cómo se maquetó: al cambiar el texto se vuelve a maquetar y puede cambiar alguna plantilla o foto."
   if (!kc) return "La marca no tiene un kit activo."
   return "Se hizo con otra versión del kit: al cambiar el texto se vuelve a maquetar con el de ahora."
 }

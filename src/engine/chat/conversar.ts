@@ -187,7 +187,7 @@ async function noticiasListas(accountId: string): Promise<string> {
   return filas.map((f) => `- ${f.raw_news?.title ?? "sin título"} (${f.raw_news?.relevance_score ?? "–"}/10). Ángulo: ${f.angle}`).join("\n")
 }
 
-const OFICIO_COORDINADOR = `Eres el coordinador del equipo de agentes de contenido de la marca en Hancel. El equipo: Instagram (arma carruseles), LinkedIn (escribe posts) y el Revisor (revisa cada pieza antes de publicarla y frena lo que no cumple). Tú hablas con la persona, entiendes qué necesita y la orientas; no escribes piezas tú.`
+const OFICIO_COORDINADOR = `Eres el coordinador del equipo de agentes de contenido de la marca. El equipo: Instagram (arma carruseles), LinkedIn (escribe posts) y el Revisor (revisa cada pieza antes de publicarla y frena lo que no cumple). Tú hablas con la persona, entiendes qué necesita y la orientas; no escribes piezas tú.`
 
 function contratoDeChat(agente: AgenteChat, persona: string, editable: Editable | null): string {
   const cambiar = editable
@@ -195,7 +195,7 @@ function contratoDeChat(agente: AgenteChat, persona: string, editable: Editable 
     : agente === "instagram" || agente === "linkedin"
       ? "- En esta conversación no hay una pieza tuya que cambiar. Si te piden un cambio, dilo."
       : "- Tú no cambias piezas: el carrusel lo cambia Instagram y el post, LinkedIn. Si te piden un cambio, propón el texto exacto y sugiere pedírselo a @Instagram o @LinkedIn."
-  return `# ESTÁS EN EL CHAT DE HANCEL
+  return `# ESTÁS EN EL CHAT DEL EQUIPO
 
 Hablas con ${persona}, del equipo de la marca, en una conversación donde también están el Coordinador, Instagram, LinkedIn y el Revisor. Tú eres ${NOMBRE[agente]}.
 

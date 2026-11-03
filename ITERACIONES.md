@@ -94,7 +94,7 @@ Al retomar uno, se detalla como bloque antes de construir.
 - **Cautelas:**
   - el chiste nace de la marca, no de copiar el meme de moda de otro;
   - las plantillas de memes conocidos y las caras reales tienen derechos;
-  - Hancel es genérico: cada marca decide en su kit si el formato le va y con
+  - Plogy Studio es genérico: cada marca decide en su kit si el formato le va y con
     qué tono, nada fijo de Plogy en el motor;
   - el revisor actual mide piezas informativas; el humor necesita otra vara
     (que se entienda sin explicar, que no falte a nadie, que no invente datos).
@@ -194,7 +194,7 @@ Al retomar uno, se detalla como bloque antes de construir.
 - **Qué es:** que los carruseles de Plogy salgan visualmente como los de
   `PLOGY_Carousel_Agent_Kit\piezas\visor.html`, tal cual: su estética, su
   layout, sus láminas de dato, listas, tablas, citas y cierre de vidrio sobre
-  foto. El texto sigue con lo que ya tiene Hancel (revisor, receta, ejemplos,
+  foto. El texto sigue con lo que ya tiene Plogy Studio (revisor, receta, ejemplos,
   CTA por pieza). Es la meta del Paso 4 (plantilla editorial).
 - **Cómo (decidido 2026-10-20):** no se configura a mano. La plantilla "plogy"
   de hoy no sirve. El importador analiza las piezas que la marca ya tiene
@@ -224,7 +224,7 @@ Al retomar uno, se detalla como bloque antes de construir.
   cierre de comentar) deja la lámina sin plantilla en ese modo.
 - **Por qué esperó:** hoy cada marca sube su kit; las de fábrica son un
   trabajo de diseño aparte.
-- **Cuándo:** antes de abrir Hancel a otras marcas.
+- **Cuándo:** antes de abrir Plogy Studio a otras marcas.
 
 ### Diseño con inteligencia a pedido desde la ficha
 - **Qué es:** en la ficha, «Regenerar → Con inteligencia» solo redibuja desde
@@ -294,12 +294,12 @@ Al retomar uno, se detalla como bloque antes de construir.
 ## Reportes y guías como los del kit
 
 Revisión del 2026-10-22 de cómo hace el kit los reportes (`plogy carruseles\
-PLOGY_Carousel_Agent_Kit`, piezas 003 a 018) y de qué tiene Hancel para hacerlos.
+PLOGY_Carousel_Agent_Kit`, piezas 003 a 018) y de qué tiene Plogy Studio para hacerlos.
 
-**Estado (2026-10-24): R1, R2, R3 y la parte de R5 que es de Hancel, construidos.**
+**Estado (2026-10-24): R1, R2, R3 y la parte de R5 que es de Plogy Studio, construidos.**
 - **Dónde vive.** El agente "recursos" está en `src/engine/recursos/`; la migración
   es `2026-10-24-recursos.sql`.
-- **Cuándo actúa.** Entra cuando el CTA del ángulo tiene "Hancel escribe el recurso
+- **Cuándo actúa.** Entra cuando el CTA del ángulo tiene "Plogy Studio escribe el recurso
   de cada pieza" (`content_ctas.recurso_por_pieza`). Va antes del carrusel y del post.
 - **Etapas:** registro de verificación con Sonnet, reporte o guía en bloques
   rotulados con Opus, revisor con rúbrica y hasta 2 vueltas.
@@ -385,9 +385,9 @@ Sigue pendiente:
   - `CALIBRACION.md` no tiene ningún veredicto humano.
 
   Las reglas están repartidas entre el documento de flujo y las piezas, y hay
-  que juntarlas antes de llevarlas a Hancel.
+  que juntarlas antes de llevarlas a Plogy Studio.
 
-### Qué tiene Hancel y qué le falta
+### Qué tiene Plogy Studio y qué le falta
 - **Lo que ya sirve:**
   - la investigación de la redacción (`redaccion/fuentes.ts`), con la fuente
     clasificada en primaria, parte interesada o medio;
@@ -529,13 +529,13 @@ que costo.
 
 ### Biblioteca de skills de plataforma
 - **Qué es:** skills base que las empresas copian y adaptan.
-- **Cuándo:** cuando haya más de una marca usando Hancel en serio.
+- **Cuándo:** cuando haya más de una marca usando Plogy Studio en serio.
 
 ### Flujo de CTA con reporte por DM
 - **Qué es:** "Comenta PALABRA", DM en dos mensajes y un reporte web, como en
   las piezas 003 a 005 del kit. Documentado, sin construir.
 - **Cuándo:** Luciano lo pidió el 2026-10-24.
-- **Qué hace ya Hancel:** escribe el reporte y los textos de los dos DM.
+- **Qué hace ya Plogy Studio:** escribe el reporte y los textos de los dos DM.
 - **Qué falta:**
   - **Web de Plogy:** que reciba `recurso.*` y devuelva la URL;
   - **Envío del DM:** elegir la herramienta y configurar la palabra de cada pieza.

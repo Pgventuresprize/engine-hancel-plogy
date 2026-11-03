@@ -13,7 +13,7 @@ export const maxDuration = 300
  * La respuesta de un agente al ultimo mensaje de la conversacion, mientras se
  * escribe. Una linea JSON por evento: quien contesta, cada trozo de texto, que
  * esta aplicando un cambio en su pieza y el final, con las laminas que cambio
- * (o el error). Despues, si toca, Hancel le pone nombre a la conversacion.
+ * (o el error). Despues, si toca, Plogy Studio le pone nombre a la conversacion.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const [sesion, usuario] = await Promise.all([sesionChat(), usuarioActual()])

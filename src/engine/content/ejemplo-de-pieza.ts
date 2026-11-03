@@ -66,7 +66,7 @@ export async function guardarPiezaComoEjemplo(accountId: string, pieceId: string
     pilar_id: clasificacion?.pilar?.id ?? null,
     cta_tipo: (clasificacion?.cta?.tipo || null) as CamposEjemplo["cta_tipo"],
     objetivo: clasificacion?.objetivo ?? null,
-    origen: "pieza de Hancel",
+    origen: "pieza de Plogy Studio",
     activo: true,
   }
   return guardarEjemplo(accountId, null, campos)

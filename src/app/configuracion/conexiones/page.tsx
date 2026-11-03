@@ -16,7 +16,7 @@ import { cuentaActual } from "@/lib/accounts"
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
 
-export const metadata = { title: "Conexiones · Engine Hancel" }
+export const metadata = { title: "Conexiones · Plogy Studio" }
 
 /**
  * Con que habla el motor, para la empresa abierta: cada empresa tiene sus

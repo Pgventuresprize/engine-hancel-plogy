@@ -21,7 +21,7 @@ export async function canvaMcp<T = Record<string, unknown>>(
   timeoutMs = 90_000
 ): Promise<ResultadoMcp<T>> {
   // Las herramientas del MCP piden siempre una intencion: es para su registro.
-  return ejecutar<T>(accountId, "canva", tool, { user_intent: "Motor de contenido de Engine Hancel", ...args }, timeoutMs)
+  return ejecutar<T>(accountId, "canva", tool, { user_intent: "Motor de contenido de Plogy Studio", ...args }, timeoutMs)
 }
 
 // ------------------------------------------------------------------ tipos

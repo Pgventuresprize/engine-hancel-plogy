@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic"
 // minutos, no segundos.
 export const maxDuration = 300
 
-export const metadata = { title: "Video studio · Engine Hancel" }
+export const metadata = { title: "Video studio · Plogy Studio" }
 
 /**
  * Video studio: el pipeline de videos, a medias entre el agente y una persona.

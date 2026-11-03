@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic"
 // Importar ejemplos desde un archivo llama a Claude una vez por pieza.
 export const maxDuration = 300
 
-export const metadata = { title: "Marca · Engine Hancel" }
+export const metadata = { title: "Marca · Plogy Studio" }
 
 /**
  * Quien es la marca, como escribe, de que habla, que pide y como se ve.

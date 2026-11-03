@@ -6,7 +6,7 @@ import { usuarioActual } from "@/lib/supabase/auth"
 
 export const dynamic = "force-dynamic"
 
-export const metadata = { title: "Empresa · Engine Hancel" }
+export const metadata = { title: "Empresa · Plogy Studio" }
 
 /**
  * La empresa abierta: su nombre, su plan (basic o advance) y sus miembros, y

@@ -6,7 +6,7 @@ import { getIdeasPorPilar } from "@/lib/ideas-data"
 export const dynamic = "force-dynamic"
 export const maxDuration = 300
 
-export const metadata = { title: "Ideas · Engine Hancel" }
+export const metadata = { title: "Ideas · Plogy Studio" }
 
 /**
  * Los cartuchos: las ideas que produce el bloque 1.

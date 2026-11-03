@@ -7,7 +7,7 @@ import { getEstudio } from "@/lib/estudio-data"
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
 
-export const metadata = { title: "Estudio de pilares · Engine Hancel" }
+export const metadata = { title: "Estudio de pilares · Plogy Studio" }
 
 /**
  * El estudio del pipeline nuevo: lo que produce cada pilar.

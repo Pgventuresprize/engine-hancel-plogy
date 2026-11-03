@@ -9,11 +9,11 @@ equipo de agentes conversacionales. Nada de esto esta construido todavia.
 1. **Paso 0 — Investigar como se construyen las marcas** y dejarlo escrito
    como metodo, para cualquier tipo de marca.
 2. **Revisar con ese metodo** las decisiones de herencia marcadas abajo.
-3. **Fases 1 a 8:** la estructura en Hancel (personas, marcas hijas,
+3. **Fases 1 a 8:** la estructura en Plogy Studio (personas, marcas hijas,
    conexiones, autonomia).
 4. **Equipo de agentes conversacionales:** la interfaz principal donde se da
    direccion, se planea y se crea.
-5. **Estrategias para Plogy y sus marcas**, hechas dentro de Hancel, con el
+5. **Estrategias para Plogy y sus marcas**, hechas dentro de Plogy Studio, con el
    metodo y con el equipo de agentes.
 
 ## Que se quiere
@@ -158,7 +158,7 @@ casos reales, no de memoria.
 
 ### No solo marcas personales
 
-Hancel es multimarca, asi que el metodo tiene que servir para cualquier tipo de
+Plogy Studio es multimarca, asi que el metodo tiene que servir para cualquier tipo de
 marca: una parte comun y lo que cambia por tipo. Punto de partida, a validar
 con la investigacion:
 
@@ -184,11 +184,11 @@ con la investigacion:
 
 ### Que es
 
-La interfaz principal de Hancel: un espacio donde se conversa con un equipo de
+La interfaz principal de Plogy Studio: un espacio donde se conversa con un equipo de
 agentes para **dar direccion a las ideas, planear y crear contenido a partir de
 ellas**, dentro de la marca abierta.
 
-Hoy no existe nada parecido. Los agentes de Hancel son pasos del pipeline que
+Hoy no existe nada parecido. Los agentes de Plogy Studio son pasos del pipeline que
 corren por horario o a mano desde el tablero (`engine/agents/turno.ts`); no hay
 ninguno con el que se pueda hablar.
 
@@ -205,7 +205,7 @@ ninguno con el que se pueda hablar.
 
 ### Se habla con todos los agentes
 
-Desde la conversacion se puede hablar con **todos los agentes de Hancel**, no
+Desde la conversacion se puede hablar con **todos los agentes de Plogy Studio**, no
 solo con un equipo nuevo (pedido 2026-10-22). Cada agente del pipeline pasa a
 tener dos modos: el de siempre (corre solo, por horario o a mano) y el
 conversacional (se le pregunta, se le corrige, se le pide otra version).
@@ -315,7 +315,7 @@ Claude ronda los 40 a 50 s.
   cifras; una cifra que no está en la noticia ni en el carrusel no entra). Las marcas van como
   etiquetas numeradas sobre el campo de escribir; Esc las quita.
 - **Cambiar conversando:** Instagram y LinkedIn ven su pieza tal como se puede
-  cambiar y devuelven el cambio en un bloque que Hancel aplica: los huecos y
+  cambiar y devuelven el cambio en un bloque que Plogy Studio aplica: los huecos y
   "otra foto" se redibujan con las mismas plantillas; un carrusel sin maqueta se
   vuelve a maquetar desde su guion (y desde ahí ya tiene maqueta). Cada cambio
   deja versión; la primera vez se guarda cómo estaba. Las láminas tocadas
@@ -673,7 +673,7 @@ videos y la cadencia de ideas. Falta la aprobacion:
   las dos.
 - Conversaciones: ¿cuanto tiempo se guardan antes de limpiarlas? ¿Alguna es
   privada de quien la escribio, o todas son del equipo?
-- Tipos de marca: ¿con cuales arranca Hancel? La tabla del Paso 0 es un punto
+- Tipos de marca: ¿con cuales arranca Plogy Studio? La tabla del Paso 0 es un punto
   de partida.
 - La investigacion del Paso 0: ¿la hacemos en una sesion aparte, con fuentes, y
   sale como documento en el repo?

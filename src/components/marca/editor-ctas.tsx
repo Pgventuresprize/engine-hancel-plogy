@@ -193,7 +193,7 @@ function TarjetaCta({
             {v.requiere_recurso && porMensaje ? (
               <Interruptor
                 id={`porpieza-${cta.id}`}
-                label="Hancel escribe el recurso de cada pieza"
+                label="Plogy Studio escribe el recurso de cada pieza"
                 checked={v.recurso_por_pieza}
                 disabled={disabled}
                 onChange={(x) => cambiar({ recurso_por_pieza: x })}

@@ -32,7 +32,7 @@ const NAV: { nombre: string; url: string; d: React.ReactNode; sub?: boolean; adv
 ]
 
 /**
- * El menu de funciones que se abre desde la izquierda: el resto de Hancel y, al
+ * El menu de funciones que se abre desde la izquierda: el resto de Plogy Studio y, al
  * pie, la cuenta con el cambio de marca y la salida. Las secciones del plan
  * advance solo se ven en las marcas advance, como en la barra del dashboard.
  */

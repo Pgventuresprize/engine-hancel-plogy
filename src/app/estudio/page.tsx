@@ -24,7 +24,7 @@ export const maxDuration = 300
 
 
 export const metadata = {
-  title: "Estudio · Engine Hancel",
+  title: "Estudio · Plogy Studio",
 }
 
 const PIPELINES = [

@@ -31,7 +31,7 @@ async function cambiar(id: string, cambios: Record<string, unknown>, soloEn: "ac
   }
 }
 
-/** Pone el nombre a mano: desde ahi Hancel ya no lo cambia solo. */
+/** Pone el nombre a mano: desde ahi Plogy Studio ya no lo cambia solo. */
 export async function renombrarConversacion(id: string, titulo: string): Promise<Resultado> {
   const limpio = titulo.replace(/\s+/g, " ").trim().slice(0, 120)
   if (!limpio) return { ok: false, error: "El nombre no puede quedar vacío." }

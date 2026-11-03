@@ -1,7 +1,7 @@
 import type { NoticiaAdjunta } from "@/engine/chat/mensajes"
 
 /**
- * El nombre que una conversacion lleva al instante, antes de que Hancel ponga
+ * El nombre que una conversacion lleva al instante, antes de que Plogy Studio ponga
  * uno mejor a partir de lo hablado. Lo usan el servidor al crearla y la
  * pantalla mientras espera la respuesta, para que no cambie al llegar.
  */

@@ -40,7 +40,7 @@ export function LinkedinConnection({
         <div>
           <CardTitle className="text-base">Cuenta de LinkedIn</CardTitle>
           <p className="text-muted-foreground mt-1 text-sm">
-            Hancel publica en el feed de esta cuenta, en tu nombre.
+            Plogy Studio publica en el feed de esta cuenta, en tu nombre.
           </p>
         </div>
         {status.connected ? (

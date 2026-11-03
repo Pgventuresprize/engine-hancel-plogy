@@ -385,7 +385,7 @@ export async function approvePiece(pieceId: string): Promise<ActionResult> {
   return setPieceStatus(pieceId, "approved")
 }
 
-/** Guarda el texto editado a mano. La revision vive dentro de Hancel. */
+/** Guarda el texto editado a mano. La revision vive dentro de Plogy Studio. */
 export async function updatePiece(form: FormData): Promise<ActionResult> {
   const pieceId = text(form, "piece_id")
   const body = text(form, "body")

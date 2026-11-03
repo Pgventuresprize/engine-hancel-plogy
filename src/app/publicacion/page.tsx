@@ -5,7 +5,7 @@ import { getPublicacion } from "@/lib/publicacion-data"
 
 export const dynamic = "force-dynamic"
 
-export const metadata = { title: "Publicación · Engine Hancel" }
+export const metadata = { title: "Publicación · Plogy Studio" }
 
 /**
  * El agente de publicacion del estudio: sus ajustes y el plan de hoy. Aparte
