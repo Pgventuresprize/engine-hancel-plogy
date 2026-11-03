@@ -115,6 +115,19 @@ export function TrabajoVista({ t }: { t: TrabajoUI }) {
       </div>
     )
   }
+  // Sin nadie delante en particular: el chat reparte los turnos.
+  if (t.estado === "espera") {
+    return (
+      <div className={s.waiting}>
+        <div className={cx(s.av, s.ghost)} style={{ color: a.color }}>
+          {a.letra}
+        </div>
+        <span style={{ fontSize: 13, color: "var(--ink3)" }}>
+          {t.agente === "revisor" ? "El Revisor dictamina cuando terminen las piezas" : `${t.titulo ?? a.nombre}: en cola`}
+        </span>
+      </div>
+    )
+  }
   const detenido = t.estado === "detenido"
   const pct = t.total ? Math.round((Math.min(t.paso, t.total) / t.total) * 100) : 0
   return (
@@ -137,7 +150,7 @@ export function TrabajoVista({ t }: { t: TrabajoUI }) {
               <span />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 500 }}>{t.etiqueta}</div>
+              <div style={{ fontSize: 13.5, fontWeight: 500 }}>{t.titulo ? `${t.titulo} · ${t.etiqueta}` : t.etiqueta}</div>
               <div className={s.bar}>
                 <i style={{ width: `${pct}%` }} />
               </div>

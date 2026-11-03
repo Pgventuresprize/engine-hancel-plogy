@@ -187,7 +187,7 @@ const palabrasClave = (t: string) =>
  * titular: el comunicado original suele estar entre ellas, y es la fuente mas
  * completa del hecho. Se piden algunas de mas porque hay medios que bloquean.
  */
-async function leerCitadas(busqueda: Busqueda, noticia: { title: string; link: string }): Promise<Citada[]> {
+export async function leerCitadas(busqueda: Busqueda, noticia: { title: string; link: string }): Promise<Citada[]> {
   if (!busqueda.ok) return []
   const titular = palabrasClave(noticia.title)
   const parecido = (titulo: string | null) => [...palabrasClave(titulo ?? "")].filter((w) => titular.has(w)).length

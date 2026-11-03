@@ -702,6 +702,10 @@ export async function runContentTick(
         continue
       }
 
+      // Se detuvo mientras se diseñaba: dibujar seria gastar en lo que ya no se quiere.
+      const { data: vigente } = await supabase.from("jobs_instagram").select("cancelado_at").eq("id", job.id).maybeSingle()
+      if ((vigente as { cancelado_at: string | null } | null)?.cancelado_at) continue
+
       const carrusel = await dePieza(() =>
         generarCarrusel(job.id, job.account_id, job.respuesta, news, estilo, nichos, destinos.includes("facebook"))
       )

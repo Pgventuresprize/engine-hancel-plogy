@@ -20,7 +20,9 @@
 --   rastro (un recurso consumido por una pasada que murio, por ejemplo).
 -- - chat_trabajos.reintentar_desde: espera tras agotar el limite del plan.
 --
--- Aditiva e idempotente. Lo existente queda en 'general' y sigue igual.
+-- Aditiva e idempotente. Lo existente queda en 'general' y sigue igual. El cron
+-- que recoge lo que quedo sin turno esta en scheduler.sql: se activa cuando la
+-- app ya tiene /api/chat/pasada desplegada.
 
 -- ------------------------------------------------------------------- carril
 
@@ -199,15 +201,3 @@ when (
   and new.carril = 'general'
 )
 execute function public.content_tick_on_row();
-
--- ---------------------------------------------------------------------- cron
-
--- Recoge lo que ninguna pasada dejo en marcha: una llamada perdida, una pasada
--- que murio, una espera que termino. Solo llama a la app si hay algo que hacer.
-do $$
-begin
-  perform cron.unschedule('engine_hancel_chat_despachar')
-  where exists (select 1 from cron.job where jobname = 'engine_hancel_chat_despachar');
-  perform cron.schedule('engine_hancel_chat_despachar', '* * * * *', 'select public.chat_despachar();');
-end;
-$$;

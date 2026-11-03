@@ -1,3 +1,4 @@
+import { ajustesDe } from "../agents/settings"
 import { pedirPiezaDeAngulo } from "../content/pedir"
 import type { Revision } from "../content/revisor"
 import { parseEstadoLibre, type PasoLibre } from "../render/kit-libre-pasos"
@@ -23,10 +24,34 @@ export type RedChat = "instagram" | "linkedin"
 export type EstadoTrabajo = "espera" | "trabajando" | "listo" | "detenido" | "fallo"
 type Buzon = "jobs_angle" | "jobs_recurso" | "jobs_linkedin" | "jobs_instagram"
 
+/** Una pieza pedida en el chat sobre un tema libre: lo que hace falta para empezarla. */
+export type PedidoPieza = {
+  red: RedChat
+  tema: string
+  /** Lo que pidio la persona de esta pieza: el enfoque, el publico, lo que debe decir. */
+  enfoque: string
+  /** Que buscar en internet. */
+  consulta: string
+  /** False cuando sale de lo que sabe la marca y no hay nada que buscar. */
+  investigar: boolean
+}
+
+/** Por donde va una pieza del chat. */
+export type FaseTrabajo = "investigar" | "angulo" | "pieza"
+
 export type TrabajoChat = {
   id: string
   account_id: string
   conversacion_id: string
+  carril: "general" | "chat"
+  fase: FaseTrabajo | null
+  pedido: PedidoPieza | null
+  titulo: string | null
+  raw_news_id: string | null
+  lease_id: string | null
+  lease_hasta: string | null
+  fallos: number
+  vence_at: string | null
   mensaje_id: string | null
   agente: RedChat | "revisor"
   tipo: "crear" | "editar" | "revisar"
@@ -100,6 +125,124 @@ export async function empezarTrabajos(opciones: {
   return { trabajos, disparar }
 }
 
+/** Lo que un trabajo del chat suma antes de la pieza: investigar y decidir el angulo. */
+const PASOS_PREVIOS = 2
+/** Turnos seguidos sin avanzar antes de darlo por fallido (como en chat_despachar). */
+const MAX_FALLOS = 4
+
+/**
+ * Las piezas de un pedido sobre temas libres, con el revisor al final. No van en
+ * fila: cada una es independiente y las reparte chat_despachar, hasta tres a la
+ * vez. Quien llama despacha despues.
+ */
+export async function empezarLote(o: {
+  accountId: string
+  conversacionId: string
+  mensajeId: string
+  piezas: PedidoPieza[]
+}): Promise<TrabajoChat[]> {
+  const comun = { account_id: o.accountId, conversacion_id: o.conversacionId, mensaje_id: o.mensajeId, carril: "chat", estado: "espera" }
+  const filas = [
+    ...o.piezas.map((p) => {
+      const a = avanceInicial(p.red)
+      return {
+        ...comun,
+        agente: p.red,
+        tipo: "crear",
+        fase: "investigar",
+        pedido: p,
+        titulo: p.tema,
+        paso: 0,
+        total: a.total + PASOS_PREVIOS,
+        etiqueta: p.investigar ? "Investigando el tema" : "Preparando el tema",
+        unidad: "Paso",
+      }
+    }),
+    { ...comun, agente: "revisor", tipo: "revisar", ...avanceInicial("revisor") },
+  ]
+  // De una sola vez: el revisor no puede ver un pedido a medio crear y dictaminar.
+  // Con su hora escalonada: en la misma transaccion todas tendrian la misma, y el
+  // orden de las tarjetas y que el revisor vaya el ultimo saldrian de la suerte.
+  const base = Date.now()
+  const conHora = filas.map((f, i) => ({ ...f, created_at: new Date(base + i).toISOString() }))
+  const { data, error } = await supabaseAdmin().from("chat_trabajos").insert(conHora).select("*")
+  if (error) throw new Error(`No se pudieron crear los trabajos: ${error.message}`)
+  return (data ?? []) as TrabajoChat[]
+}
+
+/** Si los agentes que hacen la pieza estan en servicio. Apagados no corren ni a mano. */
+export async function agentesApagados(accountId: string, redes: RedChat[]): Promise<string[]> {
+  const nombres: { agente: "angulo" | RedChat; nombre: string }[] = [
+    { agente: "angulo", nombre: "Ángulo" },
+    ...[...new Set(redes)].map((r) => ({ agente: r, nombre: r === "instagram" ? "Instagram" : "LinkedIn" })),
+  ]
+  const ajustes = await Promise.all(nombres.map((n) => ajustesDe(accountId, n.agente)))
+  return nombres.filter((_, i) => !ajustes[i].enabled).map((n) => n.nombre)
+}
+
+/** Lo que dejo el agente de angulo para un trabajo: el primero, o por que no hay. */
+export async function angulosDe(t: TrabajoChat): Promise<{ primero: string | null; fallo: string | null }> {
+  const supabase = supabaseAdmin()
+  const { data } = await supabase
+    .from("content_angles")
+    .select("id")
+    .eq("account_id", t.account_id)
+    .eq("raw_news_id", t.raw_news_id ?? t.id)
+    .order("position")
+    .limit(1)
+    .maybeSingle()
+  const angulo = (data as { id: string } | null)?.id ?? null
+  if (angulo) return { primero: angulo, fallo: null }
+  if (!t.job_id) return { primero: null, fallo: null }
+  const { data: fila } = await supabase.from("jobs_angle").select("status, error, consumed_at").eq("id", t.job_id).maybeSingle()
+  const job = fila as { status: string; error: string | null; consumed_at: string | null } | null
+  if (job?.status === "failed") return { primero: null, fallo: job.error ?? "El agente de ángulo no pudo terminar." }
+  if (job?.consumed_at) return { primero: null, fallo: "El agente de ángulo no dejó ningún ángulo." }
+  return { primero: null, fallo: null }
+}
+
+/** Con el angulo decidido, encola la pieza de su red (o la enseña, si ya estaba). */
+export async function pasarAPieza(t: TrabajoChat, angleId: string): Promise<void> {
+  if (t.agente === "revisor") return
+  const existente = await piezaDe(t.account_id, angleId, t.agente)
+  if (existente) {
+    await marcarListo({ ...t, angle_id: angleId }, existente)
+    return
+  }
+  const encolado = await pedirPiezaDeAngulo(t.account_id, angleId, t.agente)
+  const a = avanceInicial(t.agente)
+  await supabaseAdmin()
+    .from("chat_trabajos")
+    .update({
+      fase: "pieza",
+      angle_id: angleId,
+      buzon: encolado.buzon,
+      job_id: encolado.id,
+      paso: PASOS_PREVIOS + 1,
+      etiqueta: a.etiqueta,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", t.id)
+    .eq("estado", "trabajando")
+}
+
+/**
+ * Devuelve a la cola lo que dejo a medias una pasada anterior. Lo hace quien
+ * tiene el turno, asi que nadie mas lo esta trabajando: sin esperar los seis
+ * minutos de reclamarColgados, y sin riesgo de que dos agentes hagan lo mismo.
+ */
+export async function liberarColgados(t: TrabajoChat): Promise<void> {
+  const supabase = supabaseAdmin()
+  const libre = { status: "pending", processed_at: null }
+  if (t.fase === "angulo" && t.job_id) {
+    await supabase.from("jobs_angle").update(libre).eq("id", t.job_id).eq("status", "processing")
+  } else if (t.fase === "pieza" && t.angle_id) {
+    for (const tabla of ["jobs_recurso", "jobs_linkedin", "jobs_instagram"] as const) {
+      await supabase.from(tabla).update(libre).eq("content_angle_id", t.angle_id).eq("status", "processing")
+    }
+  }
+}
+
 /** Lo que dice la tarjeta antes de empezar. */
 function avanceInicial(agente: RedChat | "revisor"): Avance {
   if (agente === "revisor") return { paso: 0, total: 1, etiqueta: "Revisando las piezas", unidad: "Paso" }
@@ -162,10 +305,15 @@ type FilaBuzon = {
  * busca por angulo y no solo por el id guardado.
  */
 async function buzonDe(t: TrabajoChat): Promise<{ tabla: Buzon; fila: FilaBuzon } | null> {
+  const campos = "id, status, error, respuesta, consumed_at, cancelado_at, created_at"
+  // Antes de tener angulo solo hay su trabajo.
+  if (t.fase === "angulo" && t.job_id) {
+    const { data } = await supabaseAdmin().from("jobs_angle").select(campos).eq("id", t.job_id).maybeSingle()
+    return data ? { tabla: "jobs_angle", fila: data as FilaBuzon } : null
+  }
   if (t.agente === "revisor" || !t.angle_id) return null
   const supabase = supabaseAdmin()
   const tabla: Buzon = t.agente === "instagram" ? "jobs_instagram" : "jobs_linkedin"
-  const campos = "id, status, error, respuesta, consumed_at, cancelado_at, created_at"
   const { data: dePieza } = await supabase
     .from(tabla)
     .select(campos)
@@ -219,6 +367,7 @@ export async function actualizarTrabajos(filtro: { accountId?: string; conversac
 
   for (const t of (data ?? []) as TrabajoChat[]) {
     try {
+      if (await vencido(t)) continue
       if (t.estado === "trabajando") await seguir(t)
       else await soltarSiToca(t, disparar)
     } catch (e) {
@@ -226,6 +375,21 @@ export async function actualizarTrabajos(filtro: { accountId?: string; conversac
     }
   }
   return { disparar }
+}
+
+/** Un trabajo del chat que ya no va a salir: agoto sus turnos o su tiempo. Con turno vivo, aun no. */
+async function vencido(t: TrabajoChat): Promise<boolean> {
+  if (t.carril !== "chat" || t.agente === "revisor") return false
+  if (t.lease_hasta && new Date(t.lease_hasta).getTime() > Date.now()) return false
+  if (t.fallos >= MAX_FALLOS) {
+    await fallar(t, t.error ?? "Lo intenté varias veces y no pude terminar.")
+    return true
+  }
+  if (t.vence_at && new Date(t.vence_at).getTime() <= Date.now()) {
+    await fallar(t, "Llevaba demasiado tiempo sin terminar. Pídemela otra vez.")
+    return true
+  }
+  return false
 }
 
 async function seguir(t: TrabajoChat): Promise<void> {
@@ -238,7 +402,8 @@ async function seguir(t: TrabajoChat): Promise<void> {
   const b = await buzonDe(t)
   if (!b) return
   if (b.fila.cancelado_at) return
-  if (b.fila.status === "failed") {
+  // Un recurso fallido no tumba una pieza del chat: sale sin prometerlo.
+  if (b.fila.status === "failed" && !(t.carril === "chat" && b.tabla === "jobs_recurso")) {
     await fallar(t, b.fila.error ?? "El agente no pudo terminar.")
     return
   }
@@ -247,7 +412,9 @@ async function seguir(t: TrabajoChat): Promise<void> {
     await fallar(t, "El agente terminó pero la pieza no se pudo guardar. Mira el tablero.")
     return
   }
-  const a = avanceDeBuzon(t.agente, b.tabla, b.fila)
+  const previos = t.carril === "chat" ? PASOS_PREVIOS : 0
+  const delBuzon = avanceDeBuzon(t.agente, b.tabla, b.fila)
+  const a = { ...delBuzon, paso: delBuzon.paso + previos, total: delBuzon.total + previos }
   if (a.paso !== t.paso || a.etiqueta !== t.etiqueta) {
     await supabaseAdmin()
       .from("chat_trabajos")
@@ -259,7 +426,18 @@ async function seguir(t: TrabajoChat): Promise<void> {
 
 /** Arranca un trabajo en espera si el que va antes ya termino. */
 async function soltarSiToca(t: TrabajoChat, disparar: RedChat[]): Promise<void> {
-  if (t.despues_de) {
+  // Las piezas del chat las suelta chat_despachar, que lleva la cuenta de turnos.
+  if (t.carril === "chat" && t.agente !== "revisor") return
+  // El revisor va despues de todas las piezas de su pedido, sean una o seis.
+  if (t.agente === "revisor" && t.mensaje_id) {
+    const { data } = await supabaseAdmin()
+      .from("chat_trabajos")
+      .select("estado")
+      .eq("mensaje_id", t.mensaje_id)
+      .neq("agente", "revisor")
+    const hermanos = (data ?? []) as { estado: EstadoTrabajo }[]
+    if (hermanos.some((h) => h.estado !== "listo" && h.estado !== "fallo")) return
+  } else if (t.despues_de) {
     const { data } = await supabaseAdmin().from("chat_trabajos").select("estado").eq("id", t.despues_de).maybeSingle()
     const antes = (data as { estado: EstadoTrabajo } | null)?.estado
     // Sin el anterior (se borro) se sigue; con el anterior activo o detenido, se espera.
@@ -286,7 +464,7 @@ async function marcarListo(t: TrabajoChat, pieceId: string): Promise<TrabajoChat
     .maybeSingle()
   if (!data) return t
   if (t.agente !== "revisor") {
-    const { texto, referencia } = await anuncioDePieza(t.account_id, pieceId, t.agente)
+    const { texto, referencia } = await anuncioDePieza(t.account_id, pieceId, t.agente, t.titulo)
     await escribirMensaje({
       accountId: t.account_id,
       conversacionId: t.conversacion_id,
@@ -303,7 +481,7 @@ async function marcarListo(t: TrabajoChat, pieceId: string): Promise<TrabajoChat
   return data as TrabajoChat
 }
 
-async function fallar(t: TrabajoChat, motivo: string): Promise<TrabajoChat> {
+export async function fallar(t: TrabajoChat, motivo: string): Promise<TrabajoChat> {
   const { data } = await supabaseAdmin()
     .from("chat_trabajos")
     .update({ estado: "fallo", error: motivo.slice(0, 500), updated_at: new Date().toISOString() })
@@ -318,14 +496,14 @@ async function fallar(t: TrabajoChat, motivo: string): Promise<TrabajoChat> {
       conversacionId: t.conversacion_id,
       rol: "agente",
       agente: t.agente,
-      contenido: `No pude ${t.agente === "instagram" ? "armar el carrusel" : "escribir el post"}: ${motivo}`,
+      contenido: `No pude ${t.titulo ? `hacer "${t.titulo}"` : t.agente === "instagram" ? "armar el carrusel" : "escribir el post"}: ${motivo}`,
     })
   }
   return data as TrabajoChat
 }
 
 /** Lo que dice el agente al terminar, con la tarjeta de su pieza. */
-export async function anuncioDePieza(accountId: string, pieceId: string, red: RedChat): Promise<{ texto: string; referencia: ReferenciaPieza }> {
+export async function anuncioDePieza(accountId: string, pieceId: string, red: RedChat, titulo?: string | null): Promise<{ texto: string; referencia: ReferenciaPieza }> {
   const supabase = supabaseAdmin()
   const [{ data: pieza }, { data: ultima }] = await Promise.all([
     supabase.from("content_pieces").select("payload").eq("id", pieceId).eq("account_id", accountId).maybeSingle(),
@@ -336,14 +514,14 @@ export async function anuncioDePieza(accountId: string, pieceId: string, red: Re
   if (red === "instagram") {
     const laminas = Array.isArray(payload.images) ? payload.images.length : 0
     return {
-      texto: `Listo el carrusel: ${laminas} láminas.`,
-      referencia: { tipo: "pieza", pieceId, red, titulo: "Carrusel · Instagram", meta: `${laminas} láminas · 4:5${version ? ` · v${version}` : ""}`, version },
+      texto: `Listo ${titulo ? `"${titulo}"` : "el carrusel"}: ${laminas} láminas.`,
+      referencia: { tipo: "pieza", pieceId, red, titulo: titulo ?? "Carrusel · Instagram", meta: `${laminas} láminas · 4:5${version ? ` · v${version}` : ""}`, version },
     }
   }
   const parrafos = typeof payload.body === "string" ? payload.body.split(/\n\s*\n/).filter((p) => p.trim()).length : 0
   return {
-    texto: `Listo el post: ${parrafos} ${parrafos === 1 ? "párrafo" : "párrafos"}.`,
-    referencia: { tipo: "pieza", pieceId, red, titulo: "Post · LinkedIn", meta: `Borrador${version ? ` · v${version}` : ""}`, version },
+    texto: `Listo ${titulo ? `"${titulo}"` : "el post"}: ${parrafos} ${parrafos === 1 ? "párrafo" : "párrafos"}.`,
+    referencia: { tipo: "pieza", pieceId, red, titulo: titulo ?? "Post · LinkedIn", meta: `${titulo ? "Post · " : ""}Borrador${version ? ` · v${version}` : ""}`, version },
   }
 }
 
@@ -353,13 +531,15 @@ export async function anuncioDePieza(accountId: string, pieceId: string, red: Re
  */
 async function dictaminar(t: TrabajoChat): Promise<void> {
   const supabase = supabaseAdmin()
-  const { data: hermanos } = await supabase
-    .from("chat_trabajos")
-    .select("agente, piece_id")
-    .eq("mensaje_id", t.mensaje_id ?? "")
-    .neq("agente", "revisor")
-    .not("piece_id", "is", null)
-  const piezas = (hermanos ?? []) as { agente: RedChat; piece_id: string }[]
+  const { data: hermanos } = t.mensaje_id
+    ? await supabase
+        .from("chat_trabajos")
+        .select("agente, piece_id, titulo")
+        .eq("mensaje_id", t.mensaje_id)
+        .neq("agente", "revisor")
+        .not("piece_id", "is", null)
+    : { data: [] }
+  const piezas = (hermanos ?? []) as { agente: RedChat; piece_id: string; titulo: string | null }[]
 
   const { data: claim } = await supabase
     .from("chat_trabajos")
@@ -377,13 +557,13 @@ async function dictaminar(t: TrabajoChat): Promise<void> {
 
   const { data: filas } = await supabase.from("content_pieces").select("id, revision").in("id", piezas.map((p) => p.piece_id))
   const revisionDe = new Map(((filas ?? []) as { id: string; revision: Revision | null }[]).map((f) => [f.id, f.revision]))
-  const nombre = (red: RedChat) => (red === "instagram" ? "el carrusel" : "el post")
+  const nombre = (p: (typeof piezas)[number]) => (p.titulo ? `"${p.titulo}"` : p.agente === "instagram" ? "el carrusel" : "el post")
   const frenos: string[] = []
   let avisos = 0
   for (const p of piezas) {
     const r = revisionDe.get(p.piece_id)
     for (const h of r?.hallazgos ?? []) {
-      if (h.nivel === "frena") frenos.push(`${nombre(p.agente)}, ${h.donde}: ${h.detalle}`)
+      if (h.nivel === "frena") frenos.push(`${nombre(p)}, ${h.donde}: ${h.detalle}`)
       else avisos++
     }
   }
@@ -412,8 +592,9 @@ export async function detenerConversacion(accountId: string, conversacionId: str
   const ahora = new Date().toISOString()
   for (const t of detenidos) {
     const b = await buzonDe(t)
-    if (!b || b.fila.consumed_at) continue
-    await supabase.from(b.tabla).update({ consumed_at: ahora, cancelado_at: ahora }).eq("id", b.fila.id).is("consumed_at", null)
+    // El cancelado va siempre: un carrusel a medio diseñar puede estar reclamado
+    // o reabrirse solo, y esta marca es la que lo deja quieto.
+    if (b) await supabase.from(b.tabla).update({ consumed_at: b.fila.consumed_at ?? ahora, cancelado_at: ahora }).eq("id", b.fila.id)
   }
   return detenidos.length
 }
@@ -435,6 +616,18 @@ export async function reanudarConversacion(accountId: string, conversacionId: st
   const disparar: RedChat[] = []
   for (const t of detenidos) {
     const b = await buzonDe(t)
+    // Lo del chat vuelve a esperar su turno: quien lo tome limpia lo que quedo a
+    // medias (liberarColgados). Tocarlo aqui, con una pasada aun viva, haria que
+    // dos agentes escribieran lo mismo.
+    if (t.carril === "chat" && t.agente !== "revisor") {
+      if (b?.fila.cancelado_at) await supabase.from(b.tabla).update({ consumed_at: null, cancelado_at: null }).eq("id", b.fila.id)
+      await supabase
+        .from("chat_trabajos")
+        .update({ estado: "espera", fallos: 0, vence_at: null, reintentar_desde: null, updated_at: new Date().toISOString() })
+        .eq("id", t.id)
+        .eq("estado", "detenido")
+      continue
+    }
     if (b?.fila.cancelado_at) {
       // A medio procesar quedo 'processing' sin nadie: vuelve a 'pending'.
       await supabase
@@ -452,5 +645,6 @@ export async function reanudarConversacion(accountId: string, conversacionId: st
   }
   // Los que esperaban y no tenian buzon arrancan en la siguiente actualizacion.
   const siguiente = await actualizarTrabajos({ accountId, conversacionId })
+  if (detenidos.some((t) => t.carril === "chat")) await supabase.rpc("chat_despachar", { p_account: accountId })
   return { disparar: [...new Set([...disparar, ...siguiente.disparar])] }
 }

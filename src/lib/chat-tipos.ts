@@ -51,6 +51,8 @@ export type MensajeUI = {
 /** Una tarjeta de trabajo: lo que un agente esta haciendo, espera o dejo detenido. */
 export type TrabajoUI = {
   id: string
+  /** De que va, cuando un pedido tiene varias piezas. */
+  titulo: string | null
   agente: "instagram" | "linkedin" | "revisor"
   estado: Extract<EstadoTrabajo, "espera" | "trabajando" | "detenido">
   /** A quien espera, si esta en espera: "LinkedIn espera a que Instagram termine". */

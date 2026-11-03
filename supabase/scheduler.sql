@@ -257,14 +257,14 @@ drop trigger if exists jobs_angle_tick_trg on public.jobs_angle;
 create trigger jobs_angle_tick_trg
 after update of status on public.jobs_angle
 for each row
-when (old.status is distinct from new.status and new.status in ('done', 'failed'))
+when (old.status is distinct from new.status and new.status in ('done', 'failed') and new.carril = 'general')
 execute function public.content_tick_on_row();
 
 drop trigger if exists jobs_linkedin_tick_trg on public.jobs_linkedin;
 create trigger jobs_linkedin_tick_trg
 after update of status on public.jobs_linkedin
 for each row
-when (old.status is distinct from new.status and new.status in ('done', 'failed'))
+when (old.status is distinct from new.status and new.status in ('done', 'failed') and new.carril = 'general')
 execute function public.content_tick_on_row();
 
 -- El recurso (reporte o guia) va antes del carrusel: al terminar, el tick lo
@@ -280,8 +280,20 @@ for each row
 when (
   old.status is distinct from new.status
   and (new.status in ('done', 'failed') or (old.status = 'processing' and new.status = 'pending'))
+  and new.carril = 'general'
 )
 execute function public.content_tick_on_row();
+
+-- Los trabajos del chat: reparte turnos a lo que ninguna pasada dejo en marcha
+-- (una llamada perdida, una pasada que murio, una espera que termino). Solo llama
+-- a la app si hay algo que hacer. Necesita la migracion 2026-11-03-chat-lotes.
+do $chat$
+begin
+  perform cron.unschedule('engine_hancel_chat_despachar')
+  where exists (select 1 from cron.job where jobname = 'engine_hancel_chat_despachar');
+  perform cron.schedule('engine_hancel_chat_despachar', '* * * * *', 'select public.chat_despachar();');
+end;
+$chat$;
 
 -- El modo automatico: el agente de analisis marca 'analyzed' y aqui arranca la
 -- etapa 2. No se filtra por umbral ni por modo en el WHEN (una clausula WHEN no

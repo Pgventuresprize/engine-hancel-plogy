@@ -314,6 +314,8 @@ export async function disenoLibrePendiente(
       .from("jobs_instagram")
       .update({ respuesta, consumed_at: consumido ? new Date().toISOString() : null })
       .eq("id", job.id)
+      // Detenido a mitad: reabrirlo aqui deshacia el "Detener".
+      .is("cancelado_at", null)
     if (error) throw new Error(`No se pudo guardar el diseño: ${error.message}`)
   }
 

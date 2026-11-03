@@ -96,6 +96,7 @@ export async function hiloDe(accountId: string, conversacionId: string): Promise
       const antes = t.despues_de ? porId.get(t.despues_de) : undefined
       return {
         id: t.id,
+        titulo: t.titulo,
         agente: t.agente,
         estado: t.estado as TrabajoUI["estado"],
         esperaA: t.estado === "espera" && antes && (antes.estado === "espera" || antes.estado === "trabajando") ? antes.agente : null,

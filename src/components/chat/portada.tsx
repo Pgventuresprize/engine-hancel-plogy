@@ -106,7 +106,7 @@ export function Portada(props: {
             id="mensaje-portada"
             ref={campo}
             rows={3}
-            placeholder="Pide un carrusel, un post o una revisión…"
+            placeholder="Pide carruseles o posts sobre cualquier tema, o que investigue algo…"
             value={texto}
             onChange={(e) => {
               setTexto(e.target.value)
