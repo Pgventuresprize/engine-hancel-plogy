@@ -81,7 +81,7 @@ export function NavUser({
                     <AvatarFallback>{inicial}</AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-medium">Hancel</span>
+                    <span className="truncate font-medium">{cuenta.name}</span>
                     <span className="truncate text-xs">{email}</span>
                   </div>
                 </div>

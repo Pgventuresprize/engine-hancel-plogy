@@ -21,7 +21,7 @@ export default async function RecursosPage() {
     <DashboardShell title="Recursos">
       <div className="flex max-w-4xl flex-col gap-4">
         <div>
-          <h1 className="text-base font-medium">Reportes y guías</h1>
+          <h2 className="text-base font-medium">Reportes y guías</h2>
           <p className="text-muted-foreground text-sm">
             Lo que reciben por DM quienes comentan la palabra de una pieza. El agente de recursos los escribe antes que el carrusel cuando el CTA
             tiene encendido «Hancel escribe el recurso de cada pieza» (Marca → CTA). Ninguna pieza que promete uno se publica antes que él.

@@ -164,6 +164,42 @@
   }
 }
 
+/* --- Superficies del brand kit -------------------------------------------
+   Solo para la entrada, que hace de portada. Dentro del trabajo no hay vidrio
+   ni fondo liquido: distraen. El liquido es un degradado fijo, el respaldo sin
+   WebGL que el kit permite. */
+.plogy-liquid {
+  position: relative;
+  isolation: isolate;
+  background: #fbf9f8;
+}
+
+.plogy-liquid::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.3;
+  background:
+    radial-gradient(620px 420px at 18% 22%, #f75946 0%, #f7594600 70%),
+    radial-gradient(560px 460px at 84% 78%, #9c5aa7 0%, #9c5aa700 70%),
+    radial-gradient(480px 360px at 70% 18%, #e1556a 0%, #e1556a00 70%);
+}
+
+.plogy-glass {
+  border-radius: 28px;
+  border: 1px solid #ffffffd9;
+  background: linear-gradient(125deg, #ffffffcc, #ffffff80);
+  backdrop-filter: blur(24px) saturate(125%);
+  box-shadow: 0 16px 45px #7b300f17, inset 0 1px 0 #ffffff9c;
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .plogy-glass {
+    background: #fff8f2;
+  }
+}
+
 /* --- Visualizaciones del motor -------------------------------------------
    La red dibuja el corpus real. La deriva lenta del conjunto es ambiente del
    lienzo; lo que significa trabajo es la entrada de nodos nuevos, que solo

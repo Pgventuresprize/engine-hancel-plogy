@@ -59,7 +59,7 @@ export async function DashboardShell({
               <BreadcrumbList>
                 <BreadcrumbItem className="hidden md:block">
                   <BreadcrumbLink render={<Link href="/" />}>
-                    Hancel Engine
+                    Plogy Studio
                   </BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="hidden md:block" />
@@ -70,7 +70,10 @@ export async function DashboardShell({
             </Breadcrumb>
           </div>
         </header>
-        <div className="flex min-w-0 flex-1 flex-col gap-6 p-4 pt-6 md:p-6 md:pt-8">{children}</div>
+        <div className="flex min-w-0 flex-1 flex-col gap-6 p-4 pt-6 md:p-6 md:pt-8">
+          <h1 className="font-display text-3xl leading-tight">{title}</h1>
+          {children}
+        </div>
       </SidebarInset>
     </SidebarProvider>
   )

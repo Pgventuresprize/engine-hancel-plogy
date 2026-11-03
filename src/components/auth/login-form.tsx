@@ -59,6 +59,7 @@ export function LoginForm({
                 autoComplete="username"
                 autoFocus
                 required
+                className="h-11 bg-white/85"
               />
             </div>
 
@@ -70,6 +71,7 @@ export function LoginForm({
                 type="password"
                 autoComplete="current-password"
                 required
+                className="h-11 bg-white/85"
               />
             </div>
 
@@ -79,7 +81,7 @@ export function LoginForm({
               </p>
             ) : null}
 
-            <Button type="submit" className="w-full" disabled={pendiente}>
+            <Button type="submit" variant="brand" className="h-12 w-full" disabled={pendiente}>
               {pendiente ? "Entrando…" : "Entrar"}
             </Button>
           </div>
@@ -91,7 +93,7 @@ export function LoginForm({
           justo a quien venia interesado. */}
       <p className="text-muted-foreground text-center text-xs text-balance">
         Si quieres un demo enviame un mensaje a{" "}
-        <a href="mailto:plogydevs@gmail.com" className="underline underline-offset-4">
+        <a href="mailto:plogydevs@gmail.com" className="text-brand-text underline underline-offset-4">
           plogydevs@gmail.com
         </a>
       </p>
