@@ -50,6 +50,7 @@ Dos relojes, dentro de Postgres:
 |---|---|---|
 | **Tick de contenido** | cada **2 minutos** | Una pasada del pipeline entero |
 | **Ingesta** | 11:00 y 18:00 (Bogotá) | Dispara la extracción |
+| **Tick del calendario** | cada **5 minutos** | Publica lo programado que llegó a su hora, si el interruptor está encendido |
 
 El tick es el corazón. Cada pasada recorre todos los pasos, pero **hace un solo
 trabajo por buzón**. No es pereza: la petición tiene 60 segundos de límite y una
@@ -239,8 +240,8 @@ salen en cada una.
 | Canal | Por dónde sale |
 |---|---|
 | LinkedIn | API de LinkedIn, directo |
-| Instagram | Buffer |
-| Facebook | Buffer |
+| Instagram | Composio |
+| Facebook | Composio |
 
 **La imagen de LinkedIn no es opcional.** Si falla al dibujarla o subirla, no
 hay post: la pieza se queda sin publicar con el motivo escrito y la siguiente
@@ -251,6 +252,34 @@ interfaz.
 *Configuración → General*. Esto importa más de lo que parece: durante un día,
 comparar la hora en Bogotá con el día en UTC hizo que el motor se saltara todos
 los horarios.
+
+### El calendario
+
+En `/calendario` se arrastra una pieza a una fecha y hora, o se reparten muchas
+según los horarios de cada red. Solo Instagram y LinkedIn. Programar a mano es una
+orden explícita: sale aunque el agente de publicación esté en manual, y lo que
+tiene fecha no entra en las tandas automáticas.
+
+**La regla: ante la duda, no publica y lo enseña.** Perder la hora de un post se
+arregla; un post doble o uno frenado, no.
+
+- **Interruptor por cuenta** (`calendario_ajustes.publicar_activo`), apagado por
+  defecto. Encender es de un owner y pide confirmación; apagar lo puede cualquiera.
+  Apagado, el tick responde en `tocaria` qué publicaría y no publica: es el simulacro.
+  Una pieza publicada a mano sale aunque esté apagado.
+- **Una pieza por red en cada pasada.** LinkedIn primero, porque tarda segundos.
+- **Ventana de 30 minutos.** Lo que venció hace más no sale solo: queda en rojo para
+  recolocarlo.
+- **Hasta 3 intentos,** solo con fallos seguros: la red lo rechazó o faltó un recurso.
+- **Revisar.** Si la respuesta se corta justo al publicar, o el proceso muere, no se
+  sabe si salió. La pieza queda en Revisar y nada la publica, tampoco a mano, hasta
+  que alguien diga en el Calendario si salió o no.
+- **Editar quita la aprobación.** Un trigger anota el cambio de contenido y el motor
+  espera 3 minutos, para no publicar texto nuevo con láminas viejas.
+- **Una pieza del chat solo sale aprobada,** igual que una frenada.
+
+Probado en real el 2026-11-04 en Instagram: el tick publicó un carrusel de 10
+láminas a su hora, una sola vez.
 
 ---
 

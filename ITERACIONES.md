@@ -659,6 +659,27 @@ las piezas por tema en paralelo (2026-11-03).
   carrusel de diseño libre se marca por lámina entera y, al cambiar su texto,
   vuelve a las plantillas.
 
+## Calendario
+
+### Adjuntar un post ya hecho desde el chat
+- **Qué es:** subir de 1 a 10 fotos en el chat con su texto y decirle al agente
+  "cuádramelo para las 14:30". Dos herramientas nuevas: crear el post propio y
+  programar una pieza. No publica al instante ni enciende el interruptor.
+- **Decidido con Luciano (2026-11-04):** solo Instagram al principio, cuenta como
+  aprobado al subirlo y el texto va tal cual.
+- **Estado:** plan aprobado, sin construir. Mientras tanto, los posts 047 y 050 se
+  cargaron a mano como piezas con `payload.postPropio`.
+
+### Foto propia en LinkedIn
+- **Qué es:** hoy LinkedIn dibuja su tarjeta en vez de usar la imagen de la pieza.
+- **Cuándo:** al conectar LinkedIn y hacer su prueba real, que sigue pendiente.
+
+### Avisos cuando un post no sale
+- **Qué es:** avisar si un post falla, vence o queda en Revisar. Hoy solo se ve
+  entrando al Calendario.
+- **Cuándo:** junto con el SMTP pendiente, o antes de dejar el interruptor encendido
+  sin nadie mirando.
+
 ## Acceso y cuentas
 
 Hecho en la rama `acceso` (2026-11-03): "¿Olvidaste tu contraseña?", registro con
