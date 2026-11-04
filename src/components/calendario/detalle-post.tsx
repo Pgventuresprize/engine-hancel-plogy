@@ -5,11 +5,10 @@ import Link from "next/link"
 import { AlertTriangleIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, LockIcon, SendIcon } from "lucide-react"
 
 import { EtiquetaRed, IconoRed, sePuedeMover } from "@/components/calendario/tarjeta-post"
-import { fechaCorta } from "@/components/calendario/vistas"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
-import { aHora, PASO_MINUTOS, sumarDias } from "@/engine/calendario/reparto"
+import { aHora, fechaCorta, PASO_MINUTOS, sumarDias } from "@/engine/calendario/reparto"
 import { NOMBRE_RED, type Ahora, type PostCalendario } from "@/lib/calendario-tipos"
 import { cn } from "@/lib/utils"
 
@@ -228,7 +227,7 @@ function Contenido({ post, ahora, publicarActivo, ocupado, acciones }: { post: P
                 Quitar del calendario
               </Button>
             ) : null}
-            {!confirmar ? <Button variant="outline" render={<Link href="/estudio" />} nativeButton={false}>Editar en el Estudio</Button> : null}
+            {!confirmar ? <Button variant="outline" render={<Link href={`/estudio?pieza=${post.id}`} />} nativeButton={false}>Editar en el Estudio</Button> : null}
           </>
         )}
         {post.estado === "fallida" && !publicarActivo ? <p className="text-muted-foreground w-full text-xs">La publicación programada está apagada: reintentar no saldrá hasta encenderla.</p> : null}

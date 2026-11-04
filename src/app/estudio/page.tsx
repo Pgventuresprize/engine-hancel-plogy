@@ -51,10 +51,12 @@ export default async function ContenidoPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
-  const pipeline = (await searchParams).pipeline === "redaccion" ? "redaccion" : "redes"
+  const q = await searchParams
+  const pipeline = q.pipeline === "redaccion" ? "redaccion" : "redes"
   const [ia, datos, datosRedaccion] = await Promise.all([
     getEstadoIA(),
-    pipeline === "redes" ? getTablero() : null,
+    // `?pieza=` abre su ficha: asi llega el Calendario a lo que hay que corregir.
+    pipeline === "redes" ? getTablero(typeof q.pieza === "string" ? q.pieza : null) : null,
     pipeline === "redaccion" ? getTableroRedaccion() : null,
   ])
 

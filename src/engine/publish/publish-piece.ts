@@ -63,11 +63,12 @@ export async function publishPiece(pieceId: string, opciones: { guarda?: GuardaP
     .eq("id", pieceId)
     .is("published_at", null)
     .neq("status", "rejected")
+    // Puede haber salido ya: nada la publica hasta que alguien lo resuelva, ni a mano.
+    .eq("programada_revisar", false)
   if (guarda) {
     reclamo = reclamo
       .eq("programada_para", guarda.programadaPara)
       .eq("programada_intentos", guarda.intentos)
-      .eq("programada_revisar", false)
       .in("status", ["generated", "approved"])
       .or(FRENO_PIEZA)
     reclamo = guarda.contenidoCambiadoAt

@@ -7,7 +7,7 @@
 import assert from "node:assert/strict"
 
 import { decidirProgramada, ESPERA_EDICION_MS, MAX_INTENTOS, sinFreno, VENTANA_MS, type PiezaProgramada } from "../src/engine/calendario/decidir"
-import { claveHueco, horaLibre, horariosVacios, huecosDelDia, lunesDe, parseHorarios, repartir, sumarDias, sumarMeses, yaPaso, type Horarios } from "../src/engine/calendario/reparto"
+import { claveHueco, fechaCorta, fechaLarga, horaLibre, horariosVacios, huecosDelDia, lunesDe, parseHorarios, repartir, sumarDias, sumarMeses, yaPaso, type Horarios } from "../src/engine/calendario/reparto"
 
 const AHORA = new Date("2026-11-04T17:00:00.000Z")
 const hace = (ms: number) => new Date(AHORA.getTime() - ms).toISOString()
@@ -60,6 +60,8 @@ assert.equal(lunesDe("2026-11-04"), "2026-11-02", "miercoles")
 assert.equal(lunesDe("2026-11-08"), "2026-11-02", "el domingo es de esa semana")
 assert.equal(lunesDe("2026-11-02"), "2026-11-02", "el lunes es su propio lunes")
 assert.equal(sumarDias("2026-12-31", 1), "2027-01-01")
+assert.equal(fechaCorta("2026-11-04"), "mié 4 nov")
+assert.equal(fechaLarga("2026-11-04"), "miércoles 4 de noviembre")
 assert.equal(sumarMeses("2026-12-15", 1), "2027-01-01")
 assert.equal(sumarMeses("2026-01-31", -1), "2025-12-01")
 assert.equal(yaPaso("2026-11-04", "12:00", { dia: "2026-11-04", hora: "12:00" }), true, "la hora actual cuenta como pasada")

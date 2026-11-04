@@ -4,11 +4,10 @@ import * as React from "react"
 import { ClockIcon } from "lucide-react"
 
 import { Miniatura } from "@/components/calendario/tarjeta-post"
-import { fechaLarga } from "@/components/calendario/vistas"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { lunesDe, repartir, sumarDias, type Horarios } from "@/engine/calendario/reparto"
+import { fechaLarga, lunesDe, repartir, sumarDias, type Horarios } from "@/engine/calendario/reparto"
 import type { Ahora, Colocacion, PostCalendario } from "@/lib/calendario-tipos"
 
 export type PlanReparto = { lista: Colocacion[]; aprobar: string[] }

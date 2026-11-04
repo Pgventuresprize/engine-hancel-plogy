@@ -3,18 +3,9 @@
 import * as React from "react"
 
 import { IconoRed, MiniPost, TarjetaPost } from "@/components/calendario/tarjeta-post"
-import { aHora, aMin, claveHueco, diaDeSemana, huecosDelDia, sumarDias, yaPaso, type Horarios } from "@/engine/calendario/reparto"
+import { aHora, aMin, claveHueco, DIAS, diaDeSemana, fechaCorta, fechaLarga, huecosDelDia, mesDe, numeroDia, sumarDias, yaPaso, type Horarios } from "@/engine/calendario/reparto"
 import type { Ahora, PostCalendario } from "@/lib/calendario-tipos"
 import { cn } from "@/lib/utils"
-
-export const DIAS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"]
-const DIAS_LARGOS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"]
-export const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
-
-export const numeroDia = (dia: string) => Number(dia.slice(8))
-export const mesDe = (dia: string) => Number(dia.slice(5, 7)) - 1
-export const fechaCorta = (dia: string) => `${DIAS[diaDeSemana(dia)]} ${numeroDia(dia)} ${MESES[mesDe(dia)].slice(0, 3)}`
-export const fechaLarga = (dia: string) => `${DIAS_LARGOS[diaDeSemana(dia)]} ${numeroDia(dia)} de ${MESES[mesDe(dia)]}`
 
 const RAYADO = "bg-[repeating-linear-gradient(135deg,var(--muted)_0_6px,var(--background)_6px_12px)]"
 

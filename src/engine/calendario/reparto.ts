@@ -23,6 +23,15 @@ export const sumarDias = (dia: string, n: number) => new Date(aFecha(dia).getTim
 /** 0 = domingo, como `Date.getUTCDay`. */
 export const diaDeSemana = (dia: string) => aFecha(dia).getUTCDay()
 
+export const DIAS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"]
+const DIAS_LARGOS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"]
+export const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+
+export const numeroDia = (dia: string) => Number(dia.slice(8))
+export const mesDe = (dia: string) => Number(dia.slice(5, 7)) - 1
+export const fechaCorta = (dia: string) => `${DIAS[diaDeSemana(dia)]} ${numeroDia(dia)} ${MESES[mesDe(dia)].slice(0, 3)}`
+export const fechaLarga = (dia: string) => `${DIAS_LARGOS[diaDeSemana(dia)]} ${numeroDia(dia)} de ${MESES[mesDe(dia)]}`
+
 export const lunesDe = (dia: string) => sumarDias(dia, -((diaDeSemana(dia) + 6) % 7))
 
 export const inicioDeMes = (dia: string) => `${dia.slice(0, 7)}-01`

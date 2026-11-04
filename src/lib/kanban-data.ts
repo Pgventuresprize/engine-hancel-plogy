@@ -11,8 +11,11 @@ import type { FotoDeBiblioteca } from "@/engine/marca/imagenes-modelo"
 import type { PlanLamina } from "@/engine/render/carousel"
 import type { ModoDiseno } from "@/engine/render/theme"
 import { parseClasificacion } from "@/engine/marca/clasificacion"
+import { getSettings } from "@/engine/schedule"
 import { supabaseAdmin } from "@/engine/supabase-admin"
 import { idDeCuentaActual } from "@/lib/accounts"
+import { enZona, estadoDe } from "@/lib/calendario-data"
+import type { Ahora, EstadoPost } from "@/lib/calendario-tipos"
 import type { RawNews } from "@/lib/types"
 
 /**
@@ -70,6 +73,8 @@ export type PiezaDelTablero = {
   revision: Revision | null
   /** Como se armo el prompt que la escribio. Null = pieza de antes del armador por piezas. */
   receta: Receta | null
+  /** Su sitio en el calendario, en la hora de la cuenta. Null = no esta programada. */
+  programada: (Ahora & { estado: EstadoPost }) | null
 }
 
 export type ResumenRecurso = {
@@ -151,6 +156,15 @@ export type Tablero = {
    * esto habria que ir a la pagina del agente para descubrirlo.
    */
   modos: Partial<Record<Etapa, ModoDeEtapa>>
+  /**
+   * La ficha que pide un enlace `?pieza=`, venga del Calendario o de otro sitio.
+   *
+   * Aparte de `fichas` porque puede no estar entre las que se pintan: una columna
+   * llena la dejaria fuera, y el enlace abriria el tablero sin explicar nada.
+   */
+  pedida: { ficha: Ficha; piezaId: string } | null
+  /** Se pidio una pieza y no tiene ficha: las que no vienen de una noticia no estan aqui. */
+  pedidaPerdida: boolean
 }
 
 /**
@@ -206,7 +220,23 @@ function miniaturaDe(piezas: PiezaDelTablero[]): string | null {
   return fb?.payload.image ?? null
 }
 
-export async function getTablero(): Promise<Tablero> {
+/** Donde cae en el calendario. Lo publicado ya no se marca: dejo de ser un plan. */
+function programadaDe(p: ContentPiece & { publish_error: string | null }, zona: string, now: Date): PiezaDelTablero["programada"] {
+  if (!p.programada_para) return null
+  const estado = estadoDe(
+    {
+      status: p.status,
+      programada_para: p.programada_para,
+      programada_intentos: p.programada_intentos ?? 0,
+      programada_revisar: p.programada_revisar ?? false,
+      publish_error: p.publish_error,
+    },
+    now
+  )
+  return estado === "publicada" || estado === "bandeja" ? null : { ...enZona(p.programada_para, zona), estado }
+}
+
+export async function getTablero(piezaPedida: string | null = null): Promise<Tablero> {
   const supabase = supabaseAdmin()
   const accountId = await idDeCuentaActual()
 
@@ -241,7 +271,7 @@ export async function getTablero(): Promise<Tablero> {
   const modos = await modosDeEtapa(accountId)
   const redesActivas = await redesActivas_(accountId)
   if (filas.length === 0) {
-    return { fichas: porEtapa, conteos: { ...CONTEOS_VACIOS }, modos, redes: redesActivas }
+    return { fichas: porEtapa, conteos: { ...CONTEOS_VACIOS }, modos, redes: redesActivas, pedida: null, pedidaPerdida: Boolean(piezaPedida) }
   }
 
   // Se filtra por cuenta, no por la lista de ids: meter cientos de uuid en un
@@ -281,6 +311,8 @@ export async function getTablero(): Promise<Tablero> {
     if (!angulosPorNoticia.has(a.raw_news_id)) angulosPorNoticia.set(a.raw_news_id, a)
   }
 
+  const { timezone } = await getSettings(accountId)
+  const now = new Date()
   const piezasPorNoticia = new Map<string, PiezaDelTablero[]>()
   for (const p of (piezas.data ?? []) as (ContentPiece & {
     published_at: string | null
@@ -299,6 +331,7 @@ export async function getTablero(): Promise<Tablero> {
       publish_error: p.publish_error,
       revision: parseRevision((p as { revision?: unknown }).revision),
       receta: recetaDe(p as { job_instagram_id?: string | null; job_linkedin_id?: string | null }, recetas),
+      programada: programadaDe(p, timezone, now),
     })
     piezasPorNoticia.set(p.raw_news_id, lista)
   }
@@ -387,6 +420,11 @@ export async function getTablero(): Promise<Tablero> {
     porEtapa[ficha.etapa].push(ficha)
   }
 
+  const fichaPedida = piezaPedida
+    ? Object.values(porEtapa).flat().find((f) => f.piezas.some((p) => p.id === piezaPedida))
+    : undefined
+  const pedida = piezaPedida && fichaPedida ? { ficha: fichaPedida, piezaId: piezaPedida } : null
+
   // Los conteos salen de todo lo recorrido; las tarjetas, de un trozo.
   const conteos = { ...CONTEOS_VACIOS }
   const fichas = { ...porEtapa }
@@ -395,7 +433,7 @@ export async function getTablero(): Promise<Tablero> {
     fichas[etapa] = porEtapa[etapa].slice(0, VISIBLES)
   }
 
-  return { fichas, conteos, modos, redes: redesActivas }
+  return { fichas, conteos, modos, redes: redesActivas, pedida, pedidaPerdida: Boolean(piezaPedida) && !pedida }
 }
 
 const CONTEOS_VACIOS: Record<Etapa, number> = {

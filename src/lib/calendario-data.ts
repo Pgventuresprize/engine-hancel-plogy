@@ -57,7 +57,17 @@ function primeraFrase(texto: string | null): string {
 const textoDelPost = (f: Fila) =>
   [f.network === "linkedin" ? [f.hook, f.cuerpo].filter(Boolean).join("\n\n") : f.caption, (f.hashtags ?? []).join(" ")].filter(Boolean).join("\n\n")
 
-function estadoDe(f: Fila, now: Date): EstadoPost {
+/** El dia y la hora de un instante en la zona de la cuenta. */
+export function enZona(iso: string, zona: string): Ahora {
+  const fecha = new Date(iso)
+  const { hour, minute } = partsIn(zona, fecha)
+  return { dia: dayIn(zona, fecha), hora: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}` }
+}
+
+export function estadoDe(
+  f: Pick<Fila, "status" | "programada_para" | "programada_intentos" | "programada_revisar" | "publish_error">,
+  now: Date
+): EstadoPost {
   if (f.status === "published") return "publicada"
   if (f.status === "publishing") return "publicando"
   if (f.programada_revisar) return "revisar"
@@ -92,11 +102,7 @@ export async function getCalendario(pedido: { vista: VistaCalendario; fecha: str
   const { timezone } = await getSettings(accountId)
   const now = new Date()
 
-  const local = (iso: string) => {
-    const fecha = new Date(iso)
-    const { hour, minute } = partsIn(timezone, fecha)
-    return { dia: dayIn(timezone, fecha), hora: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}` }
-  }
+  const local = (iso: string) => enZona(iso, timezone)
   const ahora: Ahora = local(now.toISOString())
 
   const base = pedido.fecha && /^\d{4}-\d{2}-\d{2}$/.test(pedido.fecha) ? pedido.fecha : ahora.dia

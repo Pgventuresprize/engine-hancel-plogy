@@ -15,9 +15,10 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { FichaDialog } from "@/components/kanban/ficha-dialog"
 import { useAltoHastaAbajo } from "@/components/kanban/use-alto-hasta-abajo"
+import { fechaCorta } from "@/engine/calendario/reparto"
 import { conPocoMaterial, nombreMaterial } from "@/engine/content/material"
 import type { Etapa, Ficha, ModoDeEtapa, Tablero as TableroDatos } from "@/lib/kanban-data"
-import { PlayIcon } from "lucide-react"
+import { CalendarClockIcon, PlayIcon } from "lucide-react"
 
 /**
  * El tablero del pipeline.
@@ -163,37 +164,51 @@ function admite(origen: Etapa, destino: Etapa): boolean {
   return hasta === desde + 1
 }
 
+const claveDe = (f: Ficha) => `${f.newsId}:${f.red ?? ""}`
+
 export function Tablero({ datos }: { datos: TableroDatos }) {
   // Se guarda cual esta abierta, no la ficha: si se guardara la ficha, la
   // ventana pintaria para siempre la copia del momento en que se abrio, y
   // regenerar un carrusel dejaria de verse aunque el servidor ya tuviera las
   // imagenes nuevas. Buscandola en `datos` cada vez, cualquier revalidacion
   // llega sola a la ventana abierta.
-  const [abiertaId, setAbiertaId] = React.useState<string | null>(null)
-  const [abierta, setAbierta] = React.useState(false)
+  const [abiertaId, setAbiertaId] = React.useState<string | null>(datos.pedida ? claveDe(datos.pedida.ficha) : null)
+  const [abierta, setAbierta] = React.useState(Boolean(datos.pedida))
   const [arrastrando, setArrastrando] = React.useState<Ficha | null>(null)
   const [moviendo, setMoviendo] = React.useState<string | null>(null)
-  const [aviso, setAviso] = React.useState<{ tipo: "error" | "ok"; texto: string } | null>(null)
+  const [aviso, setAviso] = React.useState<{ tipo: "error" | "ok"; texto: string } | null>(
+    datos.pedidaPerdida ? { tipo: "error", texto: "Esa pieza no tiene ficha en el tablero." } : null
+  )
   const [refTablero, altoTablero] = useAltoHastaAbajo<HTMLDivElement>()
 
   // Con la que se abrio, de respaldo: al cambiar de etapa una ficha puede
   // quedarse fuera de las visibles de su columna, y es mejor seguir viendo lo
   // de antes que una ventana en blanco de golpe.
-  const [respaldo, setRespaldo] = React.useState<Ficha | null>(null)
+  const [respaldo, setRespaldo] = React.useState<Ficha | null>(datos.pedida?.ficha ?? null)
 
   const ficha = React.useMemo(() => {
     if (!abiertaId) return null
     for (const lista of Object.values(datos.fichas)) {
-      const encontrada = lista.find((f) => `${f.newsId}:${f.red ?? ""}` === abiertaId)
+      const encontrada = lista.find((f) => claveDe(f) === abiertaId)
       if (encontrada) return encontrada
     }
+    // La pedida por enlace puede no estar entre las que se pintan.
+    if (datos.pedida && abiertaId.startsWith(`${datos.pedida.ficha.newsId}:`)) return datos.pedida.ficha
     return respaldo
   }, [abiertaId, datos, respaldo])
 
   function abrir(f: Ficha) {
     setRespaldo(f)
-    setAbiertaId(`${f.newsId}:${f.red ?? ""}`)
+    setAbiertaId(claveDe(f))
     setAbierta(true)
+  }
+
+  function cambiarAbierta(v: boolean) {
+    setAbierta(v)
+    // Sin esto, recargar el tablero volveria a abrir la ficha que ya se cerro.
+    if (!v && new URLSearchParams(window.location.search).has("pieza")) {
+      window.history.replaceState(null, "", window.location.pathname)
+    }
   }
 
   async function soltar(f: Ficha, etapa: Etapa) {
@@ -296,7 +311,7 @@ export function Tablero({ datos }: { datos: TableroDatos }) {
         })}
       </div>
 
-      <FichaDialog ficha={ficha} abierta={abierta} onOpenChange={setAbierta} />
+      <FichaDialog ficha={ficha} abierta={abierta} onOpenChange={cambiarAbierta} piezaInicial={datos.pedida?.piezaId} />
     </>
   )
 }
@@ -383,7 +398,7 @@ function Columna({
         ) : (
           fichas.map((f) => (
             <Tarjeta
-              key={`${f.newsId}:${f.red ?? ""}`}
+              key={claveDe(f)}
               ficha={f}
               arrastrable={
                 etapa !== "descartado_fecha" && etapa !== "repetida" && etapa !== "vetada"
@@ -483,11 +498,42 @@ function Tarjeta({
           <AvisoRevision ficha={ficha} />
         </div>
 
+        <FechasProgramadas ficha={ficha} />
+
         {ficha.fuente ? (
           <p className="text-muted-foreground truncate text-xs">{ficha.fuente}</p>
         ) : null}
       </div>
     </button>
+  )
+}
+
+/** Cuando sale, o por que no salio. Va por pieza: en Borradores una tarjeta trae varias. */
+function FechasProgramadas({ ficha }: { ficha: Ficha }) {
+  const piezas = ficha.piezas.filter((p) => p.programada && (!ficha.red || p.network === ficha.red))
+  if (piezas.length === 0) return null
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      {piezas.map((p) => {
+        const { dia, hora, estado } = p.programada!
+        const fecha = `${fechaCorta(dia)}, ${hora}`
+        return (
+          <p
+            key={p.id}
+            className={`flex items-center gap-1 text-xs ${
+              estado === "revisar" ? "text-warning" : estado === "fallida" ? "text-destructive" : "text-muted-foreground"
+            }`}
+          >
+            <CalendarClockIcon className="size-3 shrink-0" />
+            <span className="truncate">
+              {piezas.length > 1 ? `${NOMBRE_RED[p.network] ?? p.network}: ` : ""}
+              {estado === "revisar" ? "Puede haber salido" : estado === "fallida" ? `No salió · ${fecha}` : fecha}
+            </span>
+          </p>
+        )
+      })}
+    </div>
   )
 }
 

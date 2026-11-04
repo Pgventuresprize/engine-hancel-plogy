@@ -464,13 +464,18 @@ export async function publishPieceNow(pieceId: string): Promise<ActionResult> {
 
   // `publishPiece` recibe solo el id, asi que la pertenencia se comprueba antes:
   // publicar la pieza de otra cuenta la mandaria a las redes equivocadas.
-  const { count } = await supabaseAdmin()
+  const { data: pieza } = await supabaseAdmin()
     .from("content_pieces")
-    .select("id", { count: "exact", head: true })
+    .select("programada_revisar")
     .eq("id", pieceId)
     .eq("account_id", await idDeCuentaActual())
+    .maybeSingle()
 
-  if (!count) return { ok: false, error: "Esa pieza no es de esta cuenta." }
+  if (!pieza) return { ok: false, error: "Esa pieza no es de esta cuenta." }
+  // El reclamo tambien lo impide; esto es para decir por que.
+  if ((pieza as { programada_revisar: boolean }).programada_revisar) {
+    return { ok: false, error: "Puede haber salido ya: míralo en la red y resuélvelo en el Calendario." }
+  }
 
   const result = await publishPiece(pieceId)
   refresh()

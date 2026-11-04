@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
   BookmarkPlusIcon,
@@ -49,6 +50,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { fechaLarga } from "@/engine/calendario/reparto"
 import { RecetaDelPrompt } from "@/components/agentes/simulador-prompt"
 import { PanelRecurso } from "@/components/kanban/panel-recurso"
 import { Textarea } from "@/components/ui/textarea"
@@ -88,11 +90,12 @@ const TEXTO_PROBLEMA: Record<string, string> = {
   letra_pequena: "letra por debajo del mínimo del kit",
 }
 
-/** La pestaña que toca abrir: la etapa mas avanzada que alcanzo el hecho. */
-function pestanaInicial(f: Ficha): string {
+/** La pestaña que toca abrir: la pieza pedida o, si no, la etapa mas avanzada que alcanzo el hecho. */
+function pestanaInicial(f: Ficha, piezaInicial?: string): string {
   if (f.piezas.length > 0) {
+    const pedida = f.piezas.find((p) => p.id === piezaInicial)
     const publicada = f.piezas.find((p) => p.status === "published")
-    return `pieza:${(publicada ?? f.piezas[0]).id}`
+    return `pieza:${(pedida ?? publicada ?? f.piezas[0]).id}`
   }
   // Un recurso esperando aprobacion es lo siguiente que hay que mirar.
   if (f.angulo && f.recurso && f.recurso.estado !== "descartado") return "recurso"
@@ -138,10 +141,13 @@ export function FichaDialog({
   ficha,
   abierta,
   onOpenChange,
+  piezaInicial,
 }: {
   ficha: Ficha | null
   abierta: boolean
   onOpenChange: (v: boolean) => void
+  /** La pieza con la que abrir: una ficha de Borradores puede traer varias. */
+  piezaInicial?: string
 }) {
   if (!ficha) return null
 
@@ -162,7 +168,7 @@ export function FichaDialog({
             su etapa actual sin tener que sincronizar estado a mano. */}
         <Tabs
           key={ficha.newsId}
-          defaultValue={pestanaInicial(ficha)}
+          defaultValue={pestanaInicial(ficha, piezaInicial)}
           className="flex min-h-0 flex-1 flex-col gap-3"
         >
           <TabsList className="h-auto shrink-0 flex-wrap">
@@ -244,6 +250,7 @@ function PanelNoticia({ ficha }: { ficha: Ficha }) {
           size="sm"
           variant="outline"
           render={<a href={ficha.link} target="_blank" rel="noreferrer" />}
+          nativeButton={false}
         >
           <ExternalLinkIcon />
           Ver la fuente
@@ -451,6 +458,8 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
   const rechazada = pieza.status === "rejected"
   // Frenada y sin aprobar: no sale sola. Aprobarla o publicarla es decir "sale igual".
   const frenada = Boolean(pieza.revision?.frena) && pieza.status !== "approved"
+  // No se sabe si salio: publicarla desde aqui podria sacarla dos veces.
+  const porRevisar = pieza.programada?.estado === "revisar"
   const conHallazgos = (pieza.revision?.hallazgos.length ?? 0) > 0
   // Las laminas del carrusel o, en Facebook, su imagen unica.
   const imagenes = esCarrusel
@@ -493,6 +502,8 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
       </div>
 
       {pieza.publish_error ? <p className="text-destructive text-xs">{pieza.publish_error}</p> : null}
+
+      {pieza.programada ? <AvisoCalendario programada={pieza.programada} /> : null}
 
       {!publicada ? <PanelRevision revision={pieza.revision} aprobada={pieza.status === "approved"} /> : null}
 
@@ -651,6 +662,7 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
               size="sm"
               variant="outline"
               render={<a href={`/api/content/carousel?piece=${pieza.id}`} download />}
+              nativeButton={false}
             >
               <DownloadIcon />
               Descargar
@@ -704,7 +716,8 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
             <Button
               size="sm"
               variant="secondary"
-              disabled={pending}
+              disabled={pending || porRevisar}
+              title={porRevisar ? "Primero hay que resolver en el Calendario si salió o no." : undefined}
               onClick={() => correr(() => publishPieceNow(pieza.id))}
             >
               <SendIcon />
@@ -769,6 +782,31 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
         <GuardarComoEjemplo pieceId={pieza.id} />
       ) : null}
     </div>
+  )
+}
+
+/** Su sitio en el calendario, con el camino para resolverlo alli. */
+function AvisoCalendario({ programada }: { programada: NonNullable<PiezaDelTablero["programada"]> }) {
+  const { dia, hora, estado } = programada
+  const enlace = (
+    <Link href={`/calendario?fecha=${dia}`} className="underline">
+      Ver en el calendario
+    </Link>
+  )
+
+  if (estado === "revisar") {
+    return (
+      <p className="rounded-lg border border-warning/40 bg-warning-soft p-3 text-xs text-warning">
+        <span className="font-medium">Puede haber salido.</span> Míralo en la red y resuélvelo en el calendario antes de
+        publicarla de nuevo. {enlace}
+      </p>
+    )
+  }
+  return (
+    <p className={`text-xs ${estado === "fallida" ? "text-destructive" : "text-muted-foreground"}`}>
+      {estado === "fallida" ? "No salió a su hora: " : "Programada para el "}
+      {fechaLarga(dia)}, {hora}. {enlace}
+    </p>
   )
 }
 
