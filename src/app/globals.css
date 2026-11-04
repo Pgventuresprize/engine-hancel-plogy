@@ -46,6 +46,12 @@
   --info: #6f3a7c;
   --info-soft: #f3e9f5;
 
+  /* Las redes en el calendario: se distinguen de un vistazo sin competir con la marca. */
+  --ig: #a8386a;
+  --ig-soft: #fbeaf1;
+  --li: #3b3430;
+  --li-soft: #ece7e3;
+
   --chart-1: #ff5b00;
   --chart-2: #f75946;
   --chart-3: #c85981;
@@ -138,6 +144,10 @@
   --color-warning-soft: var(--warning-soft);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
+  --color-ig: var(--ig);
+  --color-ig-soft: var(--ig-soft);
+  --color-li: var(--li);
+  --color-li-soft: var(--li-soft);
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);

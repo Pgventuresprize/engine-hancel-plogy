@@ -17,7 +17,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { BotIcon, ChefHatIcon, MessageSquareIcon, ClapperboardIcon, FileTextIcon, FingerprintIcon, GalleryHorizontalEndIcon, KanbanIcon, LayersIcon, LightbulbIcon, SendIcon, SettingsIcon } from "lucide-react"
+import { BotIcon, CalendarDaysIcon, ChefHatIcon, MessageSquareIcon, ClapperboardIcon, FileTextIcon, FingerprintIcon, GalleryHorizontalEndIcon, KanbanIcon, LayersIcon, LightbulbIcon, SendIcon, SettingsIcon } from "lucide-react"
 
 import { AGENTES } from "@/lib/agentes-catalogo"
 
@@ -52,6 +52,14 @@ export function AppSidebar({
       url: "/estudio",
       icon: <KanbanIcon />,
       isActive: pathname === "/estudio",
+      items: [],
+    },
+    {
+      // Cuando sale cada post. El Estudio produce; aqui se decide la fecha.
+      title: "Calendario",
+      url: "/calendario",
+      icon: <CalendarDaysIcon />,
+      isActive: pathname.startsWith("/calendario"),
       items: [],
     },
     {
@@ -163,7 +171,7 @@ export function AppSidebar({
       ],
     },
   ]
-  const SOLO_ADVANCE = ["/capas", "/ideas", "/estudio/pilares", "/recetas", "/publicacion", "/videos"]
+  const SOLO_ADVANCE = ["/calendario", "/capas", "/ideas", "/estudio/pilares", "/recetas", "/publicacion", "/videos"]
   const navMain = todo.filter((item) => advance || !SOLO_ADVANCE.includes(item.url))
 
   return (
