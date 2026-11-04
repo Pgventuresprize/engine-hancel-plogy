@@ -136,6 +136,12 @@ export type ContentPiece = {
   /** El id que devuelve LinkedIn; con el se arma la URL del post publicado. */
   linkedin_urn: string | null
   publish_error: string | null
+  /** El instante en que debe salir. Null = no esta en el calendario. */
+  programada_para?: string | null
+  programada_intentos?: number
+  /** No se sabe si salio: lo decide una persona mirando la red. */
+  programada_revisar?: boolean
+  contenido_cambiado_at?: string | null
 }
 
 /**

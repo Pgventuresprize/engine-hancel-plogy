@@ -38,6 +38,7 @@ const ABIERTAS = [
   "/api/videos/tick",
   "/api/redaccion/tick",
   "/api/publicacion/tick",
+  "/api/calendario/tick",
   "/api/chat/pasada",
 ]
 

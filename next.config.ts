@@ -14,6 +14,8 @@ const nextConfig: NextConfig = {
     "/marca": ["./node_modules/@sparticuz/chromium/bin/**"],
     "/api/content/tick": ["./node_modules/@sparticuz/chromium/bin/**"],
     "/estudio": ["./node_modules/@sparticuz/chromium/bin/**"],
+    // "Publicar ahora" corre en la ruta del calendario y dibuja la tarjeta de LinkedIn.
+    "/calendario": ["./src/engine/render/fonts/**", "./node_modules/@sparticuz/chromium/bin/**"],
     // El chat dispara pasadas que dibujan carruseles y restaura versiones
     // redibujandolas desde su maqueta.
     "/api/chat/**": ["./node_modules/@sparticuz/chromium/bin/**"],

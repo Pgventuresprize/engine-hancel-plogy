@@ -368,16 +368,24 @@ async function setPieceStatus(
   if (!pieceId) return { ok: false, error: "Falta el id de la pieza." }
 
   try {
-    const { error } = await supabaseAdmin()
+    const fila = supabaseAdmin()
       .from("content_pieces")
-      .update({
-        status,
-        approved_at: status === "approved" ? new Date().toISOString() : null,
-      })
+      .update(
+        status === "approved"
+          ? { status, approved_at: new Date().toISOString() }
+          : // Rechazada sale tambien del calendario: una pieza recuperada no puede
+            // volver con una fecha vieja.
+            { status, approved_at: null, programada_para: null, programada_revisar: false }
+      )
       .eq("id", pieceId)
       .eq("account_id", await idDeCuentaActual())
 
+    // Aprobar no puede pisar una pieza publicando: la esconderia de quien recoge
+    // los reclamos colgados. Rechazar si la alcanza, para que un fallo no la reviva.
+    const { data, error } = await (status === "approved" ? fila.is("published_at", null) : fila.neq("status", "published")).select("id")
+
     if (error) throw new Error(error.message)
+    if (!data?.length) return { ok: false, error: "Esa pieza ya se publicó o se está publicando." }
     refresh()
     return { ok: true }
   } catch (error) {
@@ -1193,10 +1201,11 @@ export async function moverFicha(
         if (misPiezas.length > 0) {
           const { error } = await supabase
             .from("content_pieces")
-            .update({ status: "rejected", approved_at: null })
+            .update({ status: "rejected", approved_at: null, programada_para: null, programada_revisar: false })
             .in("id", misPiezas.map((p) => p.id))
             .eq("account_id", accountId)
-            .is("published_at", null)
+            // Tambien lo que esta saliendo: si falla, no puede revivir.
+            .neq("status", "published")
           if (error) throw new Error(error.message)
         }
         if (angulo) {
@@ -1299,10 +1308,11 @@ export async function rechazarFicha(
 
     const { error: errorPiezas } = await supabase
       .from("content_pieces")
-      .update({ status: "rejected", approved_at: null })
+      .update({ status: "rejected", approved_at: null, programada_para: null, programada_revisar: false })
       .eq("raw_news_id", newsId)
       .eq("account_id", accountId)
-      .is("published_at", null)
+      // Tambien lo que esta saliendo: si falla, no puede revivir.
+      .neq("status", "published")
 
     if (errorPiezas) throw new Error(errorPiezas.message)
 

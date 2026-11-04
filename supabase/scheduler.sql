@@ -453,6 +453,47 @@ begin
 end
 $$;
 
+-- ----------------------------------------------------------- calendario
+-- El tick del calendario: publica lo programado que llego a su hora. Va aparte
+-- del de publicacion para que un carrusel de pilares o un reel no le coman el
+-- tiempo. Necesita la migracion 2026-11-04-calendario y /api/calendario/tick
+-- desplegado. Mientras el interruptor de la cuenta este apagado no publica nada.
+create or replace function public.fire_calendario_tick()
+returns bigint
+language plpgsql
+security definer
+set search_path to ''
+as $$
+declare
+  v_url        text;
+  v_secret     text;
+  v_request_id bigint;
+begin
+  select decrypted_secret into v_url    from vault.decrypted_secrets where name = 'content_tick_url';
+  select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'ingest_secret';
+  if v_url is null or v_secret is null then
+    raise warning 'engine-hancel: falta content_tick_url/ingest_secret para el tick del calendario';
+    return null;
+  end if;
+  select net.http_post(
+    url := replace(v_url, '/api/content/tick', '/api/calendario/tick'),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer ' || v_secret),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 300000
+  ) into v_request_id;
+  return v_request_id;
+end;
+$$;
+
+revoke all on function public.fire_calendario_tick() from public, anon, authenticated;
+
+do $$
+begin
+  perform cron.unschedule(jobid) from cron.job where jobname = 'engine_hancel_calendario_tick';
+  perform cron.schedule('engine_hancel_calendario_tick', '*/5 * * * *', 'select public.fire_calendario_tick();');
+end
+$$;
+
 -- ------------------------------------------------------------ redaccion
 -- El tick del pipeline de redaccion: selecciona por el umbral de redaccion y
 -- redacta lo que haya en cola. Cada cinco minutos.

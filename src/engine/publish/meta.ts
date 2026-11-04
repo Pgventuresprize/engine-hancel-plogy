@@ -17,7 +17,10 @@ import { supabaseAdmin } from "../supabase-admin"
  * No lanza: el fallo viaja en el resultado.
  */
 
-export type ResultadoPublicacion = { ok: true; postId: string } | { ok: false; error: string }
+export type ResultadoPublicacion =
+  | { ok: true; postId: string }
+  /** `ambiguo`: se pidio publicar y no se sabe si salio. No se reintenta sola. */
+  | { ok: false; error: string; ambiguo?: boolean }
 
 const BUCKET = "carousels"
 
@@ -130,16 +133,26 @@ async function aJpeg(urls: string[]): Promise<{ ok: true; urls: string[] } | { o
   return { ok: true, urls: salida }
 }
 
+/**
+ * `estricto` es para lo que sale sin nadie delante (el calendario): si no se puede
+ * comprobar la red no publica, y un post igual ya publicado no se da por suyo. Lo
+ * programado solo se reintenta tras un no seguro, asi que encontrar uno igual es
+ * o una coincidencia o algo que no se entiende, y lo decide una persona.
+ */
 export async function publicarInstagram(
   accountId: string,
-  opciones: { texto: string; imagenes?: string[]; video?: string }
+  opciones: { texto: string; imagenes?: string[]; video?: string; estricto?: boolean }
 ): Promise<ResultadoPublicacion> {
   const cuenta = await cuentaInstagram(accountId)
   if (!cuenta.ok) return cuenta
   const ig = cuenta.id
   const caption = opciones.texto.slice(0, 2200)
-  const existente = await yaPublicado(accountId, "instagram", caption)
-  if (existente) return { ok: true, postId: existente }
+  const comprobado = await comprobarInstagram(accountId, caption)
+  if (comprobado.estado === "si") {
+    if (!opciones.estricto) return { ok: true, postId: comprobado.id }
+    return { ok: false, ambiguo: true, error: "Ya hay en Instagram un post que empieza igual: míralo antes de volver a publicar." }
+  }
+  if (comprobado.estado === "no_se" && opciones.estricto) return { ok: false, error: comprobado.motivo }
 
   let contenedor: string | null = null
   if (opciones.video) {
@@ -172,7 +185,8 @@ export async function publicarInstagram(
     creation_id: contenedor,
     max_wait_seconds: opciones.video ? 240 : 90,
   }, 280_000)
-  if (!p.ok) return p
+  // Este es el unico paso que publica de verdad: un fallo aqui no dice si salio.
+  if (!p.ok) return { ...p, ambiguo: true }
   return { ok: true, postId: idDe(p.data) ?? contenedor }
 }
 
@@ -196,19 +210,14 @@ const VENTANA_DUPLICADO_MS = 6 * 3_600_000
  * publicar se mira la red; si ya esta, no se repite.
  */
 export async function yaPublicado(accountId: string, red: "instagram" | "facebook", texto: string): Promise<string | null> {
+  if (red === "instagram") {
+    const comprobado = await comprobarInstagram(accountId, texto)
+    return comprobado.estado === "si" ? comprobado.id : null
+  }
   const buscado = huella(texto)
   if (buscado.length < 20) return null
   const desde = Date.now() - VENTANA_DUPLICADO_MS
   try {
-    if (red === "instagram") {
-      const cuenta = await cuentaInstagram(accountId)
-      if (!cuenta.ok) return null
-      const r = await ejecutar(accountId, "instagram", "INSTAGRAM_GET_IG_USER_MEDIA", { ig_user_id: cuenta.id, limit: 15, fields: "id,timestamp,caption" }, 30_000)
-      if (!r.ok) return null
-      const lista = ((r.data as { data?: { id: string; timestamp?: string; caption?: string }[] }).data ?? [])
-      const igual = lista.find((m) => m.caption && huella(m.caption) === buscado && (!m.timestamp || new Date(m.timestamp).getTime() >= desde))
-      return igual?.id ?? null
-    }
     const pagina = (await secretosDe(accountId)).facebook_page_id
     if (!pagina) return null
     const r = await ejecutar(accountId, "facebook", "FACEBOOK_GET_PAGE_POSTS", { page_id: pagina, limit: 15, fields: "id,created_time,message" }, 30_000)
@@ -219,6 +228,42 @@ export async function yaPublicado(accountId: string, red: "instagram" | "faceboo
   } catch {
     // Si no se puede mirar, se publica: perder un post es peor que no poder comprobarlo.
     return null
+  }
+}
+
+export type Comprobacion = { estado: "si"; id: string } | { estado: "no" } | { estado: "no_se"; motivo: string }
+
+/** La lista de una respuesta de Composio, que a veces viene anidada; null si no hay. */
+function listaDe<T>(x: unknown): T[] | null {
+  if (Array.isArray(x)) return x as T[]
+  if (!x || typeof x !== "object") return null
+  const o = x as Record<string, unknown>
+  for (const k of ["data", "response_data", "result"]) {
+    const dentro = listaDe<T>(o[k])
+    if (dentro) return dentro
+  }
+  return null
+}
+
+/**
+ * Si ese texto ya salio en Instagram, distinguiendo "no esta" de "no se pudo
+ * mirar": quien publica sin nadie delante no puede tratarlos igual.
+ */
+export async function comprobarInstagram(accountId: string, texto: string): Promise<Comprobacion> {
+  const buscado = huella(texto)
+  if (buscado.length < 20) return { estado: "no_se", motivo: "El texto es muy corto para comprobar si ya se publicó." }
+  const desde = Date.now() - VENTANA_DUPLICADO_MS
+  try {
+    const cuenta = await cuentaInstagram(accountId)
+    if (!cuenta.ok) return { estado: "no_se", motivo: cuenta.error }
+    const r = await ejecutar(accountId, "instagram", "INSTAGRAM_GET_IG_USER_MEDIA", { ig_user_id: cuenta.id, limit: 15, fields: "id,timestamp,caption" }, 30_000)
+    if (!r.ok) return { estado: "no_se", motivo: `No se pudo mirar Instagram: ${r.error}` }
+    const lista = listaDe<{ id: string; timestamp?: string; caption?: string }>(r.data)
+    if (!lista) return { estado: "no_se", motivo: "Instagram respondió algo que no se pudo leer." }
+    const igual = lista.find((m) => m.caption && huella(m.caption) === buscado && (!m.timestamp || new Date(m.timestamp).getTime() >= desde))
+    return igual ? { estado: "si", id: igual.id } : { estado: "no" }
+  } catch (error) {
+    return { estado: "no_se", motivo: error instanceof Error ? error.message : String(error) }
   }
 }
 

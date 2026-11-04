@@ -10,21 +10,40 @@ import { publicarFacebook, publicarInstagram } from "./meta"
 import { buildCommentary, publishText, subirImagen, type PublishResult } from "./linkedin"
 
 /**
+ * El freno, escrito para PostgREST. Sale si alguien la aprobo, o si es de la cola
+ * general y el revisor no la freno; las de antes del revisor no tienen revision y
+ * salen como siempre. Lo creado desde el chat es un borrador que alguien pidio:
+ * sin aprobar no sale, ni en una tanda a mano. Lo comparten las tandas y el
+ * calendario, y `sinFreno` (calendario/decidir.ts) es la misma regla en codigo.
+ */
+export const FRENO_PIEZA = "status.eq.approved,and(carril.eq.general,or(revision.is.null,revision->>frena.eq.false))"
+
+/**
+ * Lo que el calendario vio al decidir publicar una pieza. El reclamo lo compara
+ * con la fila: si alguien la movio, la edito, la freno o la quito mientras tanto,
+ * no coincide y no sale. Asi una lista leida hace un minuto no le gana a una persona.
+ */
+export type GuardaProgramada = {
+  programadaPara: string
+  intentos: number
+  contenidoCambiadoAt: string | null
+}
+
+/**
  * Publica una pieza y anota el resultado en su fila.
  *
- * La guarda contra publicar dos veces es `published_at`: se comprueba antes de
- * llamar a LinkedIn y se escribe justo despues. No es una transaccion, asi que
- * dos publicaciones simultaneas de la misma pieza podrian colarse; en la
- * practica solo hay dos disparadores (el boton y el tick) y el boton se
- * deshabilita al publicar.
+ * La guarda contra publicar dos veces es el reclamo atomico sobre `published_at`.
+ * Sin `guarda` publica lo que le pidan: es el boton, una persona delante. Con
+ * `guarda` sale sola, y por eso es estricta en todo lo que el boton deja pasar.
  */
-export async function publishPiece(pieceId: string): Promise<PublishResult> {
+export async function publishPiece(pieceId: string, opciones: { guarda?: GuardaProgramada } = {}): Promise<PublishResult> {
   const supabase = supabaseAdmin()
+  const { guarda } = opciones
 
   // El recurso sale antes que la pieza: un carrusel que pide comentar una
   // palabra sin el recurso publicado deja a quien comenta sin nada que leer.
-  const falta = await recursoSinPublicar(pieceId)
-  if (falta) return { ok: false, error: falta }
+  const falta = await recursoSinPublicar(pieceId, Boolean(guarda))
+  if (falta) return { ok: false, error: falta, codigo: "recurso" }
 
   // Reclamo atomico ANTES de publicar. El error anterior era un check-then-act:
   // se leia published_at, se veia null, se publicaba y despues se marcaba. Los
@@ -33,14 +52,29 @@ export async function publishPiece(pieceId: string): Promise<PublishResult> {
   // cinco veces. Aqui `published_at` se pone en el mismo UPDATE que comprueba
   // que estaba vacio: la base garantiza que solo una pasada gana la fila.
   const marca = new Date().toISOString()
-  const { data: reclamada, error: errorReclamo } = await supabase
+  let reclamo = supabase
     .from("content_pieces")
-    .update({ status: "publishing", published_at: marca })
+    .update({
+      status: "publishing",
+      published_at: marca,
+      // El intento se cuenta aqui y no al fallar: un proceso que muere tambien gasta uno.
+      ...(guarda ? { programada_intentos: guarda.intentos + 1 } : {}),
+    })
     .eq("id", pieceId)
     .is("published_at", null)
     .neq("status", "rejected")
-    .select("*")
-    .maybeSingle()
+  if (guarda) {
+    reclamo = reclamo
+      .eq("programada_para", guarda.programadaPara)
+      .eq("programada_intentos", guarda.intentos)
+      .eq("programada_revisar", false)
+      .in("status", ["generated", "approved"])
+      .or(FRENO_PIEZA)
+    reclamo = guarda.contenidoCambiadoAt
+      ? reclamo.eq("contenido_cambiado_at", guarda.contenidoCambiadoAt)
+      : reclamo.is("contenido_cambiado_at", null)
+  }
+  const { data: reclamada, error: errorReclamo } = await reclamo.select("*").maybeSingle()
 
   // El error del UPDATE no se puede tragar: si la base rechaza el reclamo (un
   // CHECK que no admite 'publishing', un trigger que falla) y se ignora, cada
@@ -52,8 +86,8 @@ export async function publishPiece(pieceId: string): Promise<PublishResult> {
 
   if (!reclamada) {
     // O ya se publico, o esta rechazada, o otra pasada la tomo en esta misma
-    // rafaga. En los tres casos no hay nada que hacer aqui.
-    return { ok: false, error: "La pieza ya se publico o la tomo otra pasada." }
+    // rafaga, o (con guarda) cambio desde que se leyo. No hay nada que hacer aqui.
+    return { ok: false, error: "La pieza ya se publico o la tomo otra pasada.", codigo: "reclamo_perdido" }
   }
 
   const piece = reclamada as ContentPiece & { published_at: string | null; linkedin_urn: string | null }
@@ -62,7 +96,7 @@ export async function publishPiece(pieceId: string): Promise<PublishResult> {
   // Facebook con las conexiones de Composio de la empresa.
   const result =
     piece.network === "instagram"
-      ? await publicarCarrusel(piece)
+      ? await publicarCarrusel(piece, Boolean(guarda))
       : piece.network === "facebook"
         ? await publicarEnFacebook(piece)
         : await publicarEnLinkedin(piece)
@@ -75,7 +109,7 @@ export async function publishPiece(pieceId: string): Promise<PublishResult> {
         published_at: marca,
         // La columna guarda el identificador del post publicado, sea de la red
         // que sea: el URN de LinkedIn o el id que devuelve Buffer.
-        linkedin_urn: result.urn,
+        linkedin_urn: result.urn || null,
         // Queda anotado que el post salio ilustrado, que es la unica forma de
         // comprobarlo despues sin abrir el feed.
         ...(result.imageUrn ? { image_urn: result.imageUrn } : {}),
@@ -84,15 +118,25 @@ export async function publishPiece(pieceId: string): Promise<PublishResult> {
       .eq("id", pieceId)
   } else {
     // La publicacion fallo, asi que se suelta el reclamo: published_at vuelve a
-    // null para que un reintento pueda tomarla, y el error queda a la vista.
+    // null para que un reintento pueda tomarla, y el error queda a la vista. Vuelve
+    // al estado que tenia: perder la aprobacion por un fallo de la red dejaba una
+    // pieza frenada sin poder reintentarse. Solo si sigue en 'publishing': si la
+    // rechazaron mientras salia, soltarla asi la reviviria.
+    //
+    // Si no se sabe si salio y esta en el calendario, no puede quedar lista para
+    // su hora: saldria otra vez. Queda en Revisar.
+    const publish_error = result.error.slice(0, 1000)
     await supabase
       .from("content_pieces")
       .update({
-        status: "generated",
+        status: piece.approved_at ? "approved" : "generated",
         published_at: null,
-        publish_error: result.error.slice(0, 1000),
+        publish_error,
+        ...(result.codigo === "ambiguo" && piece.programada_para ? { programada_revisar: true } : {}),
       })
       .eq("id", pieceId)
+      .eq("status", "publishing")
+    await supabase.from("content_pieces").update({ published_at: null, publish_error }).eq("id", pieceId).eq("status", "rejected")
   }
 
   return result
@@ -127,7 +171,7 @@ async function publicarEnLinkedin(piece: ContentPiece): Promise<PublishResult> {
  * Instagram: el carrusel entero, con la conexion de Instagram de la empresa.
  * Las imagenes ya viven en URLs publicas del storage.
  */
-async function publicarCarrusel(piece: ContentPiece): Promise<PublishResult> {
+async function publicarCarrusel(piece: ContentPiece, estricto: boolean): Promise<PublishResult> {
   const payload = piece.payload as unknown as {
     caption?: string
     hashtags?: string[]
@@ -143,8 +187,9 @@ async function publicarCarrusel(piece: ContentPiece): Promise<PublishResult> {
     .filter((parte) => parte && parte.trim().length > 0)
     .join("\n\n")
 
-  const resultado = await publicarInstagram(piece.account_id, { texto, imagenes })
-  return resultado.ok ? { ok: true, urn: resultado.postId } : { ok: false, error: resultado.error }
+  const resultado = await publicarInstagram(piece.account_id, { texto, imagenes, estricto })
+  if (resultado.ok) return { ok: true, urn: resultado.postId }
+  return { ok: false, error: resultado.error, ...(resultado.ambiguo ? { codigo: "ambiguo" as const } : {}) }
 }
 
 /**
@@ -178,19 +223,24 @@ async function publicarEnFacebook(piece: ContentPiece): Promise<PublishResult> {
  * Si la pieza promete un recurso que aun no esta en la web, el motivo. Solo
  * frena las piezas que se escribieron con su recurso (lo dice el input de su
  * buzon): un recurso escrito despues, a mano, no frena piezas que no lo piden.
+ *
+ * `estricto` es para lo que sale sin nadie delante: si no se puede leer, frena.
  */
-export async function recursoSinPublicar(pieceId: string): Promise<string | null> {
+export async function recursoSinPublicar(pieceId: string, estricto = false): Promise<string | null> {
   const supabase = supabaseAdmin()
-  const { data: pieza } = await supabase.from("content_pieces").select("job_instagram_id, job_linkedin_id").eq("id", pieceId).maybeSingle()
+  const sinLeer = estricto ? "No se pudo comprobar su recurso: se reintenta en la próxima pasada." : null
+  const { data: pieza, error: errorPieza } = await supabase.from("content_pieces").select("job_instagram_id, job_linkedin_id").eq("id", pieceId).maybeSingle()
+  if (errorPieza) return sinLeer
   const p = pieza as { job_instagram_id: string | null; job_linkedin_id: string | null } | null
   if (!p) return null
   const [tabla, jobId] = p.job_instagram_id ? ["jobs_instagram", p.job_instagram_id] : ["jobs_linkedin", p.job_linkedin_id]
   if (!jobId) return null
-  const { data: job } = await supabase.from(tabla).select("input").eq("id", jobId).maybeSingle()
+  const { data: job, error: errorJob } = await supabase.from(tabla).select("input").eq("id", jobId).maybeSingle()
+  if (errorJob) return sinLeer
   const recursoId = (job as { input?: { recurso?: { id?: string } | null } } | null)?.input?.recurso?.id
   if (!recursoId) return null
   const { data, error } = await supabase.from("content_recursos").select("status, web_url").eq("id", recursoId).maybeSingle()
-  if (error || !data) return null
+  if (error || !data) return sinLeer
   const r = data as { status: string; web_url: string | null }
   if (r.status === "descartado") return "La pieza pide comentar la palabra de un recurso que se descartó: regenérala o cambia el cierre antes de publicarla."
   if (r.web_url) return null
@@ -210,13 +260,21 @@ export async function pendingToPublish(
   // publicar, y si el proceso muere en esa ventana de segundos quedaria colgada
   // sin salir y sin que nadie la reintente. Cinco minutos es mucho mas de lo
   // que tarda publicar, asi que a esas alturas es un reclamo huerfano.
-  await supabase
-    .from("content_pieces")
-    .update({ status: "generated", published_at: null })
-    .eq("account_id", accountId)
-    .eq("network", network)
-    .eq("status", "publishing")
-    .lt("published_at", new Date(Date.now() - 5 * 60_000).toISOString())
+  //
+  // Lo que esta en el calendario no se suelta aqui: no se sabe si salio, asi que lo
+  // recoge su propio barrido y va a Revisar (programadas.ts).
+  const hace5Min = new Date(Date.now() - 5 * 60_000).toISOString()
+  const huerfanas = (status: "approved" | "generated") =>
+    supabase
+      .from("content_pieces")
+      .update({ status, published_at: null })
+      .eq("account_id", accountId)
+      .eq("network", network)
+      .eq("status", "publishing")
+      .is("programada_para", null)
+      .lt("published_at", hace5Min)
+  await huerfanas("approved").not("approved_at", "is", null)
+  await huerfanas("generated").is("approved_at", null)
 
   const { data, error } = await supabase
     .from("content_pieces")
@@ -224,12 +282,10 @@ export async function pendingToPublish(
     .eq("account_id", accountId)
     .eq("network", network)
     .in("status", ["generated", "approved"])
-    // El freno del revisor: una pieza que frena no sale sola. Sale si alguien
-    // la aprobo, que es decir "la vi y sale igual". Las de antes del revisor no
-    // tienen revision y salen como siempre. Lo creado desde el chat es un
-    // borrador que alguien pidio: sin aprobar no sale, ni en una tanda a mano.
-    .or("status.eq.approved,and(carril.eq.general,or(revision.is.null,revision->>frena.eq.false))")
+    .or(FRENO_PIEZA)
     .is("published_at", null)
+    // Lo que tiene fecha sale a su hora, no en la siguiente tanda.
+    .is("programada_para", null)
     .order("created_at")
     .limit(limite)
 

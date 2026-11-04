@@ -215,7 +215,16 @@ export type PublishResult =
       /** URN de la imagen adjunta, cuando la publicacion llevo una. */
       imageUrn?: string
     }
-  | { ok: false; error: string }
+  | {
+      ok: false
+      error: string
+      /**
+       * Por que no salio, cuando quien llama tiene que actuar distinto.
+       * `ambiguo`: se envio y no se sabe si llego. Reintentar podria duplicar el
+       * post, asi que una pieza programada pasa a Revisar.
+       */
+      codigo?: "reclamo_perdido" | "recurso" | "ambiguo"
+    }
 
 /** El texto tal como se publica: hook, cuerpo y hashtags, en ese orden. */
 export function buildCommentary(payload: PiecePayload): string {
@@ -353,19 +362,19 @@ export async function publishText(
       return {
         ok: false,
         error: `LinkedIn respondio ${response.status}: ${detalle.slice(0, 400)}`,
+        // Un 4xx es un no. Un 5xx puede llegar con el post ya creado.
+        ...(response.status >= 500 ? { codigo: "ambiguo" as const } : {}),
       }
     }
 
-    // El id del post viaja en la cabecera, no en el cuerpo.
-    const urn = response.headers.get("x-restli-id")
-    if (!urn) {
-      return { ok: false, error: "LinkedIn acepto el post pero no devolvio su identificador." }
-    }
-
-    return { ok: true, urn }
+    // El id del post viaja en la cabecera, no en el cuerpo. El 201 ya dice que
+    // salio: darlo por fallido porque falte el id acababa en un post doble. Sin id
+    // la pieza queda publicada, solo que sin enlace al post.
+    return { ok: true, urn: response.headers.get("x-restli-id") ?? "" }
   } catch (error) {
+    // La peticion se corto (un timeout, la red): pudo llegar o no.
     const message = error instanceof Error ? error.message : String(error)
-    return { ok: false, error: message }
+    return { ok: false, error: message, codigo: "ambiguo" }
   }
 }
 
