@@ -14,6 +14,7 @@ import { cx, I, Ico, Logo, useFuera } from "./comun"
 const NAV: { nombre: string; url: string; d: React.ReactNode; sub?: boolean; advance?: boolean }[] = [
   { nombre: "Chat", url: "/", d: <path d="M4 5h16v11H9l-5 4z" /> },
   { nombre: "Estudio", url: "/estudio", d: <path d="M5 4v16M10 4v16M15 4l4 16" /> },
+  { nombre: "Calendario", url: "/calendario", d: <path d="M5 6h14v14H5zM5 10h14M9 3v5M15 3v5" />, advance: true },
   { nombre: "Marca", url: "/marca", d: (<><circle cx="12" cy="12" r="8" /><path d="M12 8v8M9 10v4M15 10v4" /></>) },
   { nombre: "Capas", url: "/capas", d: <path d="M12 4l8 4-8 4-8-4zM4 12l8 4 8-4M4 16l8 4 8-4" />, advance: true },
   { nombre: "Ideas", url: "/ideas", d: <path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5V16h8v-2.5A6 6 0 0 0 12 3z" />, advance: true },
