@@ -120,6 +120,8 @@ export async function getTableroRedaccion(): Promise<TableroRedaccion> {
       .from("raw_news")
       .select("id, title, source, link, niche, tema, status, relevance_score, created_at, date_serper, snippet, analysis_notes, keywords_matched, content_fetch_status, image_url")
       .eq("account_id", accountId)
+      // Lo pedido en el chat va a redes, no al portal de noticias.
+      .eq("carril", "general")
       .order("created_at", { ascending: false })
       .limit(MAX_FILAS),
     supabase

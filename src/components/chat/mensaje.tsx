@@ -50,6 +50,15 @@ export function MensajeVista({ m, montado, onAbrirPieza }: { m: MensajeUI; monta
             <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.noticia.titulo}</span>
           </div>
         ) : null}
+        {m.fuentes.length ? (
+          <div className={s.refs} aria-label="Fuentes">
+            {m.fuentes.map((f) => (
+              <a key={f.url} className={s.ref} href={f.url} target="_blank" rel="noopener noreferrer" title={f.titulo} style={{ textDecoration: "none" }}>
+                {f.medio}
+              </a>
+            ))}
+          </div>
+        ) : null}
         {m.referencias.map((r) => (
           <TarjetaPieza key={`${r.pieceId}-${r.version ?? 0}`} r={r} onAbrir={() => onAbrirPieza(r)} />
         ))}
@@ -106,6 +115,19 @@ export function TrabajoVista({ t }: { t: TrabajoUI }) {
       </div>
     )
   }
+  // Sin nadie delante en particular: el chat reparte los turnos.
+  if (t.estado === "espera") {
+    return (
+      <div className={s.waiting}>
+        <div className={cx(s.av, s.ghost)} style={{ color: a.color }}>
+          {a.letra}
+        </div>
+        <span style={{ fontSize: 13, color: "var(--ink3)" }}>
+          {t.agente === "revisor" ? "El Revisor dictamina cuando terminen las piezas" : `${t.titulo ?? a.nombre}: en cola`}
+        </span>
+      </div>
+    )
+  }
   const detenido = t.estado === "detenido"
   const pct = t.total ? Math.round((Math.min(t.paso, t.total) / t.total) * 100) : 0
   return (
@@ -128,7 +150,7 @@ export function TrabajoVista({ t }: { t: TrabajoUI }) {
               <span />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 500 }}>{t.etiqueta}</div>
+              <div style={{ fontSize: 13.5, fontWeight: 500 }}>{t.titulo ? `${t.titulo} · ${t.etiqueta}` : t.etiqueta}</div>
               <div className={s.bar}>
                 <i style={{ width: `${pct}%` }} />
               </div>
@@ -164,7 +186,7 @@ export function PensandoVista() {
 }
 
 /** La respuesta de un agente mientras la escribe. */
-export function EnVivoVista({ agente, texto, aplicando }: { agente: AgenteChat; texto: string; aplicando?: boolean }) {
+export function EnVivoVista({ agente, texto, aplicando, herramienta }: { agente: AgenteChat; texto: string; aplicando?: boolean; herramienta?: string | null }) {
   const a = AG[agente]
   return (
     <div className={s.msg}>
@@ -174,9 +196,19 @@ export function EnVivoVista({ agente, texto, aplicando }: { agente: AgenteChat; 
           <span className={s.n} style={{ color: agente === "coordinador" ? "var(--ink)" : a.color }}>
             {a.nombre}
           </span>
-          <span className={s.cm}>{aplicando ? "aplicando el cambio" : "escribiendo"}</span>
+          <span className={s.cm}>{aplicando ? "aplicando el cambio" : herramienta ? "investigando" : "escribiendo"}</span>
         </div>
         {texto ? <p className={s.mt}>{conNegritas(texto)}</p> : null}
+        {herramienta ? (
+          <div className={s.aplicando} role="status">
+            <span className={s.dots} aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </span>
+            {herramienta}
+          </div>
+        ) : null}
         {aplicando ? (
           <div className={s.aplicando} role="status">
             <span className={s.dots} aria-hidden="true">
@@ -186,7 +218,7 @@ export function EnVivoVista({ agente, texto, aplicando }: { agente: AgenteChat; 
             </span>
             Aplicando el cambio y volviendo a dibujar…
           </div>
-        ) : texto ? null : (
+        ) : texto || herramienta ? null : (
           <div className={s.dots} aria-label={`${a.nombre} está pensando`} style={{ padding: "6px 0" }}>
             <span />
             <span />

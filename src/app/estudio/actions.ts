@@ -135,6 +135,9 @@ const DIAS_DE_HECHOS_CUBIERTOS = 7
 async function hechoYaCubierto(news: RawNews): Promise<string | null> {
   const supabase = supabaseAdmin()
 
+  // Lo pidio una persona en el chat: no es prensa que se pueda repetir.
+  if (news.carril === "chat") return null
+
   // El veto no es una nota baja que se pueda empujar: es un tema que esta
   // cuenta no cubre. Se corta aqui porque el tablero no es la unica via.
   if (news.status === "vetada") {
@@ -157,6 +160,7 @@ async function hechoYaCubierto(news: RawNews): Promise<string | null> {
     .from("raw_news")
     .select("id, title, content_angles!inner(id)")
     .eq("account_id", news.account_id)
+    .eq("carril", "general")
     .gte("created_at", desde)
     .neq("id", news.id)
     .limit(120)
@@ -1022,6 +1026,8 @@ async function facebookDesdeCarruselExistente(angleId: string): Promise<boolean>
   const { error } = await supabase.from("content_pieces").insert({
     account_id: accountId,
     content_angle_id: angleId,
+    // Hereda el carril: una pieza del chat nunca sale sola, tampoco su Facebook.
+    carril: pieza.carril ?? "general",
     raw_news_id: pieza.raw_news_id,
     job_instagram_id: pieza.job_instagram_id,
     network: "facebook",

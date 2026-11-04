@@ -1,4 +1,4 @@
-import type { AgenteChat, NoticiaAdjunta, Referencia, RolMensaje, Seleccion } from "@/engine/chat/mensajes"
+import type { AgenteChat, NoticiaAdjunta, ReferenciaFuente, ReferenciaPieza, RolMensaje, Seleccion } from "@/engine/chat/mensajes"
 import type { PiezaVista, VersionVista } from "@/engine/chat/piezas"
 import type { EstadoTrabajo } from "@/engine/chat/trabajos"
 
@@ -7,7 +7,7 @@ import type { EstadoTrabajo } from "@/engine/chat/trabajos"
  * datos planos: la pantalla los pinta y agrupa, el servidor los lee y escribe.
  */
 
-export type { AgenteChat, NoticiaAdjunta, PiezaVista, VersionVista }
+export type { AgenteChat, NoticiaAdjunta, PiezaVista, ReferenciaFuente, VersionVista }
 
 /** Algo marcado en la pieza del panel: va con el siguiente mensaje. */
 export type Marca = Seleccion
@@ -28,7 +28,7 @@ export type FilaConversacion = {
   borrada: string | null
 }
 
-export type ReferenciaUI = Referencia & {
+export type ReferenciaUI = ReferenciaPieza & {
   /** La portada del carrusel, para la miniatura de la tarjeta. */
   miniatura: string | null
 }
@@ -41,6 +41,8 @@ export type MensajeUI = {
   contenido: string
   noticia: NoticiaAdjunta | null
   referencias: ReferenciaUI[]
+  /** De donde salio lo que dice el mensaje, si investigo. */
+  fuentes: ReferenciaFuente[]
   /** Lo que marco en la pieza para este pedido: "L1 · Titulo". */
   marcas: string[]
   creado: string
@@ -49,6 +51,8 @@ export type MensajeUI = {
 /** Una tarjeta de trabajo: lo que un agente esta haciendo, espera o dejo detenido. */
 export type TrabajoUI = {
   id: string
+  /** De que va, cuando un pedido tiene varias piezas. */
+  titulo: string | null
   agente: "instagram" | "linkedin" | "revisor"
   estado: Extract<EstadoTrabajo, "espera" | "trabajando" | "detenido">
   /** A quien espera, si esta en espera: "LinkedIn espera a que Instagram termine". */

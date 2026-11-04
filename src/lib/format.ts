@@ -46,6 +46,7 @@ export const STATUS_LABELS: Record<string, string> = {
   pending_analysis: "Pendiente de analisis",
   analyzing: "Analizando",
   analyzed: "Analizada",
+  chat: "Desde el chat",
   pending: "Pendiente",
   success: "Completado",
   failed: "Fallido",

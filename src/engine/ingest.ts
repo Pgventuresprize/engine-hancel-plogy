@@ -176,6 +176,9 @@ export async function runIngestion(options: RunOptions): Promise<IngestionSummar
       .from("raw_news")
       .select("id, title, niche")
       .eq("account_id", accountId)
+      // Lo pedido en el chat no es prensa del dia: borrarla por parecido se
+      // llevaria en cascada sus piezas, y al reves borraria noticias de verdad.
+      .eq("carril", "general")
       .gte("created_at", startOfTodayUtc(started))
       .order("created_at", { ascending: true })
       .limit(DEDUPE_FETCH_LIMIT)

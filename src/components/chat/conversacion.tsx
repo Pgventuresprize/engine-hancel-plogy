@@ -16,7 +16,7 @@ export function Conversacion(props: {
   faltante: boolean
   enviando: boolean
   /** La respuesta que se esta escribiendo; sin agente aun, el coordinador lee. */
-  enVivo: { agente: AgenteChat | null; texto: string; aplicando: boolean } | null
+  enVivo: { agente: AgenteChat | null; texto: string; aplicando: boolean; herramienta: string | null } | null
   montado: boolean
   onGuardar: () => void
   onRenombrar: () => void
@@ -155,7 +155,7 @@ export function Conversacion(props: {
             )
           )}
           {props.enVivo?.agente ? (
-            <EnVivoVista agente={props.enVivo.agente} texto={props.enVivo.texto} aplicando={props.enVivo.aplicando} />
+            <EnVivoVista agente={props.enVivo.agente} texto={props.enVivo.texto} aplicando={props.enVivo.aplicando} herramienta={props.enVivo.herramienta} />
           ) : respondiendo ? (
             <PensandoVista />
           ) : null}

@@ -1,6 +1,6 @@
 import type { RawNews } from "@/lib/types"
 
-import { claimRecursoJobs, enqueueInstagramJob, enqueueLinkedinJob, markJobUnreadable, type JobRecurso } from "../content/jobs"
+import { claimRecursoJobs, enqueueInstagramJob, enqueueLinkedinJob, markJobUnreadable, type JobRecurso, type Objetivo } from "../content/jobs"
 import type { ContentLog } from "../content/log"
 import type { ContentAngle } from "../content/types"
 import { supabaseAdmin } from "../supabase-admin"
@@ -17,9 +17,9 @@ import { contarPalabrasRecurso, DIAS_DE_PALABRA, limpiarPalabra } from "./modelo
  * `estadoDelRecurso` en jobs.ts): un carrusel que ofrece algo que no existe es
  * peor que uno que invita a seguir a la marca.
  */
-export async function drenarRecursos(log: ContentLog, presupuesto?: number): Promise<{ consumidos: number; creados: number; errores: string[] }> {
+export async function drenarRecursos(log: ContentLog, presupuesto?: number, objetivo?: Objetivo): Promise<{ consumidos: number; creados: number; errores: string[] }> {
   const supabase = supabaseAdmin()
-  const jobs = await claimRecursoJobs(presupuesto)
+  const jobs = await claimRecursoJobs(presupuesto, objetivo)
   const errores: string[] = []
   let creados = 0
 

@@ -38,6 +38,7 @@ const ABIERTAS = [
   "/api/videos/tick",
   "/api/redaccion/tick",
   "/api/publicacion/tick",
+  "/api/chat/pasada",
 ]
 
 /** Con sesion no ofrecen nada: se va al inicio. */

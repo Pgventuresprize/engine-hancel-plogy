@@ -6,7 +6,9 @@ import { usuarioComposio } from "../secretos"
  *
  * Dos identificadores que es facil confundir:
  * - La auth config (`ac_...`) dice "esta es la configuracion de Canva (o
- *   Facebook, o Instagram) en Composio". Es de la plataforma y va fija aqui.
+ *   Facebook, o Instagram) en Composio". Es de la plataforma y va en el
+ *   entorno, no en el codigo: vive en el proyecto de Composio de la clave, y al
+ *   cambiar de proyecto las que estaban escritas aqui dejaron de existir.
  * - La cuenta conectada (`ca_...`) es el Canva o la pagina de Facebook de una
  *   empresa. La crea Composio cuando alguien de la empresa inicia sesion desde
  *   Conexiones; nadie la escribe a mano.
@@ -22,14 +24,29 @@ const API = "https://backend.composio.dev/api/v3.1"
 
 export type Toolkit = "canva" | "facebook" | "instagram"
 
-/** La auth config de cada toolkit en Composio. Se puede sobreescribir por entorno. */
-export const AUTH_CONFIG: Record<Toolkit, string> = {
-  canva: process.env.COMPOSIO_CANVA_AUTH_CONFIG_ID?.trim() || "ac_mF7f1F7XqvON",
-  facebook: process.env.COMPOSIO_FACEBOOK_AUTH_CONFIG_ID?.trim() || "ac_V3qhG8l4dYur",
-  instagram: process.env.COMPOSIO_INSTAGRAM_AUTH_CONFIG_ID?.trim() || "ac_VahuawW7hmAw",
+/**
+ * La auth config de cada toolkit en Composio, del entorno. Canva es la del
+ * toolkit `canva_mcp` (Canva MCP), no la de `canva`: las herramientas del
+ * estudio son las del MCP.
+ */
+export const AUTH_CONFIG: Record<Toolkit, string | null> = {
+  canva: process.env.COMPOSIO_CANVA_AUTH_CONFIG_ID?.trim() || null,
+  facebook: process.env.COMPOSIO_FACEBOOK_AUTH_CONFIG_ID?.trim() || null,
+  instagram: process.env.COMPOSIO_INSTAGRAM_AUTH_CONFIG_ID?.trim() || null,
 }
 
 const NOMBRE: Record<Toolkit, string> = { canva: "Canva", facebook: "Facebook", instagram: "Instagram" }
+
+const VARIABLE: Record<Toolkit, string> = {
+  canva: "COMPOSIO_CANVA_AUTH_CONFIG_ID",
+  facebook: "COMPOSIO_FACEBOOK_AUTH_CONFIG_ID",
+  instagram: "COMPOSIO_INSTAGRAM_AUTH_CONFIG_ID",
+}
+
+/** Dicho para quien tiene que arreglarlo, no el "Auth config not found" de Composio. */
+function faltaAuthConfig(toolkit: Toolkit): string {
+  return `Falta configurar ${NOMBRE[toolkit]} en Composio (${VARIABLE[toolkit]}).`
+}
 
 /** La clave de Composio de la plataforma. */
 export async function claveComposio(): Promise<string | null> {
@@ -59,9 +76,11 @@ export async function estadoConexion(accountId: string, toolkit: Toolkit, fresco
 async function consultarEstado(accountId: string, toolkit: Toolkit): Promise<EstadoConexion> {
   const clave = await claveComposio()
   if (!clave) return { conectado: false, motivo: "Falta la clave de Composio de la plataforma." }
+  const authConfig = AUTH_CONFIG[toolkit]
+  if (!authConfig) return { conectado: false, motivo: faltaAuthConfig(toolkit) }
   try {
     const url = new URL(`${API}/connected_accounts`)
-    url.searchParams.set("auth_config_ids", AUTH_CONFIG[toolkit])
+    url.searchParams.set("auth_config_ids", authConfig)
     url.searchParams.set("user_ids", await usuarioComposio(accountId))
     url.searchParams.set("statuses", "ACTIVE")
     url.searchParams.set("order_by", "updated_at")
@@ -91,11 +110,13 @@ export async function enlaceConexion(
 ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   const clave = await claveComposio()
   if (!clave) return { ok: false, error: "Falta la clave de Composio de la plataforma." }
+  const authConfig = AUTH_CONFIG[toolkit]
+  if (!authConfig) return { ok: false, error: faltaAuthConfig(toolkit) }
   try {
     const res = await fetch(`${API}/connected_accounts/link`, {
       method: "POST",
       headers: { "x-api-key": clave, "Content-Type": "application/json" },
-      body: JSON.stringify({ auth_config_id: AUTH_CONFIG[toolkit], user_id: await usuarioComposio(accountId), callback_url: callbackUrl }),
+      body: JSON.stringify({ auth_config_id: authConfig, user_id: await usuarioComposio(accountId), callback_url: callbackUrl }),
       signal: AbortSignal.timeout(20_000),
     })
     const json = (await res.json().catch(() => null)) as { redirect_url?: string; error?: { message?: string } | string; message?: string } | null

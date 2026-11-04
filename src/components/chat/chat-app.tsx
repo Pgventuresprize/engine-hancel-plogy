@@ -57,7 +57,7 @@ export function ChatApp(props: {
   const [provisional, setProvisional] = React.useState<Hilo | null>(null)
   const [enviando, setEnviando] = React.useState(false)
   /** La respuesta que un agente esta escribiendo ahora, antes de guardarse. */
-  const [enVivo, setEnVivo] = React.useState<{ conversacion: string; agente: AgenteChat | null; texto: string; aplicando: boolean } | null>(null)
+  const [enVivo, setEnVivo] = React.useState<{ conversacion: string; agente: AgenteChat | null; texto: string; aplicando: boolean; herramienta: string | null } | null>(null)
   const [faltante, setFaltante] = React.useState<string | null>(null)
   const [panel, setPanel] = React.useState(false)
   const [enPapelera, setEnPapelera] = React.useState(false)
@@ -274,7 +274,7 @@ export function ChatApp(props: {
 
   /** Pide la respuesta del agente y la pinta mientras llega; al final trae el hilo guardado. */
   const escuchar = async (id: string) => {
-    setEnVivo({ conversacion: id, agente: null, texto: "", aplicando: false })
+    setEnVivo({ conversacion: id, agente: null, texto: "", aplicando: false, herramienta: null })
     try {
       const r = await fetch(`/api/chat/${id}/responder`, {
         method: "POST",
@@ -300,6 +300,7 @@ export function ChatApp(props: {
             tipo: string
             agente?: AgenteChat
             t?: string
+            detalle?: string
             error?: string
             pieza?: { id: string; tocadas: number[] }
           }
@@ -308,7 +309,12 @@ export function ChatApp(props: {
             setEnVivo((v) => (v ? { ...v, agente } : v))
           } else if (e.tipo === "texto" && e.t) {
             const t = e.t
-            setEnVivo((v) => (v ? { ...v, texto: v.texto + t } : v))
+            setEnVivo((v) => (v ? { ...v, texto: v.texto + t, herramienta: null } : v))
+          } else if (e.tipo === "descartar") {
+            setEnVivo((v) => (v ? { ...v, texto: "" } : v))
+          } else if (e.tipo === "herramienta") {
+            const herramienta = e.detalle ?? null
+            setEnVivo((v) => (v ? { ...v, herramienta } : v))
           } else if (e.tipo === "aplicando") setEnVivo((v) => (v ? { ...v, aplicando: true } : v))
           else if (e.tipo === "fin" && e.pieza) {
             // La pieza que cambio queda a la vista, con sus laminas nuevas destellando.
@@ -347,7 +353,7 @@ export function ChatApp(props: {
         ocupado: "coordinador",
         borrada: null,
       },
-      mensajes: [{ id: "nuevo", rol: "usuario", agente: null, autor: props.usuario.nombre, contenido: texto, noticia, referencias: [], marcas: [], creado: ahora }],
+      mensajes: [{ id: "nuevo", rol: "usuario", agente: null, autor: props.usuario.nombre, contenido: texto, noticia, referencias: [], fuentes: [], marcas: [], creado: ahora }],
       trabajos: [],
     })
     setEnviando(true)
@@ -398,6 +404,7 @@ export function ChatApp(props: {
                   contenido: texto,
                   noticia: null,
                   referencias: [],
+                  fuentes: [],
                   marcas: marcadas.map((m) => m.etiqueta),
                   creado: ahora,
                 },

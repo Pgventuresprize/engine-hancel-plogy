@@ -63,7 +63,16 @@ function abrir(): Promise<Browser> {
   return navegador
 }
 
+/** Cuantas tandas estan dibujando ahora: varias pasadas pueden compartir instancia. */
+let dibujando = 0
+
+/**
+ * Cierra el navegador para empezar con uno limpio tras un fallo. Si otra pasada
+ * esta dibujando, se deja: cerrarlo le romperia su carrusel. Si de verdad se
+ * cayo, `disconnected` ya lo quito y el siguiente que abra lanza otro.
+ */
 export async function cerrarNavegador(): Promise<void> {
+  if (dibujando > 0) return
   const b = navegador
   navegador = null
   if (b) await (await b).close().catch(() => undefined)
@@ -308,16 +317,21 @@ async function dibujarEn(
  * data: o about: se corta.
  */
 export async function dibujarLaminas(htmls: string[], opciones: OpcionesDibujo): Promise<LaminaDibujada[]> {
-  const pagina = await paginaSinRed()
+  dibujando++
   try {
-    const salida: LaminaDibujada[] = []
-    for (const html of htmls) {
-      const inicio = Date.now()
-      salida.push({ ...(await dibujarEn(pagina, html, opciones)), ms: Date.now() - inicio })
+    const pagina = await paginaSinRed()
+    try {
+      const salida: LaminaDibujada[] = []
+      for (const html of htmls) {
+        const inicio = Date.now()
+        salida.push({ ...(await dibujarEn(pagina, html, opciones)), ms: Date.now() - inicio })
+      }
+      return salida
+    } finally {
+      await pagina.close().catch(() => undefined)
     }
-    return salida
   } finally {
-    await pagina.close().catch(() => undefined)
+    dibujando--
   }
 }
 

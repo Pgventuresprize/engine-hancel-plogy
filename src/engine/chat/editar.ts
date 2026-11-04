@@ -1,11 +1,13 @@
 import { guardarVersion, versionesDe } from "../content/versiones"
 import { cifrasInventadas, parseFigura, type Figura, type ItemFigura } from "../marca/figuras"
 import { elegirDeBiblioteca, hayFotosEnBiblioteca, registrarUsos } from "../marca/imagenes"
-import { kitActivo, type KitCargado } from "../marca/kit"
+import { FORMATOS, kitActivo, type KitCargado } from "../marca/kit"
 import type { Hueco, Plantilla } from "../marca/kit-modelo"
 import { generarCarrusel, nichosConocidos, noticiaDelAngulo, parseInstagramResponse, type CarouselPayload } from "../render/carousel"
-import type { MaquetaGuardada } from "../render/kit-carrusel"
-import { claveKit } from "../render/kit-libre-pasos"
+import type { MaquetaGuardada, VarianteLamina } from "../render/kit-carrusel"
+import { disenarLamina } from "../render/kit-lamina"
+import { cargarFotosLibre, claveKit, type FotoGuardada } from "../render/kit-libre-pasos"
+import { quitado } from "../render/kit-maqueta"
 import { dibujarDesdeFuente } from "../render/redibujar"
 import { estiloDesdeConfig } from "../render/theme"
 import { supabaseAdmin } from "../supabase-admin"
@@ -26,6 +28,11 @@ import type { Seleccion } from "./mensajes"
  *     libre. Se cambia el guion y se vuelve a maquetar (pueden cambiar
  *     plantillas o fotos; desde ahi ya tiene maqueta).
  *   - "post": un post de LinkedIn, por parrafos.
+ *
+ * En un carrusel con maqueta, ademas del texto y las fotos se puede cambiar la
+ * plantilla de una lamina por otra del kit o pedir que se rediseñe a partir de la
+ * suya (render/kit-lamina.ts). Una pieza no limita lo que se puede pedir: limita
+ * lo que se inventa (cifras) y lo que ya salio publicado.
  */
 
 export type ModoEdicion = "huecos" | "guion" | "post"
@@ -36,7 +43,18 @@ export type Editable =
   | {
       modo: "huecos"
       pieceId: string
-      laminas: { n: number; tipo: string; huecos: HuecoEditable[]; foto: "tiene" | "puede" | "no"; figura: Figura | null }[]
+      laminas: {
+        n: number
+        tipo: string
+        /** La plantilla con que esta hecha y su clave en el catalogo. */
+        plantilla: string
+        clave: string
+        /** Lo que se pidio al rediseñarla, si se rediseño. */
+        disenada: string | null
+        huecos: HuecoEditable[]
+        foto: "tiene" | "puede" | "no"
+        figura: Figura | null
+      }[]
       caption: string
       hashtags: string[]
     }
@@ -69,12 +87,20 @@ export type CambioFigura = {
 
 /** Lo que el agente devuelve en el bloque ```cambios. */
 export type Cambios = {
+  /** La pieza que cambia (P1, P2...), cuando el agente tiene varias delante. */
+  pieza?: string
   motivo?: string
   laminas?: {
     n: number
+    /** La clave de otra plantilla del kit. */
+    plantilla?: string
+    /** Lo que se pide rediseñar de la lamina, partiendo de su plantilla. */
+    diseno?: string
     textos?: Record<string, string>
     listas?: Record<string, string[]>
     foto?: "otra"
+    /** Como tiene que ser la foto, si se pidio algo concreto. */
+    foto_pide?: string
     figura?: CambioFigura
     hook?: string
     title?: string
@@ -91,6 +117,12 @@ export type Cambios = {
 
 export type Aplicado = { version: number | null; tocadas: number[]; avisos: string[]; motivo: string }
 
+/** Lo que dejo el diseñador por lamina: la variante y su foto, o por que no salio. */
+export type Disenos = Record<string, { variante?: VarianteLamina; foto?: FotoGuardada["origen"]; motivo?: string }>
+
+/** Si el cambio pide rediseñar alguna lamina: esos tardan y van como trabajo. */
+export const pideDiseno = (c: Cambios): boolean => Boolean(c.laminas?.some((l) => typeof l.diseno === "string" && l.diseno.trim()))
+
 type Fila = {
   id: string
   network: string
@@ -100,6 +132,11 @@ type Fila = {
   job_instagram_id: string | null
   job_linkedin_id: string | null
 }
+
+/** Como se nombra una plantilla ante el agente: su id es demasiado largo para escribirlo. */
+const claveDe = (p: Plantilla) => p.id.slice(0, 8)
+
+const admiteFoto = (p: Plantilla, v?: VarianteLamina | null) => (v ? v.conFoto : p.foto.usa !== "no")
 
 async function filaDe(accountId: string, pieceId: string): Promise<Fila> {
   const { data } = await supabaseAdmin()
@@ -168,7 +205,10 @@ export async function editableDe(accountId: string, pieceId: string): Promise<Ed
         return {
           n: i + 1,
           tipo: p.tipo,
-          foto: p.foto.usa === "no" ? "no" : l.foto ? "tiene" : "puede",
+          plantilla: p.nombre,
+          clave: claveDe(p),
+          disenada: l.variante?.pedido ?? null,
+          foto: l.foto ? "tiene" : admiteFoto(p, l.variante) ? "puede" : "no",
           figura: l.figura ?? null,
           huecos: p.huecos
             .filter((h) => h.tipo === "texto" || h.tipo === "lista" || h.tipo === "numero")
@@ -241,7 +281,7 @@ export function textoEditable(e: Editable): string {
       "Carrusel de Instagram. Cada lámina es una plantilla del kit de la marca y su texto va en huecos con nombre: para cambiar un texto, cambias su hueco.",
       ...e.laminas.map((l) =>
         [
-          `## Lámina ${l.n} (${l.tipo})`,
+          `## Lámina ${l.n} (${l.tipo}, plantilla "${l.plantilla}" ${l.clave}${l.disenada ? `, rediseñada: ${l.disenada}` : ""})`,
           ...l.huecos.map((h) =>
             h.tipo === "lista"
               ? `- ${h.nombre} (lista${h.min_items || h.max_items ? ` de ${h.min_items ?? 1} a ${h.max_items ?? "varios"} elementos` : ""}, máx. ${h.max} caracteres cada uno${h.descripcion ? `; ${h.descripcion}` : ""}): ${JSON.stringify(h.valor)}`
@@ -281,59 +321,76 @@ export function textoEditable(e: Editable): string {
     .join("\n\n")
 }
 
+/** Las plantillas del kit, para que el agente pueda cambiar la de una lamina. */
+export function catalogoDelKit(kc: KitCargado): string {
+  const lineas = kc.plantillas.map((p) => {
+    const foto = p.foto.usa === "no" ? "sin foto" : `foto ${p.foto.usa} (${p.foto.uso === "inserto" ? "dentro de la lámina" : "de fondo"})`
+    const huecos = p.huecos.map((h) => `${h.nombre}${h.obligatorio ? "*" : ""}${h.tipo === "figura" ? " (figura)" : h.tipo === "lista" ? ` (lista, ${h.max} c/u)` : ` (${h.max})`}`)
+    return `- ${claveDe(p)} · ${p.tipo} · ${p.nombre} · fondo ${p.fondo} · ${foto} · huecos: ${huecos.join(", ")}. ${p.cuando_usar}`
+  })
+  return `# LAS PLANTILLAS DEL KIT DE LA MARCA\n\nEl asterisco es hueco obligatorio; el número, los caracteres que caben.\n\n${lineas.join("\n")}`
+}
+
 const REGLA_FIGURA = `- "figura" cambia la figura de esa lámina: {"titulo": "…", "items": [{"texto": "…", "cifra": "…"}, …]}. En "items" van todos sus elementos, en orden, con lo que cambia de cada uno (texto, nota, cifra, valor o celdas); sin "items" quedan como están. Una cifra que no esté en la noticia ni en el carrusel no entra: no inventes datos.`
 
-/** Como se escribe el bloque de cambios para cada manera de cambiar. */
-export function contratoDeCambios(modo: ModoEdicion): string {
-  const ejemplo =
-    modo === "huecos"
-      ? `{"motivo": "Acortó el titular de la portada", "laminas": [{"n": 1, "textos": {"titulo": "…"}}, {"n": 6, "listas": {"puntos": ["…", "…", "…"]}}, {"n": 4, "figura": {"titulo": "…"}}, {"n": 8, "foto": "otra"}]}`
-      : modo === "guion"
-        ? `{"motivo": "Acortó el titular de la portada", "laminas": [{"n": 1, "hook": "…"}, {"n": 3, "title": "…", "body": "…"}], "cierre": {"title": "…"}}`
-        : `{"motivo": "Reescribió el gancho", "parrafos": {"1": "…", "4": ""}}`
-  const reglas =
-    modo === "huecos"
-      ? [
-          `- En "textos" va cada hueco de texto que cambia, con su texto nuevo completo; en "listas", cada lista que cambia, completa. Solo los huecos que tiene esa lámina, con sus nombres exactos.`,
-          `- Respeta el máximo de caracteres de cada hueco: si no cabe, no se lee.`,
-          `- "foto": "otra" cambia la foto de esa lámina por otra de la biblioteca de la marca.`,
-          `- Donde el texto admite *resaltado*, se marca con asteriscos, como ya viene.`,
-          REGLA_FIGURA,
-        ]
-      : modo === "guion"
-        ? [
-            `- En cada lámina, solo los campos que cambian (hook en la portada; lead, title, body o items en las demás), con su texto nuevo completo. El cierre va aparte, en "cierre".`,
-            REGLA_FIGURA,
-            `- Al aplicarlo, el carrusel se vuelve a maquetar: avísalo en una frase si puede cambiar el aspecto.`,
-          ]
-        : [
-            `- En "parrafos", el número de cada párrafo que cambia y su texto nuevo completo. "" lo quita. Para añadir uno, ponlo junto a otro separado por una línea en blanco.`,
-          ]
+const EJEMPLO_CAMBIOS: Record<ModoEdicion, string> = {
+  huecos: `{"motivo": "Dos láminas con foto", "laminas": [{"n": 1, "textos": {"titulo": "…"}}, {"n": 6, "listas": {"puntos": ["…", "…", "…"]}}, {"n": 4, "figura": {"titulo": "…"}}, {"n": 8, "foto": "otra"}, {"n": 3, "plantilla": "<clave>", "textos": {"titulo": "…", "cuerpo": "…"}, "foto": "otra"}, {"n": 5, "diseno": "Foto a sangre detrás del texto, con velo para que se lea", "foto": "otra"}]}`,
+  guion: `{"motivo": "Acortó el titular de la portada", "laminas": [{"n": 1, "hook": "…"}, {"n": 3, "title": "…", "body": "…"}], "cierre": {"title": "…"}}`,
+  post: `{"motivo": "Reescribió el gancho", "parrafos": {"1": "…", "4": ""}}`,
+}
+
+const REGLAS_CAMBIOS: Record<ModoEdicion, string[]> = {
+  huecos: [
+    `- En "textos" va cada hueco de texto que cambia, con su texto nuevo completo; en "listas", cada lista que cambia, completa. Solo los huecos que tiene esa lámina, con sus nombres exactos.`,
+    `- Respeta el máximo de caracteres de cada hueco: si no cabe, no se lee.`,
+    `- "foto": "otra" le pone a esa lámina una foto de la biblioteca de la marca, o le cambia la que tiene. Si se pidió cómo tiene que ser, añade "foto_pide" con la descripción.`,
+    `- "plantilla": "<clave>" pasa la lámina a otra plantilla del kit, de la lista de plantillas. Llena en "textos" los huecos de la nueva, sin perder nada de lo que dice la lámina: si tenía algo en un hueco que la nueva no tiene (una fuente, un antetítulo), pásalo a otro hueco. Una lámina con figura solo va a una plantilla con hueco de figura. Si la plantilla lleva foto, añade "foto": "otra".`,
+    `- "diseno": "<lo que se pidió>" rediseña esa lámina partiendo de su plantilla y del carrusel: su texto no cambia. Úsalo cuando ninguna plantilla del kit dé lo que te pidieron: una foto detrás del texto en una lámina que no la lleva, otra composición, otro fondo. Escribe lo que se pidió, concreto. Si lleva foto, añade "foto": "otra". Va con su texto si también lo cambias.`,
+    `- Si te piden fotos o imágenes en general, decide tú en qué láminas: primero las que se prestan, nunca encima de una figura.`,
+    `- Donde el texto admite *resaltado*, se marca con asteriscos, como ya viene.`,
+    REGLA_FIGURA,
+  ],
+  guion: [
+    `- En cada lámina, solo los campos que cambian (hook en la portada; lead, title, body o items en las demás), con su texto nuevo completo. El cierre va aparte, en "cierre".`,
+    REGLA_FIGURA,
+    `- Al aplicarlo, el carrusel se vuelve a maquetar: avísalo en una frase si puede cambiar el aspecto.`,
+  ],
+  post: [`- En "parrafos", el número de cada párrafo que cambia y su texto nuevo completo. "" lo quita. Para añadir uno, ponlo junto a otro separado por una línea en blanco.`],
+}
+
+/** Como se escribe el bloque de cambios para las piezas que el agente tiene delante. */
+export function contratoDeCambios(modos: ModoEdicion[], varias: boolean): string {
+  const usados = [...new Set(modos)]
+  const conHuecos = usados.includes("huecos")
+  const reglas = usados.flatMap((m) => (usados.length > 1 ? [`Para una pieza por ${m === "huecos" ? "plantillas" : m}:`, ...REGLAS_CAMBIOS[m]] : REGLAS_CAMBIOS[m]))
   return `# CÓMO CAMBIAS LA PIEZA
 
-Si la persona pide un cambio en la pieza, hazlo tú. Primero dile en una o dos frases qué cambiaste, con el texto nuevo. Al final, sin nada después, añade el bloque con el cambio:
+Si la persona pide un cambio en una pieza, hazlo tú. Primero dile en una o dos frases qué cambiaste, con el texto nuevo. Al final, sin nada después, añade el bloque con el cambio:
 
 \`\`\`cambios
-${ejemplo}
+${usados.map((m) => EJEMPLO_CAMBIOS[m]).join("\n")}
 \`\`\`
 
 - "motivo": lo que cambió, de 3 a 8 palabras, como se lee en el historial de versiones.
 ${reglas.join("\n")}
 - "caption" (texto nuevo completo) y "hashtags" (lista) solo si cambian.
 - Cambia solo lo que se pide. Si marcó partes de la pieza, solo esas: lo demás queda igual.
-- Si el pedido no se entiende o no se puede hacer, pregunta o explica por qué, y no pongas el bloque.
+${varias ? `- Con varias piezas, cada cambio lleva "pieza" con su etiqueta (P1, P2...). Si el pedido vale para varias ("los carruseles", "todos"), el bloque es una lista con un cambio por pieza: [{"pieza": "P1", ...}, {"pieza": "P2", ...}].\n` : ""}${conHuecos || varias ? `- Un cambio con "diseno" o en varias piezas no se aplica al instante: se pone a trabajar y sale como tarjeta. Entonces di en una frase lo que vas a hacer, en futuro, y no digas que ya quedó.\n` : ""}- Lo que te pidan se hace: que una plantilla no lo traiga no es motivo para decir que no, ni para mandar a la persona a otro agente. ${conHuecos ? `Cambia la plantilla o rediseña la lámina.` : ""} Solo dos cosas no se hacen: inventar cifras o datos, y tocar lo ya publicado.
+- Si lo pedido puede costar algo (menos legibilidad, un texto que no cabe), hazlo igual y avísalo en una frase.
+- Si el pedido no se entiende, pregunta y no pongas el bloque.
 - Nunca digas que cambiaste algo si no pones el bloque: sin bloque, la pieza no cambia.`
 }
 
 /** Separa la prosa del bloque ```cambios. */
-export function leerCambios(texto: string): { prosa: string; cambios: Cambios | null; error: string | null } {
+export function leerCambios(texto: string): { prosa: string; cambios: Cambios[] | null; error: string | null } {
   const m = texto.match(/```cambios\s*([\s\S]*?)(```|$)/)
   const prosa = texto.replace(/```[\s\S]*$/, "").trim()
   if (!m) return { prosa, cambios: null, error: null }
   try {
-    const c = JSON.parse(m[1].trim()) as Cambios
-    if (!c || typeof c !== "object" || Array.isArray(c)) throw new Error("no es un objeto")
-    return { prosa, cambios: c, error: null }
+    const c = JSON.parse(m[1].trim()) as Cambios | Cambios[]
+    const lista = Array.isArray(c) ? c : [c]
+    if (!lista.length || lista.some((x) => !x || typeof x !== "object" || Array.isArray(x))) throw new Error("no es un objeto")
+    return { prosa, cambios: lista, error: null }
   } catch (e) {
     return { prosa, cambios: null, error: `el bloque de cambios no se pudo leer (${e instanceof Error ? e.message : String(e)})` }
   }
@@ -360,7 +417,7 @@ const lista = (v: unknown) => (Array.isArray(v) ? v.map((x) => String(x).trim())
  * Aplica los cambios y guarda la version nueva. Lanza con un motivo claro si no
  * se puede; si el carrusel no se puede volver a dibujar, la pieza queda como estaba.
  */
-export async function aplicarCambios(o: { accountId: string; pieceId: string; cambios: Cambios; agente: string }): Promise<Aplicado> {
+export async function aplicarCambios(o: { accountId: string; pieceId: string; cambios: Cambios; agente: string; disenos?: Disenos }): Promise<Aplicado> {
   const f = await filaDe(o.accountId, o.pieceId)
   if (f.published_at) throw new Error("La pieza ya está publicada: lo publicado no se toca.")
   const motivo = (limpio(o.cambios.motivo) || "Cambio pedido en el chat").slice(0, 120)
@@ -374,7 +431,7 @@ export async function aplicarCambios(o: { accountId: string; pieceId: string; ca
   else if (f.network === "instagram") {
     const kc = await kitActivo(o.accountId)
     const maqueta = maquetaUsable(f.payload, kc)
-    r = maqueta && kc ? await aplicarHuecos(o.accountId, f, kc, maqueta, o.cambios) : await aplicarGuion(o.accountId, f, o.cambios)
+    r = maqueta && kc ? await aplicarHuecos(o.accountId, f, kc, maqueta, o.cambios, o.disenos ?? {}) : await aplicarGuion(o.accountId, f, o.cambios)
   } else throw new Error("En el chat se cambian los carruseles de Instagram y los posts de LinkedIn.")
 
   const version = await guardarVersion({ accountId: o.accountId, pieceId: o.pieceId, motivo, autorAgente: o.agente })
@@ -467,18 +524,51 @@ function apretadas(payload: CarouselPayload, tocadas: number[]): string[] {
     : []
 }
 
+/** La plantilla del kit con esa clave. */
+const plantillaPorClave = (kc: KitCargado, clave: string) => kc.plantillas.find((p) => p.id === clave || claveDe(p) === clave.trim())
+
+/** Una foto de la biblioteca para una lamina, sin repetir las que ya se usan. */
+async function fotoParaLamina(o: {
+  accountId: string
+  f: Fila
+  plantilla: Plantilla
+  uso: Plantilla["foto"]["uso"]
+  texto: string
+  pide?: string
+  evitar: string[]
+}): Promise<{ imagenId: string; motivo: string } | null> {
+  if (!(await hayFotosEnBiblioteca(o.accountId))) return null
+  const pide = o.pide?.trim()
+  const { ancho, alto } = FORMATOS[o.plantilla.formato]
+  const elegidas = await elegirDeBiblioteca({
+    accountId: o.accountId,
+    huecos: [{ indice: 0, uso: o.uso, texto: pide ? `${pide}. ${o.texto}` : o.texto, tono: o.plantilla.foto.tono, espacio: o.plantilla.foto.espacio }],
+    terminos: [...(pide ? [pide] : []), ...textos(o.f.payload.terminosFoto)],
+    evitar: o.evitar,
+    // Dentro de la lamina la foto ocupa cerca de la mitad; de fondo, toda.
+    salida: { ancho, alto: o.uso === "inserto" ? Math.round(alto * 0.5) : alto },
+    obligatoria: true,
+  })
+  const elegida = elegidas.get(0)
+  return elegida ? { imagenId: elegida.imagenId, motivo: elegida.motivo } : null
+}
+
+const textoDeLamina = (l: Pick<MaquetaGuardada["laminas"][number], "textos" | "listas">) =>
+  [...Object.values(l.textos), ...Object.values(l.listas).flat()].join(". ")
+
 async function aplicarHuecos(
   accountId: string,
   f: Fila,
   kc: KitCargado,
   maqueta: MaquetaGuardada,
-  cambios: Cambios
+  cambios: Cambios,
+  disenos: Disenos
 ): Promise<Omit<Aplicado, "version" | "motivo">> {
   const supabase = supabaseAdmin()
   const laminas = maqueta.laminas.map((l) => ({ ...l, textos: { ...l.textos }, listas: { ...l.listas } }))
   const tocadas = new Set<number>()
   const avisos: string[] = []
-  const nuevasFotos: { n: number; imagenId: string; motivo: string }[] = []
+  let nuevasFotos: { n: number; imagenId: string; motivo: string }[] = []
   let fuente: string | null = null
 
   for (const c of cambios.laminas ?? []) {
@@ -488,8 +578,37 @@ async function aplicarHuecos(
       avisos.push(`La lámina ${c?.n} no existe: la dejé fuera.`)
       continue
     }
-    const p = kc.plantillas.find((x) => x.id === l.plantilla) as Plantilla
+    let p = kc.plantillas.find((x) => x.id === l.plantilla) as Plantilla
     const hueco = (nombre: string) => p.huecos.find((h) => h.nombre === nombre)
+    // Un cambio de plantilla que no se puede completar deja la lamina como estaba.
+    const copia = { ...l, textos: { ...l.textos }, listas: { ...l.listas } }
+    const yaTocada = tocadas.has(n)
+    const deshacer = (aviso: string) => {
+      laminas[n - 1] = copia
+      if (!yaTocada) tocadas.delete(n)
+      nuevasFotos = nuevasFotos.filter((x) => x.n !== n)
+      avisos.push(aviso)
+    }
+    const pedirDiseno = typeof c.diseno === "string" && Boolean(c.diseno.trim())
+    if (typeof c.plantilla === "string" && c.plantilla.trim()) {
+      const nueva = plantillaPorClave(kc, c.plantilla)
+      if (!nueva) {
+        avisos.push(`El kit no tiene la plantilla ${c.plantilla}: la lámina ${n} quedó como estaba.`)
+        continue
+      }
+      if (l.figura && !nueva.huecos.some((h) => h.tipo === "figura")) {
+        avisos.push(`La plantilla "${nueva.nombre}" no dibuja la figura de la lámina ${n}: quedó como estaba.`)
+        continue
+      }
+      const quedan = new Set(nueva.huecos.map((h) => h.nombre))
+      l.plantilla = nueva.id
+      l.textos = Object.fromEntries(Object.entries(l.textos).filter(([k]) => quedan.has(k)))
+      l.listas = Object.fromEntries(Object.entries(l.listas).filter(([k]) => quedan.has(k)))
+      delete l.variante
+      if (nueva.foto.usa === "no") l.foto = null
+      p = nueva
+      tocadas.add(n)
+    }
     for (const [nombre, valor] of Object.entries(c.textos ?? {})) {
       const h = hueco(nombre)
       if (!h || h.tipo === "lista" || h.tipo === "figura") {
@@ -515,6 +634,15 @@ async function aplicarHuecos(
       l.listas[nombre] = h.max_items ? items.slice(0, h.max_items) : items
       tocadas.add(n)
     }
+    if (l.plantilla !== copia.plantilla) {
+      const falta = p.huecos.find((h) => h.obligatorio && h.tipo !== "figura" && !(h.tipo === "lista" ? l.listas[h.nombre]?.length : l.textos[h.nombre]?.trim()))
+      if (falta) {
+        deshacer(`La plantilla "${p.nombre}" pide "${falta.nombre}" y no lo llené: la lámina ${n} quedó como estaba.`)
+        continue
+      }
+      const perdido = quitado(textoDeLamina(copia), textoDeLamina(l))
+      if (perdido.cifras.length) avisos.push(`Al cambiar la plantilla, la lámina ${n} perdió estas cifras: ${perdido.cifras.join(", ")}.`)
+    }
     if (c.figura && typeof c.figura === "object") {
       if (!l.figura) avisos.push(`La lámina ${n} no tiene figura: la dejé fuera.`)
       else {
@@ -530,30 +658,43 @@ async function aplicarHuecos(
         }
       }
     }
-    if (c.foto === "otra") {
-      if (p.foto.usa === "no") {
-        avisos.push(`La plantilla de la lámina ${n} no lleva foto.`)
+    // Con diseño, la foto ya la eligio quien diseño: la ve al diseñar.
+    const hayQuePonerFoto = !pedirDiseno && (c.foto === "otra" || (l.plantilla !== copia.plantilla && p.foto.usa === "obligatoria" && !l.foto))
+    if (hayQuePonerFoto) {
+      if (!admiteFoto(p, l.variante)) {
+        avisos.push(`La plantilla de la lámina ${n} no lleva foto: pide rediseñarla si la quieres.`)
         continue
       }
-      const evitar = laminas.flatMap((x) => (x.foto?.tipo === "biblioteca" ? [x.foto.imagenId] : []))
-      const textoLamina = [...Object.values(l.textos), ...Object.values(l.listas).flat()].join(". ")
-      const elegida =
-        (await hayFotosEnBiblioteca(accountId))
-          ? (
-              await elegirDeBiblioteca({
-                accountId,
-                huecos: [{ indice: 0, uso: p.foto.uso, texto: textoLamina, tono: p.foto.tono, espacio: p.foto.espacio }],
-                terminos: textos(f.payload.terminosFoto),
-                evitar,
-              })
-            ).get(0)
-          : undefined
+      const elegida = await fotoParaLamina({
+        accountId,
+        f,
+        plantilla: p,
+        uso: l.variante ? "fondo" : p.foto.uso,
+        texto: textoDeLamina(l),
+        pide: c.foto_pide,
+        evitar: laminas.flatMap((x) => (x.foto?.tipo === "biblioteca" ? [x.foto.imagenId] : [])),
+      })
       if (!elegida) {
-        avisos.push(`No encontré otra foto en la biblioteca que sirva para la lámina ${n}.`)
+        const aviso = `No encontré otra foto en la biblioteca que sirva para la lámina ${n} y tenga la resolución que necesita.`
+        if (p.foto.usa === "obligatoria" && !l.foto) deshacer(aviso)
+        else avisos.push(aviso)
         continue
       }
       l.foto = { tipo: "biblioteca", imagenId: elegida.imagenId, motivo: elegida.motivo }
-      nuevasFotos.push({ n, imagenId: elegida.imagenId, motivo: elegida.motivo })
+      nuevasFotos.push({ n, ...elegida })
+      tocadas.add(n)
+    }
+    if (pedirDiseno) {
+      const d = disenos[String(n)]
+      if (!d?.variante) {
+        avisos.push(`No pude rediseñar la lámina ${n}: ${d?.motivo ?? "no salió el diseño"}.`)
+        continue
+      }
+      l.variante = d.variante
+      if (d.foto) {
+        l.foto = d.foto
+        if (d.foto.tipo === "biblioteca") nuevasFotos.push({ n, imagenId: d.foto.imagenId, motivo: d.foto.motivo })
+      }
       tocadas.add(n)
     }
   }
@@ -563,7 +704,7 @@ async function aplicarHuecos(
 
   const fotosBiblioteca = [
     ...((f.payload.fotosBiblioteca as { lamina: number; imagenId: string; motivo: string }[] | undefined) ?? []).filter(
-      (x) => !nuevasFotos.some((nf) => nf.n === x.lamina)
+      (x) => !nuevasFotos.some((nf) => nf.n === x.lamina) && laminas[x.lamina - 1]?.foto?.tipo === "biblioteca"
     ),
     ...nuevasFotos.map((x) => ({ lamina: x.n, imagenId: x.imagenId, motivo: x.motivo })),
   ].sort((a, b) => a.lamina - b.lamina)
@@ -572,7 +713,7 @@ async function aplicarHuecos(
     maqueta: { ...maqueta, laminas },
     caption: p.caption,
     hashtags: p.hashtags,
-    ...(nuevasFotos.length ? { fotosBiblioteca } : {}),
+    fotosBiblioteca,
   }
   const { error } = await supabase.from("content_pieces").update({ payload }).eq("id", f.id)
   if (error) throw new Error(error.message)
@@ -592,6 +733,105 @@ async function aplicarHuecos(
   if (nuevasFotos.length) await registrarUsos(accountId, f.id, "instagram", fotosBiblioteca)
   const n = [...tocadas].sort((a, b) => a - b)
   return { tocadas: n, avisos: [...avisos, ...apretadas(dibujado, n)] }
+}
+
+/** Laminas que se diseñan a la vez en una pasada. */
+const DISENOS_A_LA_VEZ = 3
+/** Sin esto por delante no se empieza otra tanda: no cabria entera. */
+const MARGEN_TANDA_MS = 130_000
+
+const leerImagen = async (url: string): Promise<Buffer | null> => {
+  try {
+    const r = await fetch(url, { cache: "no-store" })
+    return r.ok ? Buffer.from(await r.arrayBuffer()) : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Diseña las laminas que el cambio pide rediseñar. Avanza lo que cabe hasta
+ * `hasta` y devuelve lo hecho: quien llama lo guarda y sigue en otra pasada, sin
+ * volver a pagar lo que ya salio. Lanza si Claude no responde, sin perder `hechos`.
+ */
+export async function disenarCambios(o: {
+  accountId: string
+  pieceId: string
+  cambios: Cambios
+  hechos: Disenos
+  hasta: number
+  alAvance?: (etiqueta: string) => Promise<void>
+}): Promise<{ hechos: Disenos; faltan: number }> {
+  const hechos = { ...o.hechos }
+  let resto = (o.cambios.laminas ?? []).filter((c) => typeof c.diseno === "string" && c.diseno.trim() && !(String(c.n) in hechos))
+  if (!resto.length) return { hechos, faltan: 0 }
+
+  const f = await filaDe(o.accountId, o.pieceId)
+  const kc = await kitActivo(o.accountId)
+  const maqueta = maquetaUsable(f.payload, kc)
+  if (!maqueta || !kc) {
+    const motivo = "este carrusel no está hecho con las plantillas del kit de ahora"
+    for (const c of resto) hechos[String(c.n)] = { motivo }
+    return { hechos, faltan: 0 }
+  }
+  const urls = textos(f.payload.images)
+  const leidas = await Promise.all(urls.map(leerImagen))
+  const imagenes = leidas.every(Boolean) ? (leidas as Buffer[]) : []
+  // Lo elegido en esta tanda tampoco se repite.
+  const usadas = maqueta.laminas.flatMap((x) => (x.foto?.tipo === "biblioteca" ? [x.foto.imagenId] : []))
+  for (const d of Object.values(hechos)) if (d.foto?.tipo === "biblioteca") usadas.push(d.foto.imagenId)
+
+  while (resto.length && Date.now() + MARGEN_TANDA_MS < o.hasta) {
+    const tanda = resto.slice(0, DISENOS_A_LA_VEZ)
+    resto = resto.slice(DISENOS_A_LA_VEZ)
+    await o.alAvance?.(`Diseñando ${tanda.length === 1 ? `la lámina ${tanda[0].n}` : `las láminas ${tanda.map((c) => c.n).join(", ")}`}`)
+    const encargos = []
+    for (const c of tanda) {
+      const n = Number(c.n)
+      const l = maqueta.laminas[n - 1]
+      const clave = String(c.n)
+      if (!l) {
+        hechos[clave] = { motivo: "esa lámina no existe" }
+        continue
+      }
+      const plantilla = (typeof c.plantilla === "string" && plantillaPorClave(kc, c.plantilla)) || (kc.plantillas.find((p) => p.id === l.plantilla) as Plantilla)
+      const pedido = (c.diseno as string).trim()
+      const datos = { textos: { ...l.textos, ...c.textos }, listas: { ...l.listas, ...c.listas } }
+      const quiereFoto = c.foto === "otra" || (!l.foto && /\b(foto|imagen|fotograf)/i.test(pedido))
+      let origen: FotoGuardada["origen"] | null = l.foto
+      if (quiereFoto) {
+        const elegida = await fotoParaLamina({ accountId: o.accountId, f, plantilla, uso: "fondo", texto: textoDeLamina(datos), pide: c.foto_pide, evitar: usadas })
+        if (elegida) {
+          origen = { tipo: "biblioteca", ...elegida }
+          usadas.push(elegida.imagenId)
+        } else if (!l.foto) {
+          hechos[clave] = { motivo: "no encontré una foto en la biblioteca que sirva y tenga la resolución que necesita" }
+          continue
+        }
+      }
+      encargos.push({ n, clave, l, plantilla, pedido, datos, origen })
+    }
+    await Promise.all(
+      encargos.map(async ({ n, clave, l, plantilla, pedido, datos, origen }) => {
+        const [foto] = origen ? await cargarFotosLibre(o.accountId, [{ clave: "foto", lamina: n, descripcion: "", origen }]) : []
+        const r = await disenarLamina({
+          accountId: o.accountId,
+          kc,
+          plantilla,
+          n,
+          total: maqueta.laminas.length,
+          ...datos,
+          figura: l.figura ?? null,
+          foto: foto?.datos ?? null,
+          imagenes,
+          pedido,
+          hasta: o.hasta,
+        })
+        hechos[clave] = r.ok ? { variante: r.variante, ...(origen && origen !== l.foto ? { foto: origen } : {}) } : { motivo: r.motivo }
+      })
+    )
+  }
+  return { hechos, faltan: resto.length }
 }
 
 /** Las posiciones en el guion de las laminas que parseSlides deja: se salta las vacias. */

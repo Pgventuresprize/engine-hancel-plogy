@@ -15,6 +15,7 @@ import {
   situacionDe,
   type Plazo,
 } from "./agentes"
+import { filtroDeCola, type Objetivo } from "./jobs"
 import type { AngleJobInput, LinkedinJobInput } from "./types"
 
 /**
@@ -60,17 +61,19 @@ async function procesarBuzon(
   limite: number,
   hasta: number,
   /** Lo que tarda la etapa mas larga del agente: menos que eso, no se empieza. */
-  duracion = DURACION_VERSION_MS
+  duracion = DURACION_VERSION_MS,
+  objetivo?: Objetivo
 ): Promise<{ procesadas: number; fallidas: number; errores: string[] }> {
   const supabase = supabaseAdmin()
 
-  const { data, error } = await supabase
-    .from(tabla)
-    .select("id, input, account_id, respuesta")
-    .eq("status", "pending")
-    .is("consumed_at", null)
-    .order("created_at", { ascending: true })
-    .limit(limite)
+  const lectura = filtroDeCola(
+    supabase.from(tabla).select("id, input, account_id, respuesta").eq("status", "pending").is("consumed_at", null),
+    objetivo,
+    tabla === "jobs_angle" ? "id" : "content_angle_id",
+    tabla === "jobs_angle" ? objetivo?.jobAngleId : objetivo?.angleId
+  )
+  if (!lectura) return { procesadas: 0, fallidas: 0, errores: [] }
+  const { data, error } = await lectura.order("created_at", { ascending: true }).limit(limite)
 
   if (error) throw new Error(`No se pudo leer ${tabla}: ${error.message}`)
   const jobs = (data ?? []) as { id: string; input: unknown; account_id: string; respuesta: unknown }[]
@@ -138,9 +141,12 @@ async function procesarBuzon(
       procesadas++
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
+      // Con el limite del plan agotado o un corte de red no fallo el trabajo:
+      // vuelve a la cola y la pasada del chat decide cuando reintentar.
+      const esperar = Boolean(objetivo) && (esLimiteDelPlan(msg) || esPasajero(msg))
       await supabase
         .from(tabla)
-        .update({ status: "failed", error: msg.slice(0, 1000), processed_at: new Date().toISOString() })
+        .update(esperar ? { status: "pending", processed_at: null } : { status: "failed", error: msg.slice(0, 1000), processed_at: new Date().toISOString() })
         .eq("id", job.id)
       fallidas++
       errores.push(`[${tabla}] ${msg}`)
@@ -174,6 +180,13 @@ async function reclamarColgados(): Promise<void> {
   }
 }
 
+/** El fallo de haber agotado el limite del plan: no es del trabajo y se puede esperar. */
+export const esLimiteDelPlan = (mensaje: string): boolean => /limite de uso de tu plan/i.test(mensaje)
+
+/** Un corte que no dice nada del trabajo: otra pasada lo intenta, hasta agotar sus turnos. */
+export const esPasajero = (mensaje: string): boolean =>
+  /fetch failed|timed? ?out|aborted|socket hang up|ECONNRESET|overloaded|Claude respondio 5\d\d/i.test(mensaje)
+
 /** El plazo de los escritores de piezas: lo pendiente es una pieza a medio corregir. */
 const comoPlazo = (p: PlazoDelBuzon): Plazo => ({ hasta: p.hasta, pendiente: p.pendiente as Plazo["pendiente"] })
 
@@ -191,7 +204,9 @@ export async function procesarBuzones(
    */
   maxPorBuzon: number = MAX_POR_TICK,
   /** Cuando se acaba la pasada (ms). Ninguna etapa empieza si no le cabe antes. */
-  hasta: number = Date.now() + 285_000
+  hasta: number = Date.now() + 285_000,
+  /** Solo lo de este trabajo del chat, en vez de la cola. */
+  objetivo?: Objetivo
 ): Promise<{
   procesadas: number
   fallidas: number
@@ -207,7 +222,7 @@ export async function procesarBuzones(
     const armado = await promptPara(cuenta, "angulo", null)
     const r = await generarAngulo(cuenta, input as AngleJobInput, await modeloDe(cuenta, "angulo"), armado)
     return { ...r, receta: armado.receta }
-  }, disparo, maxPorBuzon, hasta)
+  }, disparo, maxPorBuzon, hasta, undefined, objetivo)
   // El recurso va antes que el post y el carrusel que lo prometen: al
   // terminar, el tick los encola con el recurso ya escrito.
   // En su try: un buzon de recursos que no se puede leer no frena los demas.
@@ -215,7 +230,7 @@ export async function procesarBuzones(
     const armado = await promptPara(cuenta, "recursos", null, (input as InputRecurso).raw_news.id)
     const r = await generarRecurso(cuenta, input as InputRecurso, await modeloDe(cuenta, "recursos"), armado, plazo)
     return { ...r, receta: armado.receta }
-  }, disparo, maxPorBuzon, hasta, DURACION_ETAPA_RECURSO).catch((e: unknown) => ({
+  }, disparo, maxPorBuzon, hasta, DURACION_ETAPA_RECURSO, objetivo).catch((e: unknown) => ({
     procesadas: 0,
     fallidas: 0,
     errores: [`[jobs_recurso] ${e instanceof Error ? e.message : String(e)}`],
@@ -224,7 +239,7 @@ export async function procesarBuzones(
     const armado = await promptPara(cuenta, "linkedin", situacionDe(input as LinkedinJobInput), (input as LinkedinJobInput).raw_news.id)
     const r = await generarLinkedin(cuenta, input as LinkedinJobInput, await modeloDe(cuenta, "linkedin"), armado, comoPlazo(plazo))
     return { ...r, receta: armado.receta }
-  }, disparo, maxPorBuzon, hasta)
+  }, disparo, maxPorBuzon, hasta, undefined, objetivo)
   // En una pasada acotada, una sola pieza: con el criterio y el revisor con
   // Claude, un post son unos 170 s y un carrusel hasta 220 s, y juntos pasan de
   // los 300 s del tick. La pasada cortada dejaba el carrusel colgado media hora
@@ -237,7 +252,7 @@ export async function procesarBuzones(
         const armado = await promptPara(cuenta, "instagram", situacionDe(input as LinkedinJobInput), (input as LinkedinJobInput).raw_news.id)
         const r = await generarInstagram(cuenta, input as LinkedinJobInput, await modeloDe(cuenta, "instagram"), armado, comoPlazo(plazo))
         return { ...r, receta: armado.receta }
-      }, disparo, maxPorBuzon, hasta)
+      }, disparo, maxPorBuzon, hasta, undefined, objetivo)
   const resultados = [angulos, recursos, posts, carruseles]
 
   return {

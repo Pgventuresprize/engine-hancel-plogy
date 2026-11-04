@@ -582,15 +582,60 @@ que costo.
 
 ## Chat con los agentes
 
-Lo que quedó fuera de la fase 3 (marcar y editar desde el chat, 2026-11-01).
+Lo que quedó fuera de la fase 3 (marcar y editar desde el chat, 2026-11-01) y de
+las piezas por tema en paralelo (2026-11-03).
 
-### Pedidos largos que siguen en segundo plano
-- **Qué es:** si un cambio no termina en el plazo de la ruta (300 s en Vercel),
-  que pase a una cola `jobs_chat_edicion` que procesa el tick y se vea como
-  tarjeta de trabajo.
-- **Por qué esperó:** cambiar huecos y redibujar tarda menos de un minuto, y
-  rehacer un carrusel desde su guion ronda uno o dos. Cabe.
-- **Cuándo:** si en producción aparecen cambios cortados por el plazo.
+### Escribir mientras las piezas trabajan
+- **Qué es:** hoy el campo queda bloqueado hasta que terminan todas, salvo para
+  detener. Un pedido de seis piezas ocupa la conversación un buen rato.
+- **Por qué esperó:** conversar y cambiar piezas a la vez pide decidir qué hace el
+  agente con lo que aún no existe.
+- **Cuándo:** si en el uso diario se nota la espera.
+
+### Adjuntar varias noticias
+- **Qué es:** elegir varias noticias en la portada para sacar una pieza de cada
+  una, por el carril del chat.
+- **Por qué esperó:** el mismo resultado se pide con texto y `crear_piezas`.
+- **Cuándo:** si el equipo sigue partiendo de las noticias.
+
+### Filtros de marca en los temas del chat
+- **Qué es:** el veto y el filtro de política viven en el análisis, y un tema
+  pedido en el chat no pasa por él. Solo lo mira el Revisor al final.
+- **Por qué esperó:** lo pide una persona de la marca a propósito.
+- **Cuándo:** con marcas que tengan vetos estrictos o personas externas usando el
+  chat.
+
+### Piezas del chat en el tablero
+- **Qué es:** las piezas y ángulos del chat salen en el tablero, pero el botón Generar
+  sobre un ángulo del chat crea un trabajo de carril chat que ningún tick procesa y
+  se queda colgado. Ocultar el botón o llevar ese pedido al chat.
+- **Por qué esperó:** solo afecta a contenido del chat, y es a mano.
+
+### Detener y seguir justo al terminar
+- **Qué es:** si la pieza ya existe pero el trabajo aún no está listo, Seguir vuelve a
+  drenar y redibuja antes de que el índice único lo pare. No duplica, gasta de más.
+- **Por qué esperó:** hay que pulsar los dos botones en esa ventana.
+
+### Un mensaje para dos redes
+- **Qué es:** que un pedido como "arregla los carruseles y los posts" lo contesten
+  los dos agentes, uno detrás de otro. Hoy responde uno y el otro hay que pedirlo.
+- **Por qué esperó:** la respuesta en vivo de la pantalla es de un solo agente.
+
+### Fotos que aguantan el tamaño al crear la pieza
+- **Qué es:** usar `salida` en `elegirDeBiblioteca` también al crear el carrusel.
+  Hoy solo mira la resolución al cambiar fotos desde el chat; al crear puede salir
+  una foto pequeña estirada (42 de las 81 de Plogy no aguantan una lámina completa).
+- **Por qué esperó:** con menos fotos válidas se repiten antes o sale Pexels, y
+  conviene decidirlo mirando la biblioteca de cada marca.
+
+### Fotos con marca de agua en la biblioteca
+- **Qué es:** marcar o descartar al etiquetar las fotos con logos ajenos. Una de la
+  biblioteca de Plogy lleva el logo de AIM y salió en un carrusel.
+
+### Rediseñar una lámina en el diseño con inteligencia
+- **Qué es:** el pedido `diseno` solo funciona en carruseles hechos con plantillas.
+  En los de diseño libre habría que corregir su fuente (`corregirDiseno`).
+- **Por qué esperó:** el modo por defecto son las plantillas del kit.
 
 ### Revisor después de cada cambio del chat
 - **Qué es:** pasar el revisor de código (y quizá el de Claude) sobre la versión

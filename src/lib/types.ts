@@ -1,6 +1,8 @@
 /** Fila de `public.raw_news`, tal cual la devuelve Postgres. */
 export type RawNews = {
   id: string
+  /** 'general' o 'chat': las del chat no pasan por las selecciones automaticas. */
+  carril?: string
   /** La cuenta a la que pertenece. Todo el corpus esta acotado por aqui. */
   account_id: string
   niche: string

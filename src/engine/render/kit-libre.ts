@@ -171,7 +171,7 @@ export async function reducida(datos: Buffer, ancho: number): Promise<Buffer> {
 const deDataUri = (uri: string) => Buffer.from(uri.slice(uri.indexOf(",") + 1), "base64")
 
 /** Las laminas dibujadas en una tira, para el critico y para las correcciones. */
-export async function tira(dibujadas: LaminaDibujada[]): Promise<Buffer> {
+export async function tira(dibujadas: Pick<LaminaDibujada, "png">[]): Promise<Buffer> {
   const sharp = (await import("sharp")).default
   const W = 360
   const H = 450
