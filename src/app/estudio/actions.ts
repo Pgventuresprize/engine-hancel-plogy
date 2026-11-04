@@ -1026,6 +1026,8 @@ async function facebookDesdeCarruselExistente(angleId: string): Promise<boolean>
   const { error } = await supabase.from("content_pieces").insert({
     account_id: accountId,
     content_angle_id: angleId,
+    // Hereda el carril: una pieza del chat nunca sale sola, tampoco su Facebook.
+    carril: pieza.carril ?? "general",
     raw_news_id: pieza.raw_news_id,
     job_instagram_id: pieza.job_instagram_id,
     network: "facebook",

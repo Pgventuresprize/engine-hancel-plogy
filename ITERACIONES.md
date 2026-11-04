@@ -605,6 +605,17 @@ las piezas por tema en paralelo (2026-11-03).
 - **Cuándo:** con marcas que tengan vetos estrictos o personas externas usando el
   chat.
 
+### Piezas del chat en el tablero
+- **Qué es:** las piezas y ángulos del chat salen en el tablero, pero el botón Generar
+  sobre un ángulo del chat crea un trabajo de carril chat que ningún tick procesa y
+  se queda colgado. Ocultar el botón o llevar ese pedido al chat.
+- **Por qué esperó:** solo afecta a contenido del chat, y es a mano.
+
+### Detener y seguir justo al terminar
+- **Qué es:** si la pieza ya existe pero el trabajo aún no está listo, Seguir vuelve a
+  drenar y redibuja antes de que el índice único lo pare. No duplica, gasta de más.
+- **Por qué esperó:** hay que pulsar los dos botones en esa ventana.
+
 ### Un mensaje para dos redes
 - **Qué es:** que un pedido como "arregla los carruseles y los posts" lo contesten
   los dos agentes, uno detrás de otro. Hoy responde uno y el otro hay que pedirlo.

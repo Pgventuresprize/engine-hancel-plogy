@@ -120,6 +120,7 @@ export type PieceStatus = "generated" | "approved" | "published" | "rejected"
 export type ContentPiece = {
   id: string
   account_id: string
+  carril?: string
   content_angle_id: string
   raw_news_id: string | null
   job_linkedin_id: string | null
