@@ -605,13 +605,26 @@ las piezas por tema en paralelo (2026-11-03).
 - **Cuándo:** con marcas que tengan vetos estrictos o personas externas usando el
   chat.
 
-### Pedidos largos que siguen en segundo plano
-- **Qué es:** si un cambio no termina en el plazo de la ruta (300 s en Vercel),
-  que pase a una cola `jobs_chat_edicion` que procesa el tick y se vea como
-  tarjeta de trabajo.
-- **Por qué esperó:** cambiar huecos y redibujar tarda menos de un minuto, y
-  rehacer un carrusel desde su guion ronda uno o dos. Cabe.
-- **Cuándo:** si en producción aparecen cambios cortados por el plazo.
+### Un mensaje para dos redes
+- **Qué es:** que un pedido como "arregla los carruseles y los posts" lo contesten
+  los dos agentes, uno detrás de otro. Hoy responde uno y el otro hay que pedirlo.
+- **Por qué esperó:** la respuesta en vivo de la pantalla es de un solo agente.
+
+### Fotos que aguantan el tamaño al crear la pieza
+- **Qué es:** usar `salida` en `elegirDeBiblioteca` también al crear el carrusel.
+  Hoy solo mira la resolución al cambiar fotos desde el chat; al crear puede salir
+  una foto pequeña estirada (42 de las 81 de Plogy no aguantan una lámina completa).
+- **Por qué esperó:** con menos fotos válidas se repiten antes o sale Pexels, y
+  conviene decidirlo mirando la biblioteca de cada marca.
+
+### Fotos con marca de agua en la biblioteca
+- **Qué es:** marcar o descartar al etiquetar las fotos con logos ajenos. Una de la
+  biblioteca de Plogy lleva el logo de AIM y salió en un carrusel.
+
+### Rediseñar una lámina en el diseño con inteligencia
+- **Qué es:** el pedido `diseno` solo funciona en carruseles hechos con plantillas.
+  En los de diseño libre habría que corregir su fuente (`corregirDiseno`).
+- **Por qué esperó:** el modo por defecto son las plantillas del kit.
 
 ### Revisor después de cada cambio del chat
 - **Qué es:** pasar el revisor de código (y quizá el de Claude) sobre la versión

@@ -1,8 +1,9 @@
 import { conContexto } from "../claude/contexto"
 import { enqueueAngleJob, getGenerationConfig, type Objetivo } from "../content/jobs"
-import { esLimiteDelPlan } from "../content/procesar"
+import { esLimiteDelPlan, esPasajero } from "../content/procesar"
 import { runContentTick } from "../content/tick"
 import { supabaseAdmin } from "../supabase-admin"
+import { aplicarCambios, disenarCambios } from "./editar"
 import { prepararMaterial, TrabajoImposible } from "./investigar"
 import {
   actualizarTrabajos,
@@ -11,6 +12,8 @@ import {
   fallar,
   liberarColgados,
   pasarAPieza,
+  terminarCambio,
+  type PedidoCambio,
   type PedidoPieza,
   type TrabajoChat,
 } from "./trabajos"
@@ -34,6 +37,8 @@ const PASADA_VACIA_MS = 20_000
 const ESPERA_PASADA_VACIA_S = 30
 /** Con el limite del plan agotado, cuanto se espera antes de volver a intentarlo. */
 const ESPERA_LIMITE_S = 120
+/** Lo que puede diseñar un cambio en una pasada: el resto de los 300 s es para dibujar. */
+const PLAZO_CAMBIO_MS = 240_000
 
 const nuevoTope = (segundos: number) => new Date(Date.now() + segundos * 1000).toISOString()
 
@@ -80,8 +85,53 @@ async function fasePieza(t: TrabajoChat): Promise<string[]> {
   return pasadaDirigida(t, { angleId: t.angle_id }, ["recursos", t.agente])
 }
 
+/**
+ * Un cambio en una pieza: diseña lo que pidio rediseñar (guardando lo hecho, por
+ * si no cabe en esta pasada) y lo aplica. Aplicar no se reintenta: si falla, la
+ * pieza queda como estaba y la tarjeta dice por que.
+ */
+async function faseCambio(t: TrabajoChat): Promise<string[]> {
+  const supabase = supabaseAdmin()
+  const pedido = t.pedido as PedidoCambio
+  if (!t.piece_id || t.agente === "revisor") {
+    await fallar(t, "La pieza de este cambio ya no está.")
+    return []
+  }
+  const pieceId = t.piece_id
+  const agente = t.agente
+  const avance = (paso: number, etiqueta: string) =>
+    supabase.from("chat_trabajos").update({ paso, etiqueta, updated_at: new Date().toISOString() }).eq("id", t.id).eq("estado", "trabajando")
+
+  const { hechos, faltan } = await disenarCambios({
+    accountId: t.account_id,
+    pieceId,
+    cambios: pedido.cambios,
+    hechos: pedido.disenos ?? {},
+    hasta: Date.now() + PLAZO_CAMBIO_MS,
+    alAvance: async (etiqueta) => {
+      await avance(1, etiqueta)
+    },
+  })
+  // Lo diseñado se guarda siempre: detenido a mitad, "sigue" no lo vuelve a pagar.
+  await supabase.from("chat_trabajos").update({ pedido: { ...pedido, disenos: hechos } }).eq("id", t.id)
+  if (faltan) return []
+
+  const { data } = await supabase.from("chat_trabajos").select("estado").eq("id", t.id).maybeSingle()
+  if ((data as { estado: string } | null)?.estado !== "trabajando") return []
+  await avance(1, "Dibujando el carrusel")
+  try {
+    await terminarCambio(t, await aplicarCambios({ accountId: t.account_id, pieceId, cambios: pedido.cambios, agente, disenos: hechos }))
+  } catch (e) {
+    const motivo = e instanceof Error ? e.message : String(e)
+    if (esPasajero(motivo)) throw e
+    await fallar(t, motivo)
+  }
+  return []
+}
+
 /** Corre la fase en la que va el trabajo. */
 async function avanzar(t: TrabajoChat): Promise<string[]> {
+  if (t.tipo === "editar") return conContexto({ noticia: t.id, red: t.agente }, () => faseCambio(t))
   if (t.fase === "investigar") return conContexto({ noticia: t.id, red: t.agente }, () => faseInvestigar(t))
   await liberarColgados(t)
   if (t.fase === "angulo") return faseAngulo(t)

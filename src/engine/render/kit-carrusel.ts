@@ -4,6 +4,7 @@ import { cifrasInventadas, figurasDelKit, type TipoFigura } from "../marca/figur
 import { elegirDeBiblioteca, hayFotosEnBiblioteca, type FotoElegida, type HuecoDeFoto } from "../marca/imagenes"
 import { piezasDelKit } from "../marca/kit-piezas"
 import { archivosComoDatos, armarLamina, CSS_SIN_PAGINACION, FORMATOS, medidasDe, type DatosLamina, type KitCargado } from "../marca/kit"
+import type { Fondo, Plantilla } from "../marca/kit-modelo"
 import type { CarouselPayload, parseInstagramResponse } from "./carousel"
 import { terminosDeBusqueda } from "./keywords"
 import { maquetar } from "./kit-maqueta"
@@ -47,11 +48,29 @@ export type MaquetaGuardada = {
     listas: Record<string, string[]>
     figura: LaminaKit["figura"]
     foto: FotoGuardada["origen"] | null
+    variante?: VarianteLamina
   }[]
 }
 
+/**
+ * La lamina que un agente rediseño desde el chat (kit-lamina.ts): su plantilla,
+ * adaptada a lo que se pidio, con los mismos huecos. Se guarda en la maqueta y se
+ * dibuja en lugar de la plantilla; el texto sigue siendo el de la lamina.
+ */
+export type VarianteLamina = {
+  html: string
+  fondo: Fondo
+  conFoto: boolean
+  /** Lo que se pidio: se enseña al agente cuando vuelve a esa lamina. */
+  pedido: string
+}
+
+/** La plantilla con la que se dibuja una lamina: la del kit o su variante. */
+export const plantillaDe = (p: Plantilla, v?: Pick<VarianteLamina, "html" | "fondo"> | null): Plantilla =>
+  v ? { ...p, html: v.html, fondo: v.fondo } : p
+
 /** Lo que hace falta rehacer: no cabe, se sale o choca. */
-const GRAVES = new Set<Problema["tipo"]>(["se_sale", "choca", "desborda", "letra_pequena"])
+export const GRAVES = new Set<Problema["tipo"]>(["se_sale", "choca", "desborda", "letra_pequena"])
 
 const graves = (d: LaminaDibujada) => d.problemas.filter((p) => GRAVES.has(p.tipo)).length
 
@@ -410,7 +429,7 @@ export async function paginasDeMaqueta(
         : [
             armarLamina(
               kc,
-              plantillas[i],
+              plantillaDe(plantillas[i], l.variante),
               { textos: l.textos, listas: l.listas, n: i + 1, total: sinPaginacionEnLaPrimera && i === 0 ? 1 : total, foto: fotoDe(i + 1), figura: l.figura ?? null },
               { sinPaginacion: sinPaginacionEnLaPrimera && i === 0 }
             ),

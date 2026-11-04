@@ -582,6 +582,16 @@ async function vecesUsada(accountId: string, ids: string[]): Promise<Map<string,
 
 export type Candidata = Imagen & { puntos: number }
 
+/** Lo que se puede agrandar una foto antes de que se note borrosa. */
+const ESCALA_MAXIMA = 1.5
+
+/** Si la foto cubre esa medida sin agrandarse de mas, contando su recorte. */
+export function aguanta(i: Pick<Imagen, "ancho" | "alto" | "recorte">, salida: { ancho: number; alto: number }): boolean {
+  const ancho = i.ancho * (i.recorte?.w ?? 1)
+  const alto = i.alto * (i.recorte?.h ?? 1)
+  return ancho > 0 && alto > 0 && Math.max(salida.ancho / ancho, salida.alto / alto) <= ESCALA_MAXIMA
+}
+
 async function candidatas(accountId: string, palabras: string[], evitar: Set<string>, apaisada = false): Promise<Candidata[]> {
   const supabase = supabaseAdmin()
   const base = () =>
@@ -654,6 +664,10 @@ export async function elegirDeBiblioteca(opciones: {
   evitar?: string[]
   /** Para una figura apaisada: prefiere fotos horizontales y la carga entera, sin el recorte vertical. */
   apaisada?: boolean
+  /** La medida a la que va a salir: una foto pequeña se veria borrosa y ni se ofrece. */
+  salida?: { ancho: number; alto: number }
+  /** La pidio la persona: sin ninguna que encaje del todo, va la mejor de las candidatas. */
+  obligatoria?: boolean
 }): Promise<Map<number, FotoElegida>> {
   const elegidas = new Map<number, FotoElegida>()
   const { accountId, huecos } = opciones
@@ -662,7 +676,8 @@ export async function elegirDeBiblioteca(opciones: {
     const dias = await diasSinRepetir(accountId)
     const evitar = new Set([...(await usadasHace(accountId, dias)), ...(opciones.evitar ?? [])])
     const palabras = palabrasDe([...opciones.terminos, ...huecos.map((h) => h.texto)].join(" "))
-    const pool = (await candidatas(accountId, palabras, evitar, opciones.apaisada)).slice(0, CANDIDATAS_PARA_ELEGIR)
+    const { salida } = opciones
+    const pool = (await candidatas(accountId, palabras, evitar, opciones.apaisada)).filter((c) => !salida || aguanta(c, salida)).slice(0, CANDIDATAS_PARA_ELEGIR)
     if (pool.length === 0) return elegidas
     if (huecos.some((h) => h.tono && h.tono !== "cualquiera")) await completarLuminosidad(pool)
 
@@ -672,6 +687,14 @@ export async function elegirDeBiblioteca(opciones: {
 
     const asignadas = await asignarConClaude(accountId, huecos, vistas, urls, opciones.terminos)
       ?? asignarPorPuntos(huecos, vistas)
+    if (opciones.obligatoria) {
+      for (const h of huecos) {
+        if (asignadas.has(h.indice)) continue
+        const usadas = new Set([...asignadas.values()].map((a) => a.imagen.id))
+        const mejor = vistas.find((c) => !usadas.has(c.id) && vaConTono(h, c))
+        if (mejor) asignadas.set(h.indice, { imagen: mejor, motivo: "La que mejor encaja entre las que aguantan el tamaño." })
+      }
+    }
 
     for (const [indice, a] of asignadas) {
       const foto = await cargarFoto(a.imagen.ruta, opciones.apaisada ? null : a.imagen.recorte)

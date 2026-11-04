@@ -324,6 +324,36 @@ sustituye a la URL de producción. En local, `scripts/probar-chat.ts` escribe en
 el chat y `scripts/pasada-chat.ts` corre los trabajos sin `pg_net`, con
 `CHAT_SIN_DESPACHO=1`.
 
+### Quién responde y qué puede cambiar
+
+Si el mensaje no nombra a nadie con @ ni trae partes marcadas, se lee antes de
+repartirlo (`quienResponde` en `chat/conversar.ts`): el agente de lo que dice el
+mensaje. Si el mensaje no lo dice ("dale"), el de la pieza abierta y, sin pieza, el
+último que habló.
+
+El agente tiene delante hasta seis de sus piezas, etiquetadas P1, P2..., y las
+plantillas del kit. Un carrusel con maqueta se cambia de cuatro maneras
+(`chat/editar.ts`): sus huecos, su foto, otra plantilla del kit, o `diseno`, que
+rediseña la lámina. La plantilla no es un límite: solo no se inventan cifras ni se
+toca lo publicado.
+
+**Rediseñar una lámina** (`render/kit-lamina.ts`) produce una variante de su
+plantilla: el mismo HTML con sus marcas `{{t:...}}`, adaptado al pedido. El
+diseñador ve la plantilla y el carrusel dibujado. Como los huecos siguen ahí, el
+texto no se puede perder, la lámina se sigue cambiando y marcando, y se redibuja
+sin llamar a Claude. La variante va en la maqueta (`laminas[n].variante`).
+`revisarPlantilla` y el dibujo comprueban lo que no se negocia, y un crítico mira
+la lámina dentro del carrusel.
+
+Un cambio en una pieza se aplica en la respuesta. El que rediseña láminas o toca
+varias piezas va como trabajo (`tipo = 'editar'`, sin fase), con los mismos turnos
+y su tarjeta. Las láminas diseñadas se guardan en `pedido.disenos`: si no cabe en
+una pasada o se detiene, sigue sin volver a pagarlas.
+
+La foto de un cambio del chat tiene que aguantar la medida a la que sale
+(`aguanta` en `marca/imagenes.ts`: hasta 1,5 veces de ampliación) y, como la pidió
+la persona, no se queda vacía si hay candidatas (`obligatoria`).
+
 ## Qué impide que las cosas se dupliquen
 
 Tres candados, en tres sitios distintos:

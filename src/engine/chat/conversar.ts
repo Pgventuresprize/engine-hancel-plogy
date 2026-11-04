@@ -4,29 +4,44 @@ import { conversarConHerramientas, llamarClaude } from "../claude/messages"
 import type { Revision } from "../content/revisor"
 import { bloqueMarca } from "../marca/bloque"
 import { textoDeCarrusel } from "../marca/ejemplos"
+import { kitActivo } from "../marca/kit"
 import { datosParaPrompt } from "../marca/prompt"
 import { parseInstagramResponse } from "../render/carousel"
 import type { MaquetaGuardada } from "../render/kit-carrusel"
 import { getSettings } from "../schedule"
 import { supabaseAdmin } from "../supabase-admin"
-import { aplicarCambios, contratoDeCambios, editableDe, leerCambios, textoDeSelecciones, textoEditable, type Aplicado, type Editable } from "./editar"
+import {
+  aplicarCambios,
+  catalogoDelKit,
+  contratoDeCambios,
+  editableDe,
+  leerCambios,
+  pideDiseno,
+  textoDeSelecciones,
+  textoEditable,
+  type Aplicado,
+  type Cambios,
+  type Editable,
+} from "./editar"
 import { ejecutorDe, fuentesDe, HERRAMIENTAS_CHAT, MAX_PIEZAS_POR_PEDIDO, nuevoTurno } from "./herramientas"
 import { escribirMensaje, type AgenteChat, type Mensaje, type Referencia } from "./mensajes"
-import { anuncioDePieza } from "./trabajos"
+import { anuncioDePieza, despachar, empezarCambios } from "./trabajos"
 
 /**
  * Conversar con los agentes en el chat.
  *
- * Responde el agente al que se le habla: el que se nombra con @, el unico que
- * se eligio al empezar, el ultimo que hablo de su pieza o, si no, el
- * coordinador. Cada uno con su oficio y la marca (la parte fija de su prompt,
- * la misma que en el pipeline) mas un contrato de chat y lo que tiene delante:
- * las piezas de la conversacion y lo hablado.
+ * Responde el agente al que se le habla: el que se nombra con @ o el de lo que
+ * se marco; si no, el que toca segun lo que dice el mensaje, que se lee antes de
+ * repartirlo. Cada uno con su oficio y la marca (la parte fija de su prompt, la
+ * misma que en el pipeline) mas un contrato de chat y lo que tiene delante: las
+ * piezas de la conversacion y lo hablado.
  *
- * Instagram y LinkedIn cambian su pieza: la ven tal como se puede cambiar (lo
+ * Instagram y LinkedIn cambian sus piezas: las ven tal como se pueden cambiar (lo
  * marcado en el panel, si hay) y, si se les pide un cambio, lo devuelven en un
- * bloque ```cambios que se aplica al terminar (editar.ts). El bloque no se
- * enseña: la persona lee la prosa y la tarjeta de la version nueva.
+ * bloque ```cambios que se aplica al terminar (editar.ts). Un cambio en una pieza
+ * se aplica en la respuesta; el que rediseña laminas o toca varias piezas va como
+ * trabajo, con su tarjeta. El bloque no se enseña: la persona lee la prosa y la
+ * tarjeta de la version nueva.
  */
 
 /** El coordinador conversa y reparte: rapido y bueno escribiendo. */
@@ -48,11 +63,12 @@ const NOMBRE: Record<AgenteChat, string> = {
 }
 
 const MENCION = /@(coordinador|instagram|linkedin|revisor)\b/i
+const AGENTES: AgenteChat[] = ["coordinador", "instagram", "linkedin", "revisor"]
 
-/** Quien contesta el ultimo mensaje de la persona. */
-export function quienResponde(
-  mensajes: Pick<Mensaje, "rol" | "agente" | "contenido" | "agentes_pedidos" | "noticia" | "selecciones">[]
-): AgenteChat {
+type MensajeReparto = Pick<Mensaje, "rol" | "agente" | "contenido" | "agentes_pedidos" | "noticia" | "selecciones">
+
+/** A quien se le hablo sin dudas: nombrado, marcado o elegido para empezar. */
+function aQuienSeHablo(mensajes: MensajeReparto[]): AgenteChat | null {
   const ultimo = [...mensajes].reverse().find((m) => m.rol === "usuario")
   const mencion = ultimo?.contenido.match(MENCION)?.[1]?.toLowerCase()
   if (mencion) return mencion as AgenteChat
@@ -61,8 +77,74 @@ export function quienResponde(
   if (red) return red
   // Al empezar sin noticia y con un solo agente elegido, habla ese.
   const primero = mensajes[0]
-  if (primero?.rol === "usuario" && !primero.noticia && primero.agentes_pedidos?.length === 1) return primero.agentes_pedidos[0]
-  // Si no, el ultimo agente que hablo (el de la pieza que se esta mirando).
+  const alEmpezar = mensajes.filter((m) => m.rol === "usuario").length === 1
+  if (alEmpezar && primero?.rol === "usuario" && !primero.noticia && primero.agentes_pedidos?.length === 1) return primero.agentes_pedidos[0]
+  return null
+}
+
+/** Lee el mensaje y dice de quien es. Null si no queda claro o no se pudo leer. */
+async function leerDestinatario(
+  accountId: string,
+  mensajes: MensajeReparto[],
+  piezas: { red: string; titulo: string }[],
+  abierta: { red: string; titulo: string } | null
+): Promise<AgenteChat | null> {
+  const i = mensajes.findLastIndex((m) => m.rol === "usuario")
+  const recientes = mensajes.slice(Math.max(0, i - 4), i).map((m) => `[${m.rol === "usuario" ? "Persona" : NOMBRE[m.agente ?? "coordinador"]}] ${m.contenido.slice(0, 300)}`)
+  const ultimo = mensajes[i]?.contenido ?? ""
+  const r = await llamarClaude({
+    paso: "chat-reparto",
+    accountId,
+    // Equivocarse aqui es lo que mas se nota: contesta quien no era.
+    model: MODELO_COORDINADOR,
+    system: `Repartes los mensajes del chat de un equipo de contenido. No contestas el mensaje: dices a quién le toca.
+
+Lo primero es de qué pieza o de qué cosa habla el mensaje, aunque sea una opinión y no una orden:
+- instagram: cualquier cosa sobre carruseles: láminas, portada, cierre, fotos, imágenes, fondos, diseño, su texto.
+- linkedin: cualquier cosa sobre posts de LinkedIn: su texto, su gancho, sus párrafos.
+- revisor: lo que se frenó, por qué, qué encontró la revisión.
+- coordinador: investigar, ideas, planear, o crear piezas de varias redes. Nada que hable de una pieza que ya existe.
+- duda: el mensaje no dice de qué habla. Una confirmación corta ("dale", "hazlo", "sí", "perfecto") siempre es duda: la decide la pieza que se está mirando.
+
+Ejemplos:
+"siento que a los carruseles les faltan imágenes" -> instagram
+"me gustan los carruseles pero la portada no pega" -> instagram
+"cámbiale el gancho al post de marketing" -> linkedin
+"por qué frenaron eso?" -> revisor
+"investiga qué publica la competencia" -> coordinador
+"dale, hazlo" -> duda
+"gracias" -> duda
+
+Responde solo con una palabra: instagram, linkedin, revisor, coordinador o duda.`,
+    prompt: `Piezas de la conversación: ${piezas.map((p) => `${p.red === "instagram" ? "carrusel" : "post"} "${p.titulo}"`).join("; ") || "ninguna"}.
+Abierta en el panel: ${abierta ? `${abierta.red === "instagram" ? "carrusel" : "post"} "${abierta.titulo}"` : "ninguna"}.
+${recientes.length ? `\nLo último hablado:\n${recientes.join("\n")}\n` : ""}
+Mensaje que hay que repartir:
+${ultimo.slice(0, 1500)}`,
+    maxTokens: 10,
+  })
+  if (!r.ok) return null
+  const palabra = r.texto.trim().toLowerCase().replace(/[^a-z]/g, "")
+  return AGENTES.find((a) => a === palabra) ?? null
+}
+
+/**
+ * Quien contesta el ultimo mensaje de la persona: a quien se le hablo o, si no,
+ * lo que dice el mensaje. Si el mensaje tampoco lo dice, la pieza que tiene
+ * abierta y, sin pieza, el ultimo agente que hablo.
+ */
+export async function quienResponde(
+  accountId: string,
+  mensajes: MensajeReparto[],
+  piezas: { id: string; red: string; titulo: string }[],
+  piezaAbierta: string | null
+): Promise<AgenteChat> {
+  const directo = aQuienSeHablo(mensajes)
+  if (directo) return directo
+  const abierta = piezas.find((p) => p.id === piezaAbierta) ?? null
+  const leido = piezas.length ? await leerDestinatario(accountId, mensajes, piezas, abierta) : null
+  if (leido) return leido
+  if (abierta && (abierta.red === "instagram" || abierta.red === "linkedin")) return abierta.red
   const ultimoAgente = [...mensajes].reverse().find((m) => m.rol === "agente" && m.agente && m.agente !== "coordinador")
   return ultimoAgente?.agente ?? "coordinador"
 }
@@ -197,9 +279,9 @@ async function noticiasListas(accountId: string): Promise<string> {
 
 const OFICIO_COORDINADOR = `Eres el coordinador del equipo de agentes de contenido de la marca. El equipo: Instagram (arma carruseles), LinkedIn (escribe posts) y el Revisor (revisa cada pieza antes de publicarla y frena lo que no cumple). Tú hablas con la persona, entiendes qué necesita, investigas lo que haga falta y pones al equipo a trabajar; no escribes piezas tú.`
 
-function contratoDeChat(agente: AgenteChat, persona: string, editable: Editable | null, hoy: string, suyas: string[]): string {
-  const cambiar = editable
-    ? "- Puedes cambiar tu pieza: cómo, más abajo. Nunca digas que la cambiaste si no pones el bloque de cambios."
+function contratoDeChat(agente: AgenteChat, persona: string, editables: Editable[], hoy: string): string {
+  const cambiar = editables.length
+    ? `- Puedes cambiar ${editables.length > 1 ? "tus piezas" : "tu pieza"}: cómo, más abajo. Nunca digas que cambiaste algo si no pones el bloque de cambios.`
     : agente === "instagram" || agente === "linkedin"
       ? "- En esta conversación no hay una pieza tuya que cambiar. Si te piden un cambio, dilo."
       : "- Tú no cambias piezas: el carrusel lo cambia Instagram y el post, LinkedIn. Si te piden un cambio, propón el texto exacto y sugiere pedírselo a @Instagram o @LinkedIn."
@@ -222,10 +304,10 @@ Hablas con ${persona}, del equipo de la marca, en una conversación donde tambi�
 - Habla como colega: directo, concreto, sin relleno ni halagos.
 - Cuando hables de una pieza, di dónde (lámina, párrafo) y el texto exacto.
 ${cambiar}
-${agente === "revisor" ? "- Tú no creas piezas: si te piden una, sugiere pedírsela a @Coordinador.\n" : ""}${suyas.length > 1 ? `- En esta conversación hay varias piezas tuyas: ${suyas.join("; ")}. Si no está claro cuál quiere cambiar y no la marcó ni la tiene abierta, pregunta cuál antes de cambiar nada.\n` : ""}- Si te hablan de algo que es de otro agente, dilo y sugiere escribirle con @Instagram, @LinkedIn, @Revisor o @Coordinador.
-- No inventes datos de la noticia ni de la marca: si algo no está en lo que tienes delante, dilo.${investigar}${editable ? `
+${agente === "revisor" ? "- Tú no creas piezas: si te piden una, sugiere pedírsela a @Coordinador.\n" : ""}${editables.length > 1 ? `- Tienes varias piezas, con una etiqueta (P1, P2...) que es solo para el bloque de cambios: la persona no la conoce, así que háblale de cada pieza por su título. P1 es la que marcó o tiene abierta. Si habla de "los carruseles", "los posts" o "todos", cambia todas las que digan eso. Si habla de una sola y no está claro cuál, y no la marcó ni la tiene abierta, pregunta cuál antes de cambiar nada.\n` : ""}- Si te hablan de algo que de verdad es de otro agente, dilo y sugiere escribirle con @Instagram, @LinkedIn, @Revisor o @Coordinador.
+- No inventes datos de la noticia ni de la marca: si algo no está en lo que tienes delante, dilo.${investigar}${editables.length ? `
 
-${contratoDeCambios(editable.modo)}` : ""}`
+${contratoDeCambios(editables.map((e) => e.modo), editables.length > 1)}` : ""}`
 }
 
 /** Lo hablado, como transcripcion: con resumen de lo viejo si la conversacion es larga. */
@@ -282,6 +364,20 @@ async function fechaDeHoy(accountId: string): Promise<string> {
 
 /** Las piezas que se pueden cambiar en el chat. */
 const esRed = (a: AgenteChat): a is "instagram" | "linkedin" => a === "instagram" || a === "linkedin"
+
+/** Las piezas que un agente tiene delante para cambiar a la vez: mas son contexto de mas. */
+const MAX_EDITABLES = 6
+
+/** Varios cambios de la misma pieza son uno. */
+function unirPorPieza(lista: { id: string; titulo: string; cambios: Cambios }[]): { id: string; titulo: string; cambios: Cambios }[] {
+  const porId = new Map<string, { id: string; titulo: string; cambios: Cambios }>()
+  for (const x of lista) {
+    const previo = porId.get(x.id)
+    if (!previo) porId.set(x.id, x)
+    else previo.cambios = { ...previo.cambios, ...x.cambios, laminas: [...(previo.cambios.laminas ?? []), ...(x.cambios.laminas ?? [])] }
+  }
+  return [...porId.values()]
+}
 
 /**
  * Deja pasar al streaming solo la prosa: lo que viene desde el primer ``` es el
@@ -340,39 +436,52 @@ export async function responder(o: {
   const ultimo = [...mensajes].reverse().find((m) => m.rol === "usuario")
   if (!ultimo) throw new Error("No hay mensaje al que responder.")
 
-  const agente = quienResponde(mensajes)
+  const piezas = await piezasDeConversacion(o.accountId, o.conversacionId)
+  const agente = await quienResponde(o.accountId, mensajes, piezas, o.piezaAbierta ?? null)
   o.alAgente(agente)
 
   const anteriores = mensajes.filter((m) => m.id !== ultimo.id)
-  const [piezas, charla] = await Promise.all([
-    piezasDeConversacion(o.accountId, o.conversacionId),
-    transcripcion(o.accountId, o.conversacionId, anteriores, o.persona),
-  ])
+  const charla = await transcripcion(o.accountId, o.conversacionId, anteriores, o.persona)
 
-  // La pieza que puede cambiar: la marcada, la abierta en el panel o la ultima de su red.
+  // Las piezas que puede cambiar: primero las marcadas y la abierta, despues las
+  // mas nuevas de su red. La primera (P1) es la que cambia un pedido sin decir cual.
   const selecciones = (ultimo.selecciones ?? []).filter((x) => !x.red || x.red === agente)
   const propias = esRed(agente) ? piezas.filter((p) => p.red === agente) : piezas
-  const objetivo = esRed(agente)
-    ? (propias.find((p) => p.id === selecciones[0]?.pieceId) ??
-      propias.find((p) => p.id === o.piezaAbierta) ??
-      propias.at(-1) ??
-      null)
-    : null
-  let editable: Editable | null = null
-  if (objetivo) {
-    try {
-      editable = await editableDe(o.accountId, objetivo.id)
-    } catch (e) {
-      console.error("[chat] La pieza no se puede cambiar:", e instanceof Error ? e.message : e)
-    }
-  }
+  const candidatas = esRed(agente)
+    ? [
+        ...new Map(
+          [
+            ...selecciones.flatMap((s) => propias.filter((p) => p.id === s.pieceId)),
+            ...propias.filter((p) => p.id === o.piezaAbierta),
+            ...[...propias].reverse(),
+          ].map((p) => [p.id, p])
+        ).values(),
+      ].slice(0, MAX_EDITABLES)
+    : []
+  const cargadas = await Promise.all(
+    candidatas.map(async (pieza) => {
+      try {
+        return { pieza, editable: await editableDe(o.accountId, pieza.id) }
+      } catch (e) {
+        console.error("[chat] La pieza no se puede cambiar:", e instanceof Error ? e.message : e)
+        return null
+      }
+    })
+  )
+  const objetivos = cargadas.filter((x) => x !== null).map((x, i) => ({ ...x, etiqueta: `P${i + 1}` }))
+  const editables = objetivos.map((x) => x.editable)
 
   // Lo que el agente tiene delante.
   const contexto: string[] = []
-  const otras = propias.filter((p) => !editable || p.id !== objetivo?.id)
-  if (editable && objetivo) contexto.push(`# TU PIEZA, TAL COMO LA PUEDES CAMBIAR\n\n${objetivo.texto.split("\n\n").slice(0, 2).join("\n\n")}\n\n${textoEditable(editable)}`)
-  if (otras.length) contexto.push(`# ${editable ? "OTRAS PIEZAS" : "LAS PIEZAS"} DE ESTA CONVERSACIÓN\n\n${otras.map((p) => p.texto).join("\n\n")}`)
-  else if (!editable && agente === "revisor") contexto.push(await frenadosDeLaMarca(o.accountId))
+  const otras = propias.filter((p) => !objetivos.some((x) => x.pieza.id === p.id))
+  if (objetivos.length) {
+    const fichas = objetivos.map((x) => `${objetivos.length > 1 ? `## ${x.etiqueta}: "${x.pieza.titulo}"\n\n` : ""}${x.pieza.texto.split("\n\n").slice(0, 2).join("\n\n")}\n\n${textoEditable(x.editable)}`)
+    contexto.push(`# ${objetivos.length > 1 ? "TUS PIEZAS, TAL COMO LAS PUEDES CAMBIAR" : "TU PIEZA, TAL COMO LA PUEDES CAMBIAR"}\n\n${fichas.join("\n\n")}`)
+    const kit = editables.some((e) => e.modo === "huecos") ? await kitActivo(o.accountId) : null
+    if (kit) contexto.push(catalogoDelKit(kit))
+  }
+  if (otras.length) contexto.push(`# ${objetivos.length ? "OTRAS PIEZAS" : "LAS PIEZAS"} DE ESTA CONVERSACIÓN\n\n${otras.map((p) => p.texto).join("\n\n")}`)
+  else if (!objetivos.length && agente === "revisor") contexto.push(await frenadosDeLaMarca(o.accountId))
   if (agente === "coordinador") contexto.push(`# NOTICIAS CON ÁNGULO DECIDIDO, LISTAS PARA PIEZA\n\n${await noticiasListas(o.accountId)}`)
 
   let fijo: string
@@ -400,11 +509,11 @@ export async function responder(o: {
     paso: `chat-${agente}`,
     accountId: o.accountId,
     model: modelo,
-    system: { fijo, resto: contratoDeChat(agente, o.persona, editable, await fechaDeHoy(o.accountId), propias.map((p) => p.titulo)) },
+    system: { fijo, resto: contratoDeChat(agente, o.persona, editables, await fechaDeHoy(o.accountId)) },
     prompt,
     // Con la pieza delante, el bloque de cambios puede traer laminas enteras; y
     // lo investigado se cuenta en mas que unas frases.
-    maxTokens: editable || agente !== "revisor" ? 4000 : 1500,
+    maxTokens: editables.length > 1 ? 8000 : agente !== "revisor" ? 4000 : 1500,
     // Opus no deja apagar el razonamiento: sin esto, una respuesta corta tarda minutos.
     ...(modelo.includes("opus") ? { esfuerzo: "low" as const } : {}),
     alTexto: soloProsa(o.alTexto),
@@ -432,16 +541,40 @@ export async function responder(o: {
     const leido = leerCambios(r.texto)
     contenido = leido.prosa || "…"
     if (leido.error) contenido += `\n\nNo pude aplicar el cambio: ${leido.error}. Pídemelo otra vez.`
-    else if (leido.cambios && editable && objetivo && esRed(agente)) {
-      o.alAplicar?.()
-      try {
-        const a = await aplicarCambios({ accountId: o.accountId, pieceId: objetivo.id, cambios: leido.cambios, agente })
-        aplicado = { ...a, pieceId: objetivo.id }
-        const { referencia } = await anuncioDePieza(o.accountId, objetivo.id, agente)
-        referencias = [{ ...referencia, version: a.version ?? referencia.version }]
-        contenido += `\n\n${a.version ? `Quedó como **v${a.version}**.` : "Listo, quedó aplicado."}${a.avisos.length ? `\n\n${a.avisos.join("\n")}` : ""}`
-      } catch (e) {
-        contenido += `\n\nNo pude aplicar el cambio: ${e instanceof Error ? e.message : String(e)}`
+    else if (leido.cambios && objetivos.length && esRed(agente)) {
+      const lista = unirPorPieza(
+        leido.cambios.flatMap((c) => {
+          const x = c.pieza ? objetivos.find((y) => y.etiqueta === String(c.pieza).trim().toUpperCase()) : objetivos[0]
+          return x ? [{ id: x.pieza.id, titulo: x.pieza.titulo, cambios: c }] : []
+        })
+      )
+      const [uno] = lista
+      if (!uno) contenido += "\n\nNo pude aplicar el cambio: no encontré esa pieza."
+      else if (lista.length > 1 || pideDiseno(uno.cambios)) {
+        // Lo largo va como trabajo: cabe en sus pasadas y sobrevive a cerrar la pantalla.
+        try {
+          await empezarCambios({
+            accountId: o.accountId,
+            conversacionId: o.conversacionId,
+            mensajeId: ultimo.id,
+            agente,
+            piezas: lista.map((x) => ({ pieceId: x.id, titulo: x.titulo, cambios: x.cambios })),
+          })
+          await despachar(o.accountId)
+        } catch (e) {
+          contenido += `\n\nNo pude poner el cambio en marcha: ${e instanceof Error ? e.message : String(e)}`
+        }
+      } else {
+        o.alAplicar?.()
+        try {
+          const a = await aplicarCambios({ accountId: o.accountId, pieceId: uno.id, cambios: uno.cambios, agente })
+          aplicado = { ...a, pieceId: uno.id }
+          const { referencia } = await anuncioDePieza(o.accountId, uno.id, agente)
+          referencias = [{ ...referencia, version: a.version ?? referencia.version }]
+          contenido += `\n\n${a.version ? `Quedó como **v${a.version}**.` : "Listo, quedó aplicado."}${a.avisos.length ? `\n\n${a.avisos.join("\n")}` : ""}`
+        } catch (e) {
+          contenido += `\n\nNo pude aplicar el cambio: ${e instanceof Error ? e.message : String(e)}`
+        }
       }
     } else if (leido.cambios) contenido += "\n\nNo pude aplicar el cambio: no hay una pieza mía en esta conversación."
   }

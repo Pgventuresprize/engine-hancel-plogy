@@ -3,6 +3,7 @@ import { pedirPiezaDeAngulo } from "../content/pedir"
 import type { Revision } from "../content/revisor"
 import { parseEstadoLibre, type PasoLibre } from "../render/kit-libre-pasos"
 import { supabaseAdmin } from "../supabase-admin"
+import type { Aplicado, Cambios, Disenos } from "./editar"
 import { escribirMensaje, type ReferenciaPieza } from "./mensajes"
 
 /**
@@ -36,6 +37,13 @@ export type PedidoPieza = {
   investigar: boolean
 }
 
+/** Un cambio en una pieza que ya existe: tipo 'editar', sin fase. Lo aplica la pasada. */
+export type PedidoCambio = {
+  cambios: Cambios
+  /** Las laminas ya diseñadas: un cambio largo sigue en otra pasada sin repetirlas. */
+  disenos: Disenos
+}
+
 /** Por donde va una pieza del chat. */
 export type FaseTrabajo = "investigar" | "angulo" | "pieza"
 
@@ -45,7 +53,7 @@ export type TrabajoChat = {
   conversacion_id: string
   carril: "general" | "chat"
   fase: FaseTrabajo | null
-  pedido: PedidoPieza | null
+  pedido: PedidoPieza | PedidoCambio | null
   titulo: string | null
   raw_news_id: string | null
   lease_id: string | null
@@ -169,6 +177,63 @@ export async function empezarLote(o: {
   const { data, error } = await supabaseAdmin().from("chat_trabajos").insert(conHora).select("*")
   if (error) throw new Error(`No se pudieron crear los trabajos: ${error.message}`)
   return (data ?? []) as TrabajoChat[]
+}
+
+/**
+ * Los cambios que no caben en la respuesta: rediseñar laminas o tocar varias
+ * piezas. Van con los mismos turnos que crear piezas, cada uno en su tarjeta, y
+ * no pasan por el revisor: lo que se rediseña no cambia el texto. Quien llama
+ * despacha despues.
+ */
+export async function empezarCambios(o: {
+  accountId: string
+  conversacionId: string
+  mensajeId: string
+  agente: RedChat
+  piezas: { pieceId: string; titulo: string; cambios: Cambios }[]
+}): Promise<void> {
+  const base = Date.now()
+  const filas = o.piezas.map((p, i) => ({
+    account_id: o.accountId,
+    conversacion_id: o.conversacionId,
+    mensaje_id: o.mensajeId,
+    carril: "chat",
+    estado: "espera",
+    agente: o.agente,
+    tipo: "editar",
+    piece_id: p.pieceId,
+    titulo: p.titulo,
+    pedido: { cambios: p.cambios, disenos: {} } satisfies PedidoCambio,
+    paso: 0,
+    total: 2,
+    etiqueta: "Aplicando los cambios",
+    unidad: "Paso",
+    created_at: new Date(base + i).toISOString(),
+  }))
+  const { error } = await supabaseAdmin().from("chat_trabajos").insert(filas)
+  if (error) throw new Error(`No se pudieron crear los trabajos: ${error.message}`)
+}
+
+/** Termina un cambio y, si gana el paso a listo, lo cuenta con la tarjeta de la pieza. */
+export async function terminarCambio(t: TrabajoChat, a: Aplicado): Promise<void> {
+  const { data } = await supabaseAdmin()
+    .from("chat_trabajos")
+    .update({ estado: "listo", paso: t.total, etiqueta: "Listo", updated_at: new Date().toISOString() })
+    .eq("id", t.id)
+    .in("estado", ACTIVOS)
+    .select("id")
+    .maybeSingle()
+  if (!data || !t.piece_id || t.agente === "revisor") return
+  const { referencia } = await anuncioDePieza(t.account_id, t.piece_id, t.agente, t.titulo)
+  const donde = a.tocadas.length === 1 ? `la lámina ${a.tocadas[0]}` : a.tocadas.length ? `las láminas ${a.tocadas.join(", ")}` : "el texto"
+  await escribirMensaje({
+    accountId: t.account_id,
+    conversacionId: t.conversacion_id,
+    rol: "agente",
+    agente: t.agente,
+    contenido: `Listo ${t.titulo ? `"${t.titulo}"` : "el cambio"}: ${t.agente === "instagram" ? `cambié ${donde}.` : "cambié el post."}${a.version ? ` Quedó como **v${a.version}**.` : ""}${a.avisos.length ? `\n\n${a.avisos.join("\n")}` : ""}`,
+    referencias: [{ ...referencia, version: a.version ?? referencia.version }],
+  })
 }
 
 /** Si los agentes que hacen la pieza estan en servicio. Apagados no corren ni a mano. */
@@ -549,7 +614,7 @@ async function dictaminar(t: TrabajoChat): Promise<void> {
         .from("chat_trabajos")
         .select("agente, piece_id, titulo")
         .eq("mensaje_id", t.mensaje_id)
-        .neq("agente", "revisor")
+        .eq("tipo", "crear")
         .not("piece_id", "is", null)
     : { data: [] }
   const piezas = (hermanos ?? []) as { agente: RedChat; piece_id: string; titulo: string | null }[]
