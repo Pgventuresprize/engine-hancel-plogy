@@ -1,9 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { AlertTriangleIcon, CheckIcon } from "lucide-react"
+import { AlertTriangleIcon, CheckIcon, ShuffleIcon } from "lucide-react"
 
 import { EtiquetaRed, Miniatura } from "@/components/calendario/tarjeta-post"
+import { Button } from "@/components/ui/button"
 import type { PostCalendario } from "@/lib/calendario-tipos"
 import { cn } from "@/lib/utils"
 
@@ -19,6 +20,7 @@ export function Bandeja({
   alSeleccionar,
   alAbrir,
   alArrastrar,
+  alRepartir,
 }: {
   posts: PostCalendario[]
   /** Las que hay de verdad: la lista se recorta si son muchas. */
@@ -29,6 +31,7 @@ export function Bandeja({
   alSeleccionar: (ids: string[], marcar: boolean) => void
   alAbrir: (p: PostCalendario) => void
   alArrastrar: (id: string, e: React.DragEvent) => void
+  alRepartir: () => void
 }) {
   const [pestana, setPestana] = React.useState<Pestana>("listas")
   const listas = posts.filter((p) => !p.frenada)
@@ -109,11 +112,15 @@ export function Bandeja({
         )}
       </div>
 
-      <div className="hidden border-t p-2.5 md:block">
-        <label className="text-muted-foreground flex cursor-pointer items-center gap-2 text-[12.5px]">
+      <div className="flex flex-col gap-1.5 border-t p-2.5">
+        <label className="text-muted-foreground hidden cursor-pointer items-center gap-2 text-[12.5px] md:flex">
           <input type="checkbox" checked={todas} onChange={(e) => alSeleccionar(ver.map((p) => p.id), e.target.checked)} className="accent-info" />
           Seleccionar todas ({ver.length})
         </label>
+        <Button variant="brand" disabled={posts.length === 0} onClick={alRepartir}>
+          <ShuffleIcon />
+          {seleccion.size ? `Repartir ${seleccion.size} ${seleccion.size === 1 ? "seleccionada" : "seleccionadas"}` : "Repartir en la semana"}
+        </Button>
       </div>
     </aside>
   )

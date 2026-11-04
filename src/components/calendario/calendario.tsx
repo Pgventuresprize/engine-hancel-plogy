@@ -2,12 +2,14 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { AlertTriangleIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, PauseCircleIcon } from "lucide-react"
+import { AlertTriangleIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon, PauseCircleIcon, PlayCircleIcon } from "lucide-react"
 
-import { aprobarYProgramar, programarPiezas, quitarDelCalendario, reintentarPieza, resolverRevision } from "@/app/calendario/actions"
+import { programarPiezas, quitarAprobacion, quitarDelCalendario, reintentarPieza, repartirPiezas, resolverRevision } from "@/app/calendario/actions"
 import { approvePiece, publishPieceNow } from "@/app/estudio/actions"
 import { Bandeja } from "@/components/calendario/bandeja"
 import { DetallePost, type AccionesDetalle } from "@/components/calendario/detalle-post"
+import { HorariosDialog } from "@/components/calendario/horarios-dialog"
+import { RepartirDialog, type PlanReparto } from "@/components/calendario/repartir-dialog"
 import { sePuedeMover, tieneAviso } from "@/components/calendario/tarjeta-post"
 import { Agenda, fechaCorta, MESES, Mes, mesDe, numeroDia, Semana } from "@/components/calendario/vistas"
 import { useAltoHastaAbajo } from "@/components/kanban/use-alto-hasta-abajo"
@@ -70,6 +72,10 @@ export function Calendario({ datos }: { datos: DatosCalendario }) {
   const [pendiente, setPendiente] = React.useState<Colocacion[] | null>(null)
   const [aviso, setAviso] = React.useState<AvisoPantalla | null>(null)
   const [encima, setEncima] = React.useState<string | null>(null)
+  const [repartirAbierto, setRepartirAbierto] = React.useState(false)
+  const [horariosAbierto, setHorariosAbierto] = React.useState(false)
+  // Editar horarios desde Repartir: al terminar se vuelve donde se estaba.
+  const [volverARepartir, setVolverARepartir] = React.useState(false)
   const arrastrando = React.useRef(false)
 
   // El reloj avanza y la pantalla se refresca sola: un post puede salir con esto
@@ -108,7 +114,8 @@ export function Calendario({ datos }: { datos: DatosCalendario }) {
       }
     })
 
-  const restaurar = (previo: Lugar[]) =>
+  /** `aprobadas`: las que se aprobaron solo para colocarlas. Deshacer tambien las desaprueba. */
+  const restaurar = (previo: Lugar[], aprobadas: string[] = []) =>
     correr(async () => {
       aplicar({ tipo: "colocar", lista: previo })
       const conFecha = previo.filter((p): p is Colocacion => Boolean(p.dia && p.hora))
@@ -117,19 +124,22 @@ export function Calendario({ datos }: { datos: DatosCalendario }) {
       if (r1 && !r1.ok) return setAviso({ texto: r1.error })
       const r2 = sinFecha.length ? await quitarDelCalendario(sinFecha) : null
       if (r2 && !r2.ok) return setAviso({ texto: r2.error })
+      const r3 = await quitarAprobacion(aprobadas)
+      if (!r3.ok) return setAviso({ texto: r3.error })
       setAviso({ texto: "Deshecho." })
     })
 
   const ejecutar = (lista: Colocacion[], aprobar: boolean) => {
     const previo = lista.map((c) => ({ id: c.id, dia: porId(c.id)?.dia ?? null, hora: porId(c.id)?.hora ?? null }))
+    const aprobadas = aprobar ? lista.filter((c) => porId(c.id)?.frenada).map((c) => c.id) : []
     correr(async () => {
       aplicar({ tipo: "colocar", lista })
-      const r = await (aprobar ? aprobarYProgramar(lista) : programarPiezas(lista))
+      const r = await repartirPiezas(lista, aprobadas)
       if (!r.ok) return setAviso({ texto: r.error })
       setSeleccion(new Set())
       const [c] = r.colocadas
       const texto = r.colocadas.length === 1 ? `Programada: ${fechaCorta(c.dia)}, ${c.hora}.` : `${r.colocadas.length} piezas programadas.`
-      setAviso({ texto: r.warning ? `${texto} ${r.warning}` : texto, deshacer: () => restaurar(previo) })
+      setAviso({ texto: r.warning ? `${texto} ${r.warning}` : texto, deshacer: () => restaurar(previo, aprobadas) })
     })
   }
 
@@ -162,6 +172,20 @@ export function Calendario({ datos }: { datos: DatosCalendario }) {
       const r = await quitarDelCalendario(piezas.map((p) => p.id))
       if (!r.ok) return setAviso({ texto: r.error })
       setAviso({ texto: "Volvió a la bandeja.", deshacer: () => restaurar(previo) })
+    })
+  }
+
+  const ejecutarReparto = ({ lista, aprobar }: PlanReparto) => {
+    const previo = lista.map((c) => ({ id: c.id, dia: null, hora: null }))
+    setRepartirAbierto(false)
+    correr(async () => {
+      aplicar({ tipo: "colocar", lista })
+      const r = await repartirPiezas(lista, aprobar)
+      if (!r.ok) return setAviso({ texto: r.error })
+      setSeleccion(new Set())
+      const faltan = lista.length - r.colocadas.length
+      const texto = `${r.colocadas.length} ${r.colocadas.length === 1 ? "pieza programada" : "piezas programadas"}.${faltan ? ` ${faltan} no se pudieron colocar y siguen en la bandeja.` : ""}`
+      setAviso({ texto: r.warning ? `${texto} ${r.warning}` : texto, deshacer: () => restaurar(previo, aprobar) })
     })
   }
 
@@ -243,6 +267,10 @@ export function Calendario({ datos }: { datos: DatosCalendario }) {
     return p?.frenada ? [p] : []
   })
 
+  const ocupadas = new Set([...datos.ocupados, ...posts.filter((p) => p.dia && p.hora).map((p) => claveHueco(p.red, p.dia as string, p.hora as string))])
+  const paraRepartir = seleccion.size ? enBandeja.filter((p) => seleccion.has(p.id)) : enBandeja
+  const nProgramadasTotal = datos.ocupados.length
+
   const comun = { posts: colocados, ahora, alAbrir: setAbierto, alArrastrar }
   const conDestinos = { destino, encima, alSoltar: colocar }
 
@@ -277,6 +305,7 @@ export function Calendario({ datos }: { datos: DatosCalendario }) {
           }
           alAbrir={setAbierto}
           alArrastrar={alArrastrar}
+          alRepartir={() => setRepartirAbierto(true)}
         />
       </div>
 
@@ -294,6 +323,17 @@ export function Calendario({ datos }: { datos: DatosCalendario }) {
           <h2 className={cn("font-display mx-1 text-[19px] leading-tight whitespace-nowrap", navegando && "opacity-50")}>{titulo}</h2>
           <Segmentos<VistaCalendario> opciones={[["semana", "Semana"], ["mes", "Mes"]]} valor={datos.vista} alCambiar={(v) => ir(v, v === datos.vista ? datos.fecha : v === "mes" ? datos.fecha : lunesDe(ahora.dia))} />
           <Segmentos<Filtro> opciones={[["todas", "Todas"], ["instagram", "Instagram"], ["linkedin", "LinkedIn"]]} valor={filtro} alCambiar={setFiltro} />
+          <span className="flex-1" />
+          {datos.publicarActivo ? (
+            <span className="bg-success-soft text-success inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-semibold">
+              <PlayCircleIcon className="size-3.5" />
+              Publicando a su hora
+            </span>
+          ) : null}
+          <Button variant="outline" onClick={() => setHorariosAbierto(true)}>
+            <ClockIcon />
+            Horarios
+          </Button>
         </div>
 
         <div className="text-muted-foreground flex flex-wrap items-center gap-x-3.5 gap-y-1 px-4 pb-2.5 text-[12.5px]">
@@ -339,10 +379,39 @@ export function Calendario({ datos }: { datos: DatosCalendario }) {
           ) : movil ? (
             <Agenda {...comun} lunes={datos.fecha} />
           ) : (
-            <Semana {...comun} {...conDestinos} lunes={datos.fecha} />
+            <Semana {...comun} {...conDestinos} lunes={datos.fecha} horarios={datos.horarios} ocupadas={ocupadas} filtro={filtro} />
           )}
         </div>
       </div>
+
+      <RepartirDialog
+        abierto={repartirAbierto}
+        piezas={paraRepartir}
+        haySeleccion={seleccion.size > 0}
+        horarios={datos.horarios}
+        ocupadas={ocupadas}
+        ahora={ahora}
+        alCerrar={() => setRepartirAbierto(false)}
+        alConfirmar={ejecutarReparto}
+        alEditarHorarios={() => {
+          setRepartirAbierto(false)
+          setVolverARepartir(true)
+          setHorariosAbierto(true)
+        }}
+      />
+
+      <HorariosDialog
+        abierto={horariosAbierto}
+        horarios={datos.horarios}
+        publicarActivo={datos.publicarActivo}
+        programadas={nProgramadasTotal}
+        alAviso={(texto) => setAviso({ texto })}
+        alCerrar={() => {
+          setHorariosAbierto(false)
+          if (volverARepartir) setRepartirAbierto(true)
+          setVolverARepartir(false)
+        }}
+      />
 
       <DetallePost post={postAbierto} ahora={ahora} publicarActivo={datos.publicarActivo} ocupado={ocupado} acciones={acciones} alCerrar={() => setAbierto(null)} />
 

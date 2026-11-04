@@ -2,8 +2,8 @@
 
 import * as React from "react"
 
-import { MiniPost, TarjetaPost } from "@/components/calendario/tarjeta-post"
-import { aHora, aMin, diaDeSemana, sumarDias, yaPaso } from "@/engine/calendario/reparto"
+import { IconoRed, MiniPost, TarjetaPost } from "@/components/calendario/tarjeta-post"
+import { aHora, aMin, claveHueco, diaDeSemana, huecosDelDia, sumarDias, yaPaso, type Horarios } from "@/engine/calendario/reparto"
 import type { Ahora, PostCalendario } from "@/lib/calendario-tipos"
 import { cn } from "@/lib/utils"
 
@@ -14,7 +14,7 @@ export const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "ju
 export const numeroDia = (dia: string) => Number(dia.slice(8))
 export const mesDe = (dia: string) => Number(dia.slice(5, 7)) - 1
 export const fechaCorta = (dia: string) => `${DIAS[diaDeSemana(dia)]} ${numeroDia(dia)} ${MESES[mesDe(dia)].slice(0, 3)}`
-const fechaLarga = (dia: string) => `${DIAS_LARGOS[diaDeSemana(dia)]} ${numeroDia(dia)} de ${MESES[mesDe(dia)]}`
+export const fechaLarga = (dia: string) => `${DIAS_LARGOS[diaDeSemana(dia)]} ${numeroDia(dia)} de ${MESES[mesDe(dia)]}`
 
 const RAYADO = "bg-[repeating-linear-gradient(135deg,var(--muted)_0_6px,var(--background)_6px_12px)]"
 
@@ -37,7 +37,7 @@ const delDia = (posts: PostCalendario[], dia: string) => posts.filter((p) => p.d
  * La semana como rejilla de horas. De 6:00 a 22:00, y se estira si algo cae fuera:
  * un post que no se ve es peor que una fila de mas.
  */
-export function Semana({ lunes, posts, ahora, alAbrir, alArrastrar, destino, encima, alSoltar }: Comun & Destinos & { lunes: string }) {
+export function Semana({ lunes, posts, ahora, alAbrir, alArrastrar, destino, encima, alSoltar, horarios, ocupadas, filtro }: Comun & Destinos & { lunes: string; horarios: Horarios; ocupadas: Set<string>; filtro: string }) {
   const dias = Array.from({ length: 7 }, (_, i) => sumarDias(lunes, i))
   const horas = posts.filter((p) => p.hora).map((p) => Math.floor(aMin(p.hora as string) / 60))
   const desde = Math.min(6, ...horas)
@@ -69,6 +69,10 @@ export function Semana({ lunes, posts, ahora, alAbrir, alArrastrar, destino, enc
             const pasado = yaPaso(dia, aHora(h * 60 + 59), ahora)
             const dentro = delDia(posts, dia).filter((p) => Math.floor(aMin(p.hora as string) / 60) === h)
             const conHoraActual = dia === ahora.dia && Math.floor(aMin(ahora.hora) / 60) === h
+            // Los huecos de la plantilla que siguen libres: lo que Repartir llenaria.
+            const libres = pasado
+              ? []
+              : huecosDelDia(dia, horarios).filter((s) => Math.floor(aMin(s.hora) / 60) === h && (filtro === "todas" || filtro === s.red) && !ocupadas.has(claveHueco(s.red, dia, s.hora)) && !yaPaso(dia, s.hora, ahora))
             return (
               <div
                 key={clave}
@@ -84,6 +88,12 @@ export function Semana({ lunes, posts, ahora, alAbrir, alArrastrar, destino, enc
                 ) : null}
                 {dentro.map((p) => (
                   <TarjetaPost key={p.id} post={p} alAbrir={alAbrir} alArrastrar={alArrastrar} />
+                ))}
+                {libres.map((s) => (
+                  <div key={`${s.red}-${s.hora}`} title="Hueco de tus horarios" className="text-muted-foreground border-input flex items-center gap-1 rounded-md border border-dashed px-1.5 py-0.5 text-[11px] leading-tight tabular-nums">
+                    <IconoRed red={s.red} />
+                    {s.hora}
+                  </div>
                 ))}
               </div>
             )

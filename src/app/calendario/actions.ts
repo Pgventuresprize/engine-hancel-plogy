@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache"
 
 import { redesActivas } from "@/engine/agents/redes"
-import { aHora, aMin, claveHueco, horaLibre, PASO_MINUTOS, sumarDias } from "@/engine/calendario/reparto"
+import { aHora, aMin, claveHueco, horaLibre, parseHorarios, PASO_MINUTOS, sumarDias, type Horarios } from "@/engine/calendario/reparto"
 import { recursoSinPublicar } from "@/engine/publish/publish-piece"
 import { REDES_CALENDARIO } from "@/engine/publish/programadas"
 import { dayIn, getSettings, partsIn } from "@/engine/schedule"
@@ -58,13 +58,9 @@ async function avisosDe(accountId: string, piezas: { id: string; network: string
   if (piezas.some((p) => p.network === "instagram") && !redes.includes("instagram")) {
     avisos.push("Instagram no está conectado: no saldrá hasta conectarlo.")
   }
-  for (const p of piezas.slice(0, 10)) {
-    const falta = await recursoSinPublicar(p.id)
-    if (falta) {
-      avisos.push(falta)
-      break
-    }
-  }
+  const faltan = await Promise.all(piezas.slice(0, 10).map((p) => recursoSinPublicar(p.id)))
+  const falta = faltan.find(Boolean)
+  if (falta) avisos.push(falta)
   return avisos.length ? avisos.join(" ") : undefined
 }
 
@@ -107,34 +103,39 @@ export async function programarPiezas(lista: Colocacion[]): Promise<ResultadoCal
       huecos.add(claveHueco(o.network, dayIn(timezone, fecha), aHora(hour * 60 + minute)))
     }
 
-    const colocadas: Colocacion[] = []
+    // Primero se reparten los huecos, en orden; despues se escribe todo a la vez.
+    // Sin sitio se salta: la pieza se queda donde estaba y quien llama lo cuenta.
+    const previstas: Colocacion[] = []
     for (const c of lista) {
       const red = redDe.get(c.id)
-      if (!red) continue
-      const hora = horaLibre(c.dia, c.hora, red, huecos)
-      if (!hora) return { ok: false, error: "No queda sitio ese día a partir de esa hora." }
-
-      const { data: movida, error: errorMover } = await supabase
-        .from("content_pieces")
-        .update({
-          programada_para: instanteLocal(c.dia, hora, timezone).toISOString(),
-          programada_intentos: 0,
-          publish_error: null,
-        })
-        .eq("id", c.id)
-        .eq("account_id", cuenta.id)
-        .in("status", ["generated", "approved"])
-        .is("published_at", null)
-        .eq("programada_revisar", false)
-        .select("id")
-      if (errorMover) throw new Error(errorMover.message)
-      if (!movida?.length) continue
-
+      const hora = red ? horaLibre(c.dia, c.hora, red, huecos) : null
+      if (!red || !hora) continue
       huecos.add(claveHueco(red, c.dia, hora))
-      colocadas.push({ id: c.id, dia: c.dia, hora })
+      previstas.push({ id: c.id, dia: c.dia, hora })
     }
 
-    if (colocadas.length === 0) return { ok: false, error: SE_MOVIO }
+    const escritas = await Promise.all(
+      previstas.map(async (c) => {
+        const { data: movida, error: errorMover } = await supabase
+          .from("content_pieces")
+          .update({
+            programada_para: instanteLocal(c.dia, c.hora, timezone).toISOString(),
+            programada_intentos: 0,
+            publish_error: null,
+          })
+          .eq("id", c.id)
+          .eq("account_id", cuenta.id)
+          .in("status", ["generated", "approved"])
+          .is("published_at", null)
+          .eq("programada_revisar", false)
+          .select("id")
+        if (errorMover) throw new Error(errorMover.message)
+        return movida?.length ? c : null
+      })
+    )
+    const colocadas = escritas.filter((c) => c !== null)
+
+    if (colocadas.length === 0) return { ok: false, error: "No se pudo colocar: se publicó, espera revisión o no queda sitio ese día." }
     const warning = await avisosDe(cuenta.id, colocadas.map((c) => ({ id: c.id, network: redDe.get(c.id) as string })))
     refrescar()
     return { ok: true, colocadas, warning }
@@ -143,21 +144,79 @@ export async function programarPiezas(lista: Colocacion[]): Promise<ResultadoCal
   }
 }
 
-/** Aprobar es decir "la vi y sale igual". Va junto a la fecha para que no quede a medias. */
-export async function aprobarYProgramar(lista: Colocacion[]): Promise<ResultadoCalendario> {
-  if (lista.length === 0) return { ok: false, error: "No hay piezas para programar." }
+/**
+ * Colocar aprobando a la vez. Aprobar es decir "la vi y sale igual", y va junto a
+ * la fecha para que no quede a medias. Solo se aprueba lo que se pide: las demas
+ * conservan su estado.
+ */
+export async function repartirPiezas(lista: Colocacion[], aprobar: string[]): Promise<ResultadoCalendario> {
+  if (lista.length === 0) return { ok: false, error: "No hay piezas para repartir." }
+  const cuenta = await cuentaConCalendario()
+
+  if (aprobar.length) {
+    const { error } = await supabaseAdmin()
+      .from("content_pieces")
+      .update({ status: "approved", approved_at: new Date().toISOString() })
+      .eq("account_id", cuenta.id)
+      .in("id", aprobar)
+      .in("status", ["generated", "approved"])
+      .is("published_at", null)
+    if (error) return { ok: false, error: error.message }
+  }
+
+  return programarPiezas(lista)
+}
+
+/**
+ * Deshacer un reparto no puede dejar aprobadas las piezas que solo se aprobaron
+ * para colocarlas: quien se arrepiente cree que quedo todo como estaba.
+ */
+export async function quitarAprobacion(ids: string[]): Promise<ResultadoCalendario> {
+  if (ids.length === 0) return { ok: true, colocadas: [] }
   const cuenta = await cuentaConCalendario()
 
   const { error } = await supabaseAdmin()
     .from("content_pieces")
-    .update({ status: "approved", approved_at: new Date().toISOString() })
+    .update({ status: "generated", approved_at: null })
     .eq("account_id", cuenta.id)
-    .in("id", lista.map((c) => c.id))
-    .in("status", ["generated", "approved"])
+    .in("id", ids)
+    .eq("status", "approved")
     .is("published_at", null)
   if (error) return { ok: false, error: error.message }
 
-  return programarPiezas(lista)
+  refrescar()
+  return { ok: true, colocadas: [] }
+}
+
+export async function guardarHorarios(horarios: Horarios): Promise<ResultadoCalendario> {
+  const cuenta = await cuentaConCalendario()
+
+  const { error } = await supabaseAdmin()
+    .from("calendario_ajustes")
+    // Solo lo que se limpio: lo que no se entienda no llega a la base.
+    .upsert({ account_id: cuenta.id, horarios: parseHorarios(horarios), updated_at: new Date().toISOString() }, { onConflict: "account_id" })
+  if (error) return { ok: false, error: error.message }
+
+  refrescar()
+  return { ok: true, colocadas: [] }
+}
+
+/**
+ * El interruptor general. Encender hace que lo programado salga solo y no se
+ * deshace lo que ya salio, asi que es de quien gestiona la empresa. Apagar puede
+ * hacerlo cualquiera: frenar nunca puede depender de encontrar al owner.
+ */
+export async function cambiarPublicacionProgramada(activo: boolean): Promise<ResultadoCalendario> {
+  const cuenta = await cuentaConCalendario()
+  if (activo && cuenta.rol !== "owner") return { ok: false, error: "Solo un owner de la empresa puede encender la publicación programada." }
+
+  const { error } = await supabaseAdmin()
+    .from("calendario_ajustes")
+    .upsert({ account_id: cuenta.id, publicar_activo: activo, updated_at: new Date().toISOString() }, { onConflict: "account_id" })
+  if (error) return { ok: false, error: error.message }
+
+  refrescar()
+  return { ok: true, colocadas: [] }
 }
 
 export async function quitarDelCalendario(ids: string[]): Promise<ResultadoCalendario> {

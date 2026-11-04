@@ -2,7 +2,7 @@ import "server-only"
 
 import { redesActivas } from "@/engine/agents/redes"
 import { MAX_INTENTOS, sinFreno, VENTANA_MS } from "@/engine/calendario/decidir"
-import { inicioDeMes, lunesDe, sumarDias } from "@/engine/calendario/reparto"
+import { claveHueco, inicioDeMes, lunesDe, parseHorarios, sumarDias } from "@/engine/calendario/reparto"
 import { REDES_CALENDARIO } from "@/engine/publish/programadas"
 import { dayIn, getSettings, partsIn } from "@/engine/schedule"
 import { instanteLocal } from "@/engine/studio/publicar"
@@ -108,7 +108,7 @@ export async function getCalendario(pedido: { vista: VistaCalendario; fecha: str
 
   const piezas = () => supabase.from("content_pieces").select(CAMPOS).eq("account_id", accountId).in("network", [...REDES_CALENDARIO])
 
-  const [bandeja, conteo, enFechas, enRevisar, hermanas, ajustes, conectadas] = await Promise.all([
+  const [bandeja, conteo, enFechas, enRevisar, hermanas, ajustes, futuras, conectadas] = await Promise.all([
     piezas().in("status", ["generated", "approved"]).is("published_at", null).is("programada_para", null).order("created_at", { ascending: false }).limit(MAX_BANDEJA),
     supabase
       .from("content_pieces")
@@ -131,11 +131,21 @@ export async function getCalendario(pedido: { vista: VistaCalendario; fecha: str
       .neq("status", "rejected")
       .not("raw_news_id", "is", null)
       .limit(2000),
-    supabase.from("calendario_ajustes").select("publicar_activo").eq("account_id", accountId).maybeSingle(),
+    supabase.from("calendario_ajustes").select("publicar_activo, horarios").eq("account_id", accountId).maybeSingle(),
+    // Repartir mira semanas que no estan en pantalla.
+    supabase
+      .from("content_pieces")
+      .select("network, programada_para")
+      .eq("account_id", accountId)
+      .in("network", [...REDES_CALENDARIO])
+      .neq("status", "rejected")
+      .is("published_at", null)
+      .gt("programada_para", now.toISOString())
+      .limit(2000),
     redesActivas(accountId),
   ])
 
-  for (const r of [bandeja, conteo, enFechas, enRevisar, hermanas, ajustes]) {
+  for (const r of [bandeja, conteo, enFechas, enRevisar, hermanas, ajustes, futuras]) {
     if (r.error) throw new Error(`No se pudo cargar el calendario: ${r.error.message}`)
   }
 
@@ -194,5 +204,10 @@ export async function getCalendario(pedido: { vista: VistaCalendario; fecha: str
     enBandeja: conteo.count ?? 0,
     publicarActivo: (ajustes.data as { publicar_activo: boolean } | null)?.publicar_activo === true,
     redesConectadas: conectadas.filter((r): r is RedCalendario => r === "instagram" || r === "linkedin"),
+    horarios: parseHorarios((ajustes.data as { horarios: unknown } | null)?.horarios),
+    ocupados: ((futuras.data ?? []) as { network: string; programada_para: string }[]).map((f) => {
+      const { dia, hora } = local(f.programada_para)
+      return claveHueco(f.network, dia, hora)
+    }),
   }
 }

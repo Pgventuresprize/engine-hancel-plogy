@@ -1,3 +1,5 @@
+import type { Horarios } from "@/engine/calendario/reparto"
+
 /** Lo que viaja del servidor a la pantalla del calendario. Sin `server-only`: lo usa el cliente. */
 
 export type RedCalendario = "instagram" | "linkedin"
@@ -53,6 +55,9 @@ export type DatosCalendario = {
   /** El interruptor general. Apagado se organiza todo y no sale nada. */
   publicarActivo: boolean
   redesConectadas: RedCalendario[]
+  horarios: Horarios
+  /** Los huecos ya tomados de aqui en adelante, tambien fuera de las fechas visibles. */
+  ocupados: string[]
 }
 
 export type Colocacion = { id: string; dia: string; hora: string }
