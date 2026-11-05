@@ -20,10 +20,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
-const PLANES: { id: Plan; nombre: string; detalle: string }[] = [
-  { id: "basic", nombre: "Basic", detalle: "Noticias y sus agentes (extracción, análisis, ángulo, LinkedIn, Instagram, Facebook)." },
-  { id: "advance", nombre: "Advance", detalle: "Todo lo de Basic más capas, ideas, recetas, carruseles, publicación y Video studio." },
-]
+const PLANES: Record<Plan, { nombre: string; detalle: string }> = {
+  basic: { nombre: "Basic", detalle: "Noticias y sus agentes (extracción, análisis, ángulo, LinkedIn, Instagram, Facebook)." },
+  advance: { nombre: "Advance", detalle: "Todo lo de Basic más capas, ideas, recetas, carruseles, publicación y Video studio." },
+}
 
 /**
  * La empresa abierta (nombre, plan, miembros) y la creacion de empresas
@@ -45,11 +45,9 @@ export function EmpresaAdmin({
   const [pending, startTransition] = React.useTransition()
   const [aviso, setAviso] = React.useState<{ ok: boolean; texto: string } | null>(null)
   const [nombre, setNombre] = React.useState(empresa.name)
-  const [plan, setPlan] = React.useState<Plan>(empresa.plan)
   const [correo, setCorreo] = React.useState("")
   const [rol, setRol] = React.useState<Rol>("member")
   const [nuevaNombre, setNuevaNombre] = React.useState("")
-  const [nuevaPlan, setNuevaPlan] = React.useState<Plan>("basic")
 
   const correr = (fn: () => Promise<Resultado>, despues?: () => void) => {
     setAviso(null)
@@ -86,18 +84,14 @@ export function EmpresaAdmin({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Plan</Label>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {PLANES.map((p) => (
-                <button key={p.id} type="button" disabled={pending || !esOwner} onClick={() => setPlan(p.id)} className={chip(plan === p.id)}>
-                  <span className="font-medium">{p.nombre}</span>
-                  <span className="block text-xs opacity-80">{p.detalle}</span>
-                </button>
-              ))}
-            </div>
+            <p className="text-sm">
+              <span className="font-medium">{PLANES[empresa.plan].nombre}.</span>{" "}
+              <span className="text-muted-foreground">{PLANES[empresa.plan].detalle} Para cambiarlo, escríbenos.</span>
+            </p>
           </div>
           {esOwner ? (
             <div>
-              <Button disabled={pending} onClick={() => correr(() => guardarEmpresa({ name: nombre, plan }))}>
+              <Button disabled={pending} onClick={() => correr(() => guardarEmpresa({ name: nombre }))}>
                 Guardar
               </Button>
             </div>
@@ -198,7 +192,7 @@ export function EmpresaAdmin({
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Crear empresa</CardTitle>
           <p className="text-muted-foreground mt-1 text-sm">
-            Empieza vacía y sin conexiones; quedas como owner y se abre al crearla. Tus empresas:{" "}
+            Empieza vacía, sin conexiones y en Basic; quedas como owner y se abre al crearla. Tus empresas:{" "}
             {empresas.map((e) => `${e.name} (${e.plan}, ${e.rol})`).join(" · ")}.
           </p>
         </CardHeader>
@@ -207,16 +201,8 @@ export function EmpresaAdmin({
             <Label htmlFor="n-nombre">Nombre</Label>
             <Input id="n-nombre" value={nuevaNombre} disabled={pending} onChange={(e) => setNuevaNombre(e.target.value)} placeholder="Nombre de la empresa" />
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {PLANES.map((p) => (
-              <button key={p.id} type="button" disabled={pending} onClick={() => setNuevaPlan(p.id)} className={chip(nuevaPlan === p.id)}>
-                <span className="font-medium">{p.nombre}</span>
-                <span className="block text-xs opacity-80">{p.detalle}</span>
-              </button>
-            ))}
-          </div>
           <div>
-            <Button disabled={pending || nuevaNombre.trim().length < 2} onClick={() => correr(() => nuevaEmpresa(nuevaNombre, nuevaPlan), () => setNuevaNombre(""))}>
+            <Button disabled={pending || nuevaNombre.trim().length < 2} onClick={() => correr(() => nuevaEmpresa(nuevaNombre), () => setNuevaNombre(""))}>
               Crear empresa
             </Button>
           </div>

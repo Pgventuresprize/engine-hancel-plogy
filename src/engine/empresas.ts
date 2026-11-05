@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "./supabase-admin"
+import { registrarActividad } from "./admin/actividad"
 import type { Plan } from "./accounts"
 
 /**
@@ -35,7 +36,7 @@ export async function miembrosDe(accountId: string): Promise<Miembro[]> {
 }
 
 /** Un usuario por su correo, o null si no existe. */
-async function usuarioPorCorreo(email: string): Promise<{ id: string } | null> {
+export async function usuarioPorCorreo(email: string): Promise<{ id: string } | null> {
   const supabase = supabaseAdmin()
   const buscado = email.trim().toLowerCase()
   for (let page = 1; page <= 20; page++) {
@@ -123,8 +124,11 @@ export async function asegurarEmpresaPropia(
     .eq("user_id", userId)
   if (error) return { ok: false, error: `No se pudieron leer tus empresas: ${error.message}` }
   if (count) return { ok: true, creada: false }
-  const r = await crearEmpresa(nombre.trim() || "Mi empresa", "basic", userId)
-  return r.ok ? { ok: true, creada: true } : r
+  const limpio = nombre.trim() || "Mi empresa"
+  const r = await crearEmpresa(limpio, "basic", userId)
+  if (!r.ok) return r
+  await registrarActividad({ tipo: "plataforma", accion: "Registro nuevo", sobre: limpio, accountId: r.id, usuarioId: userId, detalle: "Empresa creada en Basic." })
+  return { ok: true, creada: true }
 }
 
 /** Cuantos owners tiene una empresa: nunca se puede quedar sin ninguno. */
@@ -176,7 +180,7 @@ export async function crearEmpresa(
   nombre: string,
   plan: Plan,
   creadorId: string
-): Promise<{ ok: true; slug: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; slug: string; id: string } | { ok: false; error: string }> {
   const limpio = nombre.trim()
   if (limpio.length < 2) return { ok: false, error: "Ponle un nombre a la empresa." }
   if (plan !== "basic" && plan !== "advance") return { ok: false, error: "Plan desconocido." }
@@ -202,7 +206,7 @@ export async function crearEmpresa(
   } catch (e) {
     return { ok: false, error: `Se creó la empresa pero no su configuración: ${e instanceof Error ? e.message : String(e)}` }
   }
-  return { ok: true, slug }
+  return { ok: true, slug, id }
 }
 
 /** Las redes con horario propio en `publish_schedule`. */

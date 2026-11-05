@@ -28,22 +28,40 @@ export type Cuenta = {
   name: string
   slug: string
   plan: Plan
+  /** Cuando la suspendio un administrador. Suspendida no entra nadie y sus motores paran. */
+  suspendida_en: string | null
 }
 
-const CAMPOS = "id, name, slug, plan"
+const CAMPOS = "id, name, slug, plan, suspendida_en"
 
 /** Si el plan de la empresa incluye el estudio, la publicacion y los videos. */
 export const esAdvance = (c: Pick<Cuenta, "plan">) => c.plan === "advance"
 
-/** Todas las cuentas, en orden de creacion. Es sobre lo que itera el motor. */
+/**
+ * Las cuentas activas, en orden de creacion. Es sobre lo que itera el motor: por
+ * eso una empresa suspendida deja de ingerir, generar y publicar sin tocar cada
+ * tick. El panel de administracion lee las suyas aparte.
+ */
 export async function todasLasCuentas(): Promise<Cuenta[]> {
   const { data, error } = await supabaseAdmin()
     .from("accounts")
     .select(CAMPOS)
+    .is("suspendida_en", null)
     .order("created_at")
 
   if (error) throw new Error(`No se pudieron leer las cuentas: ${error.message}`)
   return (data ?? []) as Cuenta[]
+}
+
+/**
+ * Cuales de estas cuentas estan suspendidas. Para lo que lee trabajos de todas las
+ * cuentas juntas y por eso no pasa por `todasLasCuentas`, como los buzones.
+ */
+export async function cuentasSuspendidas(ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set()
+  const { data, error } = await supabaseAdmin().from("accounts").select("id").in("id", ids).not("suspendida_en", "is", null)
+  if (error) throw new Error(`No se pudieron leer las cuentas: ${error.message}`)
+  return new Set(((data ?? []) as { id: string }[]).map((c) => c.id))
 }
 
 export async function cuentaPorId(accountId: string): Promise<Cuenta | null> {

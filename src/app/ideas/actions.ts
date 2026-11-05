@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 
 import { generarRonda } from "@/engine/ideas/generar"
 import { studioConfig } from "@/engine/studio/settings"
-import { idDeCuentaActual } from "@/lib/accounts"
+import { idDeCuentaAdvance } from "@/lib/accounts"
 import { supabaseAdmin } from "@/engine/supabase-admin"
 
 export type IdeasResult =
@@ -22,7 +22,7 @@ export async function generarIdeas(pillarId: string): Promise<IdeasResult> {
   if (!pillarId) return { ok: false, error: "Falta el pilar." }
 
   try {
-    const accountId = await idDeCuentaActual()
+    const accountId = await idDeCuentaAdvance()
 
     // El pilar tiene que ser de la cuenta abierta: el id llega del cliente.
     const { count } = await supabaseAdmin()
@@ -52,7 +52,7 @@ export async function limpiarDisponibles(pillarId: string): Promise<IdeasResult>
       .from("content_cartridges")
       .delete()
       .eq("pillar_id", pillarId)
-      .eq("account_id", await idDeCuentaActual())
+      .eq("account_id", await idDeCuentaAdvance())
       .eq("status", "available")
     if (error) throw new Error(error.message)
     revalidatePath("/ideas")

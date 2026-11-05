@@ -33,7 +33,7 @@ export async function cuentasDelUsuario(): Promise<CuentaConRol[]> {
   // tienen RLS sin politicas, asi que el filtro lo pone el codigo.
   const { data, error } = await supabaseAdmin()
     .from("account_members")
-    .select("role, accounts (id, name, slug, plan)")
+    .select("role, accounts (id, name, slug, plan, suspendida_en)")
     .eq("user_id", usuario.id)
 
   if (error) throw new Error(`No se pudieron leer las cuentas: ${error.message}`)
@@ -61,7 +61,12 @@ export async function cuentaActual(): Promise<CuentaConRol> {
   }
 
   const elegida = (await cookies()).get(COOKIE_CUENTA)?.value
-  return cuentas.find((cuenta) => cuenta.slug === elegida) ?? cuentas[0]
+  // Sin eleccion valida se abre una que funcione, si la hay.
+  const cuenta = cuentas.find((c) => c.slug === elegida) ?? cuentas.find((c) => !c.suspendida_en) ?? cuentas[0]
+  // Todo lo de una empresa pasa por aqui, asi que este es el cierre: paginas y
+  // acciones por igual. /suspendida deja cambiar a otra empresa si la tiene.
+  if (cuenta.suspendida_en) redirect("/suspendida")
+  return cuenta
 }
 
 /**
@@ -72,6 +77,17 @@ export async function exigirAdvance(): Promise<CuentaConRol> {
   const cuenta = await cuentaActual()
   if (cuenta.plan !== "advance") redirect("/")
   return cuenta
+}
+
+/**
+ * El id de la cuenta para las acciones del plan advance. La pagina ya manda fuera
+ * a una empresa basic, pero una accion de servidor se puede llamar sin pasar por
+ * ella: tiene que comprobarlo por su cuenta.
+ */
+export async function idDeCuentaAdvance(): Promise<string> {
+  const cuenta = await cuentaActual()
+  if (cuenta.plan !== "advance") throw new Error("Esto es del plan Advance.")
+  return cuenta.id
 }
 
 /** Para lo que solo puede hacer quien gestiona la empresa (owner). */

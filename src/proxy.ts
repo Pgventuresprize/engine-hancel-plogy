@@ -89,9 +89,11 @@ export async function proxy(request: NextRequest) {
     },
   })
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data } = await supabase.auth.getUser()
+  // Igual que `usuarioActual`: sin esto, un bloqueado con token vigente rebotaria
+  // para siempre entre /login, que lo ve con sesion, y el dashboard, que no.
+  const bloqueado = data.user?.banned_until && new Date(data.user.banned_until).getTime() > Date.now()
+  const user = bloqueado ? null : data.user
 
   const { pathname, search } = request.nextUrl
 
