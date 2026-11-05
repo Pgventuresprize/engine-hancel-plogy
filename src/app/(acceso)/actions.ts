@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache"
 import { asegurarEmpresaPropia } from "@/engine/empresas"
 import { authClient, usuarioActual } from "@/lib/supabase/auth"
 import { origenDeLaPeticion } from "@/lib/supabase/origen"
+import { CAPTCHA_FALLO, pasoElCaptcha } from "@/lib/turnstile"
 
 /**
  * Entrar, salir, registrarse y recuperar la contraseña.
@@ -91,6 +92,7 @@ export async function reenviarConfirmacion(_previo: EnvioResult, form: FormData)
 export async function pedirRecuperacion(_previo: EnvioResult, form: FormData): Promise<EnvioResult> {
   const email = String(form.get("email") ?? "").trim().toLowerCase()
   if (!CORREO.test(email)) return { error: "Ese correo no es válido." }
+  if (!(await pasoElCaptcha(form))) return { error: CAPTCHA_FALLO }
 
   const supabase = await authClient()
   const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: await volverA() })
@@ -153,6 +155,7 @@ export async function registrarse(_previo: EnvioResult, form: FormData): Promise
   if (!CORREO.test(email)) return { error: "Ese correo no es válido." }
   if (password.length < MINIMO) return { error: `La contraseña tiene que tener al menos ${MINIMO} caracteres.` }
   if (password !== repetida) return { error: "Las dos contraseñas no coinciden." }
+  if (!(await pasoElCaptcha(form))) return { error: CAPTCHA_FALLO }
 
   const supabase = await authClient()
   const { data, error } = await supabase.auth.signUp({

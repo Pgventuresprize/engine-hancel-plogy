@@ -12,6 +12,7 @@ import {
 } from "@/app/(acceso)/actions"
 import { EncabezadoAcceso } from "@/components/auth/encabezado"
 import { CampoContrasena } from "@/components/auth/campo-contrasena"
+import { VerificacionHumana } from "@/components/auth/verificacion-humana"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -81,6 +82,7 @@ export function RecuperarForm() {
           Escribe tu correo y te mandamos un enlace para elegir una nueva.
         </EncabezadoAcceso>
         <Campo id="email" etiqueta="Correo" type="email" placeholder="tu@correo.com" autoComplete="email" autoFocus />
+        <VerificacionHumana reinicio={resultado} />
         <Fallo resultado={resultado} />
         <Button type="submit" variant="brand" className="h-12 w-full" disabled={pendiente}>
           {pendiente ? "Mandando…" : "Mandar el enlace"}
@@ -129,6 +131,7 @@ export function RegistroForm() {
         <Campo id="email" etiqueta="Correo" type="email" placeholder="tu@correo.com" autoComplete="email" />
         <Campo id="password" etiqueta="Contraseña" type="password" autoComplete="new-password" minLength={8} placeholder="Mínimo 8 caracteres" />
         <Campo id="repetida" etiqueta="Repítela" type="password" autoComplete="new-password" minLength={8} />
+        <VerificacionHumana reinicio={resultado} />
         <Fallo resultado={resultado} />
         <Button type="submit" variant="brand" className="h-12 w-full" disabled={pendiente}>
           {pendiente ? "Creando…" : "Crear cuenta"}
