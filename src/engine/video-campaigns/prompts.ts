@@ -1,4 +1,5 @@
 import type { Brand, Brief, Piece } from "./model"
+import { RECIPE_RULE, recipeIsCurrent } from "./recipe"
 export const SCRIPT_SCHEMA = `{
 "title":"título","hook":"primera frase","conclusion":"conclusión coherente","cta":"CTA elegido","narration":"toda la voz exacta, de corrido",
 "shots":[{"start":0,"end":4,"visual":"acción concreta y plano","voice":"voz exacta","text":"texto en pantalla"}],
@@ -19,7 +20,8 @@ export function writerPrompt(b: Brief, p: Piece, brand: Brand): { system: string
     : p.mode === "adaptacion"
       ? `ADAPTACIÓN/NOTICIA PARA CONFIANZA. Desde el dossier, explica el hecho o mecanismo, su consecuencia, el criterio de la marca y una conclusión que responda al hook. Distingue hechos de interpretación. Conserva reservas y fuentes. No hace falta una referencia viral. Hook → contexto necesario → progresión/prueba → conclusión → CTA, con estructura propia del caso.`
       : `ORIGINAL PARA CONVERSIÓN. Ejecuta el concepto elegido: situación reconocible del comprador, tensión/objeción, demostración o evidencia, descubrimiento y siguiente paso concreto hacia la oferta. Entretener sirve a la idea; no fuerces humor. No hagas una lista genérica de consejos ni una moraleja. El CTA debe nacer de lo mostrado.`
-  return { system: `${CONTRACT}\n${route}\n${brandBlock(brand, p.mode === "replica")}\nCONTRATO\n${SCRIPT_SCHEMA}`, prompt: JSON.stringify({ tema: b.topics[p.topic], audiencia: b.audience, objetivo: p.objective, cta_exacto: b.cta, oferta: b.offer, material_usuario: b.material, canales: b.channels, duracion_orientativa: b.duration, referente: p.reference, transcripcion: p.transcript, duracion_referente: p.sourceDuration, dossier: p.dossier, fuentes: p.sources, concepto_elegido: p.concepts[0] || null }) }
+  const receta = p.mode === "replica" && recipeIsCurrent(p) ? p.recipe : null
+  return { system: `${CONTRACT}\n${route}${receta ? `\n${RECIPE_RULE}` : ""}\n${brandBlock(brand, p.mode === "replica")}\nCONTRATO\n${SCRIPT_SCHEMA}`, prompt: JSON.stringify({ tema: b.topics[p.topic], audiencia: b.audience, objetivo: p.objective, cta_exacto: b.cta, oferta: b.offer, material_usuario: b.material, canales: b.channels, duracion_orientativa: b.duration, referente: p.reference, transcripcion: p.transcript, duracion_referente: p.sourceDuration, dossier: p.dossier, fuentes: p.sources, concepto_elegido: p.concepts[0] || null, ...(receta ? { receta } : {}) }) }
 }
 export function reviewPrompt(b: Brief, p: Piece, brand: Brand): { system: string; prompt: string } {
   const criteria = p.mode === "replica"

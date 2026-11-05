@@ -96,6 +96,17 @@ límite de inicios, no un límite monetario: la transcripción y análisis visua
 tener cargos por duración. Default 12, configurable entre 0 y 40 por campaña.
 Las búsquedas paralelas comparten presupuesto de forma atómica.
 
+## Ficha del hook en réplicas
+
+Antes de escribir una réplica se analiza qué hizo funcionar el referente: mecanismo, plantilla con huecos, fragmentos que deben quedar literales, estructura y lo que hay que ajustar a mano. Es un paso dentro de la fase `write`, guardado en `payload.recipe`: no requiere migración y las piezas existentes siguen funcionando.
+
+- La ficha queda atada a su fuente. Si cambian la referencia o la transcripción, se analiza de nuevo.
+- La revisión comprueba el mecanismo del hook. Una edición manual se señala, nunca se reescribe.
+- Lo visual solo se da por observado si el proveedor devolvió contexto visual. Si no, la apertura es una propuesta.
+- Lo que no se sostiene no se reescribe para esquivarlo: queda en `pending` o marcado para ajuste manual.
+
+Pruebas: `node --import tsx --test scripts/video-campaigns-recipe.test.ts`.
+
 ## Cola, seguridad y operaciones
 
 Tablas nuevas: vc2_campaigns, vc2_pieces, vc2_jobs, vc2_versions, vc2_sources,
