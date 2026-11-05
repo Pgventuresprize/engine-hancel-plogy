@@ -186,7 +186,8 @@ export async function maquetar(
   modelo = MODELO_MAQUETA,
   esfuerzo: "low" | "medium" | "high" = ESFUERZO_MAQUETA,
   /** Lo que se pidio para esta version: elige las plantillas, no cambia el texto. */
-  pedido?: string
+  pedido?: string,
+  plazoMs = 240_000
 ): Promise<{ laminas: LaminaKit[]; descartadas: number[]; motivos?: string[]; error?: string }> {
   const automaticas = laminasDeGuionClasico(slides, g.antetitulo, g.cierre)
   const { texto: cat, porClave } = catalogo(kc.plantillas)
@@ -200,7 +201,7 @@ export async function maquetar(
     // Con todo el catalogo delante piensa largo, y lo que piensa sale del mismo
     // presupuesto que la respuesta: con 4000 se quedaba sin texto.
     maxTokens: 12000,
-    timeoutMs: 240_000,
+    timeoutMs: plazoMs,
   })
   if (!r.ok) return { laminas: automaticas, descartadas: [], error: r.error }
 

@@ -1061,12 +1061,17 @@ export async function rehacerDesdeGuion(
       diseno: f.payload.modoDiseno === "mecanico" ? "mecanico" : "plantillas",
       pedidoVisual: pedidoDeDiseno(visual),
       masFotos: visual?.mas_fotos === true,
+      plazoMaquetaMs: PLAZO_MAQUETA_REHACER_MS,
     },
     await nichosConocidos(accountId),
     Boolean(hermana)
   )
-  // Las notas de un post subido siguen sirviendo para decidir cuando sale.
-  const notas = typeof f.payload.notasPost === "string" ? { notasPost: f.payload.notasPost } : {}
+  // Las notas de un post subido siguen sirviendo para decidir cuando sale, y el caption
+  // que escribio el agente sigue siendo suyo: la propuesta lo muestra para que lo revisen.
+  const notas = {
+    ...(typeof f.payload.notasPost === "string" ? { notasPost: f.payload.notasPost } : {}),
+    ...(f.payload.captionEscrito === true ? { captionEscrito: true } : {}),
+  }
   const payload = { ...carrusel, ...notas, caption: pie.caption ?? carrusel.caption, hashtags: pie.hashtags ?? carrusel.hashtags }
   const { error } = await supabase.from("content_pieces").update({ payload, publish_error: null }).eq("id", f.id)
   if (error) throw new Error(error.message)
@@ -1078,6 +1083,9 @@ export async function rehacerDesdeGuion(
   }
   return payload
 }
+
+/** Vercel corta la pasada a los 300 s: las fotos y dibujar 10 laminas necesitan lo demas. */
+const PLAZO_MAQUETA_REHACER_MS = 170_000
 
 /** Lo que se pidio, como lo lee el maquetador. */
 export function pedidoDeDiseno(visual: Cambios["rehacer"]): string | undefined {

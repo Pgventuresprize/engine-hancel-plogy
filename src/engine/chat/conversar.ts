@@ -534,6 +534,16 @@ export async function responder(o: {
     modelo = m
   }
 
+  // Primero lo que se va a cambiar: "esta muy plano" no se juzga con el texto.
+  const laminasAMirar: LaminaAMirar[] = [
+    ...objetivos.flatMap((x) => x.pieza.subida.map((url, i) => ({ url, rotulo: `${x.etiqueta}, lámina ${i + 1}:`, post: objetivos.length > 1 ? x.etiqueta : "esta pieza" }))),
+    ...(postsSubidos?.imagenes ?? []),
+  ]
+  const vistas = laminasAMirar.length ? await mirarLaminas(laminasAMirar) : null
+  if (vistas?.sinVer.length) {
+    contexto.push(`# LÁMINAS QUE NO TIENES DELANTE\n\nNo pudiste ver todas las láminas de: ${vistas.sinVer.join(", ")}. No digas cómo se ven y no escribas su caption: si les falta, déjalos fuera de la propuesta con ese motivo.`)
+  }
+
   const marcado = selecciones.length ? `\n\nLo que marcó en la pieza para este pedido:\n${textoDeSelecciones(selecciones)}` : ""
   const prompt = [
     ...contexto,
@@ -543,18 +553,13 @@ export async function responder(o: {
     .filter(Boolean)
     .join("\n\n")
 
-  const laminasAMirar: LaminaAMirar[] = [
-    ...(postsSubidos?.imagenes ?? []),
-    ...objetivos.flatMap((x) => x.pieza.subida.map((url, i) => ({ url, rotulo: `${x.etiqueta}, lámina ${i + 1}:` }))),
-  ]
   const llamada = {
     paso: `chat-${agente}`,
     accountId: o.accountId,
     model: modelo,
     system: { fijo, resto: `${contratoDeChat(agente, o.persona, editables, await fechaDeHoy(o.accountId))}${postsSubidos ? CONTRATO_POSTS : ""}` },
     prompt,
-    // Se mira lo que se va a cambiar: "esta muy plano" no se juzga con el texto.
-    bloques: laminasAMirar.length ? await mirarLaminas(laminasAMirar) : undefined,
+    bloques: vistas?.bloques.length ? vistas.bloques : undefined,
     // Con la pieza delante, el bloque de cambios puede traer laminas enteras; y
     // lo investigado se cuenta en mas que unas frases.
     maxTokens: editables.length > 1 || postsSubidos ? 8000 : agente !== "revisor" ? 4000 : 1500,

@@ -386,6 +386,8 @@ export type Estilo = {
   /** Solo al rehacer una pieza: lo que se pidio para esta version, para el maquetador. */
   pedidoVisual?: string
   /** Solo al rehacer una pieza: busca foto en toda plantilla que la admita. */
+  /** Tiempo para maquetar cuando hay que caber en una pasada. Sin el, el de siempre. */
+  plazoMaquetaMs?: number
   masFotos?: boolean
   paleta: Paleta
   /** Los colores propios de la marca, si los guardo. Mandan sobre la paleta. */

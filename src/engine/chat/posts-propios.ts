@@ -8,7 +8,7 @@ import { instanteLocal } from "../studio/publicar"
 import { supabaseAdmin } from "../supabase-admin"
 import type { LaminaAMirar } from "./leer-post"
 import { escribirMensaje, type Mensaje, type Referencia, type ReferenciaLote, type ReferenciaPlan } from "./mensajes"
-import { captionDeTextos, huellaDeCaption, MAX_CAPTION, MAX_HASHTAGS, MAX_LAMINAS, MAX_POSTS_POR_LOTE, tituloDeCarpeta } from "./posts-carpeta"
+import { captionDeTextos, huellaDeCaption, largoPublicado, material, MAX_CAPTION, MAX_HASHTAGS, MAX_LAMINAS, MAX_POSTS_POR_LOTE, tituloDeCarpeta } from "./posts-carpeta"
 
 /**
  * Posts ya hechos que alguien sube al chat.
@@ -33,9 +33,6 @@ const LAMINAS_POR_POST = 3
 
 /** Donde vive un post subido. La arma el servidor: nunca sale de lo que mande el navegador. */
 const carpetaDe = (accountId: string, id: string) => `subidas/${accountId}/${id}`
-
-/** Lo que viene de un archivo no puede cerrar la etiqueta que lo marca como material. */
-const material = (t: string) => t.replace(/<\/?\s*(caption_del_archivo|notas_del_archivo)[^>]*>/gi, "")
 
 async function exigirAdvance(accountId: string): Promise<void> {
   const { data } = await supabaseAdmin().from("accounts").select("plan").eq("id", accountId).maybeSingle()
@@ -320,7 +317,7 @@ export async function postsParaElAgente(
       p.status === "published" ? "ya publicado" : p.status === "rejected" ? "rechazado" : p.programada_para ? `programado: ${new Date(p.programada_para).toLocaleString("es", { timeZone: timezone })}` : "sin programar"
     if (!caption && p.status !== "published" && conFotos < MAX_POSTS_CON_FOTOS) {
       conFotos++
-      imagenes.push(...(p.payload.images ?? []).slice(0, LAMINAS_POR_POST).map((url, n) => ({ url, rotulo: `${etiqueta}, lámina ${n + 1}:` })))
+      imagenes.push(...(p.payload.images ?? []).slice(0, LAMINAS_POR_POST).map((url, n) => ({ url, rotulo: `${etiqueta}, lámina ${n + 1}:`, post: etiqueta })))
     }
     return [
       `## ${etiqueta}: ${material(p.titulo)} (${p.payload.images?.length ?? 0} láminas, ${estado})`,
@@ -429,8 +426,8 @@ export async function proponerPlan(o: {
     const caption = pedido.caption.trim()
     const tieneCaption = Boolean(pieza.payload.caption?.trim()) && !pieza.payload.captionEscrito
     if (caption && (!tieneCaption || o.puedeCambiarCaption)) {
-      if (caption.length > MAX_CAPTION) return { ok: false, error: `El caption de ${pedido.post} pasa de ${MAX_CAPTION} caracteres.` }
       const hashtags = pedido.hashtags.map((h) => h.trim()).filter((h) => h.startsWith("#")).slice(0, MAX_HASHTAGS)
+      if (largoPublicado(caption, hashtags) > MAX_CAPTION) return { ok: false, error: `El caption de ${pedido.post}, con sus hashtags, pasa de ${MAX_CAPTION} caracteres.` }
       const { error } = await supabase
         .from("content_pieces")
         .update({ payload: { ...pieza.payload, caption, hashtags, captionEscrito: true } })
@@ -444,8 +441,8 @@ export async function proponerPlan(o: {
       fueraPropuesta.push({ ...base, motivo: "No tiene caption." })
       continue
     }
-    if ((pieza.payload.caption ?? "").length > MAX_CAPTION) {
-      fueraPropuesta.push({ ...base, motivo: `Su caption pasa de ${MAX_CAPTION} caracteres, el máximo de Instagram.` })
+    if (largoPublicado(pieza.payload.caption ?? "", pieza.payload.hashtags ?? []) > MAX_CAPTION) {
+      fueraPropuesta.push({ ...base, motivo: `Su caption, con los hashtags, pasa de ${MAX_CAPTION} caracteres, el máximo de Instagram.` })
       continue
     }
     if ((pieza.payload.hashtags ?? []).length > MAX_HASHTAGS) {

@@ -174,6 +174,9 @@ async function dibujarConReintento(htmls: string[], medidas: OpcionesDibujo) {
   }
 }
 
+/** Con menos tiempo que esto, otra vuelta del maquetador solo gastaria y se cortaria. */
+const MIN_OTRA_MAQUETA_MS = 60_000
+
 export async function generarCarruselKit(
   pieceKey: string,
   accountId: string,
@@ -220,14 +223,18 @@ export async function generarCarruselKit(
   // todo sale del reparto automatico.
   const fotosDelKit = kc.kit.sistema.fotos_por_carrusel ?? 0
   const mecanico = estilo.diseno === "mecanico"
+  const plazoMaqueta = estilo.plazoMaquetaMs
+  const inicioMaqueta = Date.now()
   let maqueta: Awaited<ReturnType<typeof maquetar>> = mecanico
     ? { laminas: laminasDeGuionClasico(slides, guion.antetitulo, guion.cierre), descartadas: [] }
-    : await maquetar(accountId, kc, guion, slides, undefined, undefined, estilo.pedidoVisual)
+    : await maquetar(accountId, kc, guion, slides, undefined, undefined, estilo.pedidoVisual, plazoMaqueta)
   // Una plantilla con huecos obligatorios que el reparto automatico no sabe
   // llenar (la palabra y la respuesta de un cierre de DM) deja la lamina sin
   // sitio: el maquetador se prueba otra vez antes de dibujar con el respaldo.
-  if (!mecanico && repartirKit(kc.plantillas, maqueta.laminas, kc.kit.sistema.ritmo, fotosDelKit).some((r) => r === null)) {
-    const otra = await maquetar(accountId, kc, guion, slides, undefined, undefined, estilo.pedidoVisual)
+  const restoMaqueta = plazoMaqueta === undefined ? undefined : plazoMaqueta - (Date.now() - inicioMaqueta)
+  const hayTiempo = restoMaqueta === undefined || restoMaqueta >= MIN_OTRA_MAQUETA_MS
+  if (!mecanico && hayTiempo && repartirKit(kc.plantillas, maqueta.laminas, kc.kit.sistema.ritmo, fotosDelKit).some((r) => r === null)) {
+    const otra = await maquetar(accountId, kc, guion, slides, undefined, undefined, estilo.pedidoVisual, restoMaqueta)
     if (otra.descartadas.length < maqueta.descartadas.length) maqueta = otra
   }
   const laminas = maqueta.laminas

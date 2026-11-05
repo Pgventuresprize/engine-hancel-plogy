@@ -38,10 +38,14 @@ Responde solo con este JSON:
 - "figura": null salvo que la lámina tenga una tabla, comparación, flujo o conjunto de tarjetas. Entonces una figura {"tipo": "...", "titulo": "...", "items": [{"texto": "...", "nota": "...", "cifra": "...", "celdas": ["..."]}], "columnas": ["..."]}, con todo lo que dice y sin repetirlo en "items" ni en "cuerpo". TIPOS_FIGURA
 - "fotos": de 4 a 8 búsquedas para un banco de fotos, de 2 a 4 palabras en inglés, sobre lo que trata el carrusel.`
 
-export type LaminaAMirar = { url: string; rotulo: string }
+/** Tope de un turno: las imagenes viajan enteras en cada vuelta de herramientas. */
+const MAX_LAMINAS_A_LA_VISTA = 24
+const A_LA_VEZ = 6
+
+export type LaminaAMirar = { url: string; rotulo: string; post: string }
 
 /** Una lamina reducida: una pesada tumba la llamada entera, y en cada turno. */
-async function reducida({ url, rotulo }: LaminaAMirar): Promise<Bloque[]> {
+async function reducida({ url, rotulo }: Pick<LaminaAMirar, "url" | "rotulo">): Promise<Bloque[]> {
   const sharp = (await import("sharp")).default
   const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
   if (!res.ok) throw new Error(`No se pudo descargar ${rotulo.replace(/:$/, "")} (${res.status}).`)
@@ -61,10 +65,19 @@ async function cargarLaminas(urls: string[]): Promise<Bloque[]> {
   return (await Promise.all(urls.map((url, i) => reducida({ url, rotulo: `Lámina ${i + 1}:` })))).flat()
 }
 
-/** Para que el agente las vea al conversar: la que no cargue no tumba la respuesta. */
-export async function mirarLaminas(laminas: LaminaAMirar[]): Promise<Bloque[]> {
-  const cargadas = await Promise.allSettled(laminas.map(reducida))
-  return cargadas.flatMap((r) => (r.status === "fulfilled" ? r.value : []))
+/**
+ * Para que el agente las vea al conversar: la que no cargue no tumba la respuesta, pero
+ * `sinVer` dice de que posts le falto alguna, para que no hable de lo que no vio.
+ */
+export async function mirarLaminas(laminas: LaminaAMirar[]): Promise<{ bloques: Bloque[]; sinVer: string[] }> {
+  const aMirar = laminas.slice(0, MAX_LAMINAS_A_LA_VISTA)
+  const cargadas: PromiseSettledResult<Bloque[]>[] = []
+  for (let i = 0; i < aMirar.length; i += A_LA_VEZ) cargadas.push(...(await Promise.allSettled(aMirar.slice(i, i + A_LA_VEZ).map(reducida))))
+  const fallaron = aMirar.filter((_, i) => cargadas[i].status === "rejected")
+  return {
+    bloques: cargadas.flatMap((r) => (r.status === "fulfilled" ? r.value : [])),
+    sinVer: [...new Set([...fallaron, ...laminas.slice(MAX_LAMINAS_A_LA_VISTA)].map((l) => l.post))],
+  }
 }
 
 type PostPorLeer = {

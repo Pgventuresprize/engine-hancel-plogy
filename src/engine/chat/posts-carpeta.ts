@@ -183,18 +183,29 @@ export function captionDeTextos(textos: { nombre: string; contenido: string }[])
 }
 
 const SIN_TILDES = /[\u0300-\u036f]/g
-/** Lo que convierte una confirmacion en otro pedido: pone peros, fechas o cambios. */
-const NO_CONFIRMA = /\d|\b(no|pero|aunque|cambia\w*|pasa\w*|mueve\w*|quita\w*|saca\w*|mejor|antes|despues|lunes|martes|miercoles|jueves|viernes|sabado|domingo|manana|hoy)\b/
-const CONFIRMA = /\b(si|dale|confirmo|confirmado|confirmalo|confirmalos|programa\w*|agenda\w*|hagale|hazlo|listo|ok|okay|de una|perfecto|sale|va)\b/
+const CONFIRMA = new Set("si dale confirmo confirmado confirma confirmalo confirmalos apruebo aprobado programa programalo programalos agenda agendalo agendalos hagale hazlo listo ok okay vale perfecto adelante".split(" "))
+/** Lo unico que puede acompañar a una confirmacion. */
+const RELLENO = new Set("asi esta bien todo todos eso esos plan propuesta tabla pues porfa por favor gracias ya claro".split(" "))
 
 /**
- * Si el mensaje confirma la propuesta y no pide nada mas. La decide el codigo, no el
- * agente: el texto de un archivo no puede escribir el mensaje de la persona.
+ * Si el mensaje confirma la propuesta y no dice nada mas. La decide el codigo, no el
+ * agente: el texto de un archivo no puede escribir el mensaje de la persona. Es una lista
+ * cerrada porque buscar palabras sueltas daba por bueno "listo, lo reviso y te aviso".
+ * Lo que no entre va por el boton Programar.
  */
 export function esConfirmacion(texto: string): boolean {
-  const t = texto.normalize("NFD").replace(SIN_TILDES, "").toLowerCase().trim()
-  return t.length > 0 && t.length <= 40 && !NO_CONFIRMA.test(t) && CONFIRMA.test(t)
+  const t = texto.normalize("NFD").replace(SIN_TILDES, "").toLowerCase().replace(/[.,;:!¡\p{Extended_Pictographic}\uFE0F]/gu, " ").replace(/\bde una\b/g, "dale").trim()
+  if (!t || t.length > 40) return false
+  const palabras = t.split(/\s+/)
+  return palabras.some((p) => CONFIRMA.has(p)) && palabras.every((p) => CONFIRMA.has(p) || RELLENO.has(p))
 }
+
+/** Lo que viene de un archivo no puede abrir ni cerrar las etiquetas que lo marcan como material. */
+export const material = (t: string) => t.replace(/</g, "‹")
+
+/** Instagram corta caption y hashtags juntos: asi los arma `publicarInstagram`. */
+export const largoPublicado = (caption: string, hashtags: string[]) =>
+  [caption, hashtags.join(" ")].filter((parte) => parte.trim()).join("\n\n").length
 
 /** Para saber si un post ya esta: espacios y mayusculas no lo hacen distinto. */
 export const huellaDeCaption = (caption: string) => caption.toLowerCase().replace(/\s+/g, " ").trim().slice(0, 120)
