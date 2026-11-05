@@ -6,6 +6,7 @@ import { BUCKET } from "../render/storage"
 import { dayIn, getSettings, partsIn } from "../schedule"
 import { instanteLocal } from "../studio/publicar"
 import { supabaseAdmin } from "../supabase-admin"
+import type { LaminaAMirar } from "./leer-post"
 import { escribirMensaje, type Mensaje, type Referencia, type ReferenciaLote, type ReferenciaPlan } from "./mensajes"
 import { captionDeTextos, huellaDeCaption, MAX_CAPTION, MAX_HASHTAGS, MAX_LAMINAS, MAX_POSTS_POR_LOTE, tituloDeCarpeta } from "./posts-carpeta"
 
@@ -29,6 +30,12 @@ const DIAS_POR_DEFECTO = 14
 /** Posts sin caption que el agente mira a la vez, y sus laminas: es lo que mas pesa. */
 const MAX_POSTS_CON_FOTOS = 8
 const LAMINAS_POR_POST = 3
+
+/** Donde vive un post subido. La arma el servidor: nunca sale de lo que mande el navegador. */
+const carpetaDe = (accountId: string, id: string) => `subidas/${accountId}/${id}`
+
+/** Lo que viene de un archivo no puede cerrar la etiqueta que lo marca como material. */
+const material = (t: string) => t.replace(/<\/?\s*(caption_del_archivo|notas_del_archivo)[^>]*>/gi, "")
 
 async function exigirAdvance(accountId: string): Promise<void> {
   const { data } = await supabaseAdmin().from("accounts").select("plan").eq("id", accountId).maybeSingle()
@@ -84,7 +91,7 @@ export async function prepararSubida(
         const ext = ruta.split(".").pop()?.toLowerCase() ?? ""
         if (!EXTENSIONES[ext]) throw new Error(`Ese archivo no es una imagen admitida: ${ruta}`)
         // El orden del nombre es el orden del carrusel.
-        const { data, error } = await storage.createSignedUploadUrl(`${id}/${String(i + 1).padStart(2, "0")}.${ext}`)
+        const { data, error } = await storage.createSignedUploadUrl(`${carpetaDe(accountId, id)}/${String(i + 1).padStart(2, "0")}.${ext}`)
         if (error || !data) throw new Error(error?.message ?? "No se pudo preparar la subida.")
         return { ruta, url: data.signedUrl }
       })
@@ -95,26 +102,28 @@ export async function prepararSubida(
 }
 
 /** Las imagenes ya subidas de un post, en orden. Salen del bucket: el navegador no dicta direcciones. */
-async function imagenesSubidas(id: string): Promise<string[]> {
+async function imagenesSubidas(accountId: string, id: string): Promise<string[]> {
   const storage = supabaseAdmin().storage.from(BUCKET)
-  const { data, error } = await storage.list(id, { limit: 100, sortBy: { column: "name", order: "asc" } })
+  const carpeta = carpetaDe(accountId, id)
+  const { data, error } = await storage.list(carpeta, { limit: 100, sortBy: { column: "name", order: "asc" } })
   if (error) throw new Error(error.message)
   const version = Date.now().toString(36)
   return (data ?? [])
     .filter((f) => /^\d+\.(png|jpe?g|webp)$/i.test(f.name))
-    .map((f) => `${storage.getPublicUrl(`${id}/${f.name}`).data.publicUrl}?v=${version}`)
+    .map((f) => `${storage.getPublicUrl(`${carpeta}/${f.name}`).data.publicUrl}?v=${version}`)
 }
 
 /** Si el navegador se arrepiente antes de enviar: lo que aun no es pieza se borra. */
-export async function descartarSubida(ids: string[]): Promise<void> {
-  const validos = ids.filter((i) => UUID.test(i))
+export async function descartarSubida(accountId: string, ids: string[]): Promise<void> {
+  const validos = ids.filter((i) => UUID.test(i)).slice(0, MAX_POSTS_POR_LOTE)
   if (!validos.length) return
   const { data } = await supabaseAdmin().from("content_pieces").select("id").in("id", validos)
   const yaPiezas = new Set(((data ?? []) as { id: string }[]).map((f) => f.id))
   const storage = supabaseAdmin().storage.from(BUCKET)
   for (const id of validos.filter((i) => !yaPiezas.has(i))) {
-    const { data: archivos } = await storage.list(id, { limit: 100 })
-    const rutas = (archivos ?? []).map((f) => `${id}/${f.name}`)
+    const carpeta = carpetaDe(accountId, id)
+    const { data: archivos } = await storage.list(carpeta, { limit: 100 })
+    const rutas = (archivos ?? []).map((f) => `${carpeta}/${f.name}`)
     if (rutas.length) await storage.remove(rutas)
   }
 }
@@ -152,7 +161,7 @@ export async function registrarPosts(
       ids.push(post.id)
       continue
     }
-    const images = await imagenesSubidas(post.id)
+    const images = await imagenesSubidas(accountId, post.id)
     if (!images.length) {
       fuera.push({ nombre: post.nombre, motivo: "Sus imágenes no llegaron." })
       continue
@@ -294,14 +303,14 @@ async function horariosDe(accountId: string): Promise<{ horarios: Horarios; acti
 export async function postsParaElAgente(
   accountId: string,
   mensajes: Pick<Mensaje, "referencias">[]
-): Promise<{ texto: string; etiquetas: Map<string, string>; imagenes: string[] } | null> {
+): Promise<{ texto: string; etiquetas: Map<string, string>; imagenes: LaminaAMirar[] } | null> {
   const lotes = mensajes.flatMap((m) => (m.referencias ?? []).filter((r): r is ReferenciaLote => r.tipo === "lote"))
   if (!lotes.length) return null
   const piezas = await piezasDeLotes(accountId, idsDeLotes(mensajes))
   const [{ timezone }, { horarios, activo }, redes] = await Promise.all([getSettings(accountId), horariosDe(accountId), redesActivas(accountId)])
 
   const etiquetas = new Map<string, string>()
-  const imagenes: string[] = []
+  const imagenes: LaminaAMirar[] = []
   let conFotos = 0
   const fichas = piezas.map((p, i) => {
     const etiqueta = `A${i + 1}`
@@ -311,12 +320,12 @@ export async function postsParaElAgente(
       p.status === "published" ? "ya publicado" : p.status === "rejected" ? "rechazado" : p.programada_para ? `programado: ${new Date(p.programada_para).toLocaleString("es", { timeZone: timezone })}` : "sin programar"
     if (!caption && p.status !== "published" && conFotos < MAX_POSTS_CON_FOTOS) {
       conFotos++
-      imagenes.push(...(p.payload.images ?? []).slice(0, LAMINAS_POR_POST))
+      imagenes.push(...(p.payload.images ?? []).slice(0, LAMINAS_POR_POST).map((url, n) => ({ url, rotulo: `${etiqueta}, lámina ${n + 1}:` })))
     }
     return [
-      `## ${etiqueta}: ${p.titulo} (${p.payload.images?.length ?? 0} láminas, ${estado})`,
-      caption ? `<caption_del_archivo>\n${caption}\n${(p.payload.hashtags ?? []).join(" ")}\n</caption_del_archivo>` : "SIN CAPTION",
-      p.payload.notasPost ? `<notas_del_archivo>\n${p.payload.notasPost}\n</notas_del_archivo>` : "",
+      `## ${etiqueta}: ${material(p.titulo)} (${p.payload.images?.length ?? 0} láminas, ${estado})`,
+      caption ? `<caption_del_archivo>\n${material(caption)}\n${material((p.payload.hashtags ?? []).join(" "))}\n</caption_del_archivo>` : "SIN CAPTION",
+      p.payload.notasPost ? `<notas_del_archivo>\n${material(p.payload.notasPost)}\n</notas_del_archivo>` : "",
     ]
       .filter(Boolean)
       .join("\n")
@@ -328,7 +337,7 @@ export async function postsParaElAgente(
     texto: [
       `# POSTS ADJUNTOS\n\nHoy es ${new Intl.DateTimeFormat("es", { timeZone: timezone, dateStyle: "full", timeStyle: "short" }).format(new Date())} (${timezone}). Horarios de Instagram: ${textoHorarios(horarios)}. Publicación programada: ${activo ? "encendida" : "APAGADA, lo programado no sale hasta que la enciendan en Calendario > Horarios"}. Instagram ${redes.includes("instagram") ? "conectado" : "SIN CONECTAR"}.`,
       ...fichas,
-      fuera.length ? `## No se pudieron subir\n${fuera.map((f) => `- ${f.nombre}: ${f.motivo}`).join("\n")}` : "",
+      fuera.length ? `## No se pudieron subir\n${fuera.map((f) => `- ${material(f.nombre)}: ${f.motivo}`).join("\n")}` : "",
     ]
       .filter(Boolean)
       .join("\n\n"),
@@ -381,6 +390,8 @@ export async function proponerPlan(o: {
   desde: string
   hasta: string
   pedidos: PedidoDeAgente[]
+  /** La persona pidio tocar un caption: si no, el del archivo no se cambia. */
+  puedeCambiarCaption: boolean
 }): Promise<{ ok: true; plan: ReferenciaPlan } | { ok: false; error: string }> {
   await exigirAdvance(o.accountId)
   const supabase = supabaseAdmin()
@@ -416,7 +427,8 @@ export async function proponerPlan(o: {
     }
 
     const caption = pedido.caption.trim()
-    if (caption) {
+    const tieneCaption = Boolean(pieza.payload.caption?.trim()) && !pieza.payload.captionEscrito
+    if (caption && (!tieneCaption || o.puedeCambiarCaption)) {
       if (caption.length > MAX_CAPTION) return { ok: false, error: `El caption de ${pedido.post} pasa de ${MAX_CAPTION} caracteres.` }
       const hashtags = pedido.hashtags.map((h) => h.trim()).filter((h) => h.startsWith("#")).slice(0, MAX_HASHTAGS)
       const { error } = await supabase
@@ -430,6 +442,14 @@ export async function proponerPlan(o: {
     }
     if (!pieza.payload.caption?.trim()) {
       fueraPropuesta.push({ ...base, motivo: "No tiene caption." })
+      continue
+    }
+    if ((pieza.payload.caption ?? "").length > MAX_CAPTION) {
+      fueraPropuesta.push({ ...base, motivo: `Su caption pasa de ${MAX_CAPTION} caracteres, el máximo de Instagram.` })
+      continue
+    }
+    if ((pieza.payload.hashtags ?? []).length > MAX_HASHTAGS) {
+      fueraPropuesta.push({ ...base, motivo: `Tiene más de ${MAX_HASHTAGS} hashtags, el máximo de Instagram.` })
       continue
     }
     if (pieza.payload.captionEscrito) escritos.add(pieza.id)
@@ -450,15 +470,33 @@ export async function proponerPlan(o: {
   const armado = armarPlan({ pedidos, desde, hasta, horarios, ocupadas: await huecosTomados(o.accountId, timezone, new Set(ids)), ahora })
 
   const titulo = (id: string) => porId.get(id)?.titulo ?? "Sin título"
+  // Se lee despues de guardar los captions: es la version que se esta proponiendo.
+  const versiones = await versionesDe(o.accountId, armado.filas.map((f) => f.id))
   return {
     ok: true,
     plan: {
       tipo: "plan",
       estado: "propuesto",
-      filas: armado.filas.map((f) => ({ pieceId: f.id, titulo: titulo(f.id), dia: f.dia, hora: f.hora, captionEscrito: escritos.has(f.id) })),
+      filas: armado.filas.map((f) => ({
+        pieceId: f.id,
+        titulo: titulo(f.id),
+        dia: f.dia,
+        hora: f.hora,
+        captionEscrito: escritos.has(f.id),
+        cambiado: versiones.get(f.id) ?? null,
+        ...(escritos.has(f.id) ? { caption: porId.get(f.id)?.payload.caption ?? "" } : {}),
+      })),
       fuera: [...fueraPropuesta, ...armado.fuera.map((f) => ({ pieceId: f.id, titulo: titulo(f.id), motivo: f.motivo }))],
     },
   }
+}
+
+/** Cuando cambio por ultima vez el contenido de cada pieza. */
+async function versionesDe(accountId: string, ids: string[]): Promise<Map<string, string | null>> {
+  if (!ids.length) return new Map()
+  const { data, error } = await supabaseAdmin().from("content_pieces").select("id, contenido_cambiado_at").eq("account_id", accountId).in("id", ids)
+  if (error) throw new Error(error.message)
+  return new Map(((data ?? []) as { id: string; contenido_cambiado_at: string | null }[]).map((f) => [f.id, f.contenido_cambiado_at]))
 }
 
 type FilaMensaje = { id: string; referencias: Referencia[] | null }
@@ -497,11 +535,17 @@ export async function confirmarPlan(accountId: string, conversacionId: string, m
   const { activo } = await horariosDe(accountId)
   const ids = ultimo.plan.filas.map((f) => f.pieceId)
   const ocupadas = await huecosTomados(accountId, timezone, new Set(ids))
+  const versiones = await versionesDe(accountId, ids)
   const now = new Date()
   const hechas: ReferenciaPlan["filas"] = []
   const fuera = [...ultimo.plan.fuera]
 
   for (const fila of ultimo.plan.filas) {
+    // Lo que se edito despues de proponer no es lo que la persona esta confirmando.
+    if (fila.cambiado !== undefined && (versiones.get(fila.pieceId) ?? null) !== fila.cambiado) {
+      fuera.push({ pieceId: fila.pieceId, titulo: fila.titulo, motivo: "Cambió después de la propuesta: revísalo y vuelve a proponerlo." })
+      continue
+    }
     const hora = horaLibre(fila.dia, fila.hora, "instagram", ocupadas)
     if (!hora || instanteLocal(fila.dia, hora, timezone).getTime() <= now.getTime()) {
       fuera.push({ pieceId: fila.pieceId, titulo: fila.titulo, motivo: "Su hora ya pasó: hay que volver a proponerla." })
@@ -532,14 +576,16 @@ export async function confirmarPlan(accountId: string, conversacionId: string, m
   }
 
   // Si un post ya programado quedo fuera, es que se pidio sacarlo: la tabla dice que
-  // no sale, y su fecha vieja lo publicaria igual.
+  // no sale, y su fecha vieja lo publicaria igual. Tambien pierde la aprobacion:
+  // aprobado y sin fecha, lo tomaria la tanda automatica.
   const sacados = fuera.map((f) => f.pieceId).filter((id) => !hechas.some((h) => h.pieceId === id))
   if (sacados.length) {
     const { error: errorSacar } = await supabase
       .from("content_pieces")
-      .update({ programada_para: null, programada_intentos: 0, publish_error: null })
+      .update({ status: "generated", approved_at: null, programada_para: null, programada_intentos: 0, publish_error: null })
       .eq("account_id", accountId)
       .in("id", sacados)
+      .in("status", ["generated", "approved"])
       .is("published_at", null)
       .eq("programada_revisar", false)
     if (errorSacar) throw new Error(errorSacar.message)

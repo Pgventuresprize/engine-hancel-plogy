@@ -295,7 +295,8 @@ export function parseSlides(valor: unknown, tope = MAX_SLIDES): Slide[] {
       items: items.length ? items : null,
       ...(tipoLamina ? { tipoLamina } : {}),
       ...(figura ? { figura } : {}),
-      ...(texto(obj.fuente) ? { fuente: texto(obj.fuente) } : {}),
+      // "fuente" a secas es una nota interna del agente y no se publica: esta es la que se lee en un post subido.
+      ...(texto(obj.fuente_lamina) ? { fuente: texto(obj.fuente_lamina) } : {}),
     })
   }
 

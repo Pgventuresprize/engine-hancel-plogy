@@ -993,14 +993,17 @@ async function aplicarGuion(accountId: string, f: Fila, cambios: Cambios): Promi
   // El diseño libre tiene el texto viejo dibujado dentro: con texto nuevo ya no sirve.
   if (tocadas.size) delete respuesta.diseno_libre
 
-  await supabase.from("jobs_instagram").update({ respuesta }).eq("id", f.job_instagram_id)
   if (!tocadas.size) {
+    await supabase.from("jobs_instagram").update({ respuesta }).eq("id", f.job_instagram_id)
     await supabase.from("content_pieces").update({ payload: { ...f.payload, caption: p.caption, hashtags: p.hashtags } }).eq("id", f.id)
     return { tocadas: [], avisos }
   }
 
   try {
     const payload = await rehacerDesdeGuion(accountId, f, respuesta, { caption: p.caption, hashtags: p.hashtags }, rehacer)
+    // El guion se guarda con el dibujo ya hecho: si el proceso muere antes, no quedan desparejos.
+    const { error: errorGuion } = await supabase.from("jobs_instagram").update({ respuesta }).eq("id", f.job_instagram_id)
+    if (errorGuion) throw new Error(errorGuion.message)
     const n = [...tocadas].sort((a, b) => a - b)
     return {
       tocadas: n,
@@ -1017,7 +1020,6 @@ async function aplicarGuion(accountId: string, f: Fila, cambios: Cambios): Promi
       ],
     }
   } catch (e) {
-    await supabase.from("jobs_instagram").update({ respuesta: antes }).eq("id", f.job_instagram_id)
     throw new Error(`No se pudo volver a armar el carrusel: ${e instanceof Error ? e.message : String(e)}`)
   }
 }

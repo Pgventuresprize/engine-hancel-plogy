@@ -105,7 +105,7 @@ const aSlide = (c: Contenido, n: number) => ({
   body: c.body || null,
   items: c.items.length ? c.items : null,
   ...(c.figura ? { figura: c.figura } : {}),
-  ...(c.fuente ? { fuente: c.fuente } : {}),
+  ...(c.fuente ? { fuente_lamina: c.fuente } : {}),
 })
 
 /**

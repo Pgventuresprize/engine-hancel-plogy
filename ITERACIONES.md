@@ -661,6 +661,12 @@ las piezas por tema en paralelo (2026-11-03).
 
 ## Calendario
 
+### Quitar del Calendario deja la pieza aprobada
+- **Qué es:** `quitarDelCalendario` borra la fecha y conserva la aprobación. Aprobada y sin
+  fecha, una tanda automática de publicación la publicaría. Hoy no pasa porque los agentes
+  de publicación están en manual.
+- **Cuándo:** antes de poner un agente de publicación en automático.
+
 ### Fuentes de los posts subidos que no caben
 - **Qué es:** al rehacer un post subido, pocas plantillas tienen hueco de fuente, así que
   esa línea se pierde y solo se avisa. Faltaría una plantilla con pie o repetir la fuente

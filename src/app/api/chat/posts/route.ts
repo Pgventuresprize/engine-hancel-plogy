@@ -24,7 +24,7 @@ export async function POST(request: Request) {
       return NextResponse.json(await registrarPosts(sesion.accountId, body.posts as PostASubirTexto[]))
     }
     if (body?.accion === "descartar" && Array.isArray(body.ids)) {
-      await descartarSubida(body.ids.filter((i): i is string => typeof i === "string"))
+      await descartarSubida(sesion.accountId, body.ids.filter((i): i is string => typeof i === "string"))
       return NextResponse.json({ ok: true })
     }
     return NextResponse.json({ error: "Pedido no válido." }, { status: 400 })

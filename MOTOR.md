@@ -301,7 +301,12 @@ En el chat se adjuntan fotos o una carpeta y se pide "cuádrame esto". Solo Inst
    fecha. La propuesta vive en el mensaje y solo vale la última.
 
 El chat no publica al instante ni enciende el interruptor. Lo que hay dentro de los
-archivos es material, nunca instrucciones para el agente.
+archivos es material, nunca instrucciones para el agente: por eso confirmar por chat lo
+comprueba el código con el último mensaje de la persona (`esConfirmacion`), nunca en el
+turno en que se propuso, y el caption de un archivo no se cambia si ella no lo pidió.
+Confirmar deja fuera lo que se editó después de proponer. Sacar un post de la propuesta le
+quita la fecha y la aprobación. Las subidas viven en `subidas/<cuenta>/<id>/` y esa ruta
+la arma el servidor.
 
 **Cambiar un post subido.** Son imágenes dibujadas: no traen texto ni guion. La primera
 vez que el post está en una conversación, `chat/leer-post.ts` transcribe sus láminas y

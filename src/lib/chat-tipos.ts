@@ -40,7 +40,7 @@ export type LoteUI = { posts: number; miniaturas: string[]; fuera: { nombre: str
 export type PlanUI = {
   estado: "propuesto" | "programado"
   vigente: boolean
-  filas: { pieceId: string; titulo: string; dia: string; hora: string; captionEscrito: boolean; miniatura: string | null }[]
+  filas: { pieceId: string; titulo: string; dia: string; hora: string; captionEscrito: boolean; caption?: string; miniatura: string | null }[]
   fuera: { pieceId: string; titulo: string; motivo: string }[]
 }
 

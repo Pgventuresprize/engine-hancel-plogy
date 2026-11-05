@@ -139,6 +139,20 @@ function PlanVista({ plan, onConfirmar }: { plan: PlanUI; onConfirmar?: () => Pr
           ))}
         </ul>
       ) : null}
+      {plan.filas.some((f) => f.caption) ? (
+        <details className={s.plandetalle} open>
+          <summary>Captions escritos por el agente</summary>
+          <ul className={s.planfuera}>
+            {plan.filas.flatMap((f) =>
+              f.caption ? [
+                <li key={f.pieceId}>
+                  <b>{f.titulo}:</b> {f.caption}
+                </li>,
+              ] : []
+            )}
+          </ul>
+        </details>
+      ) : null}
       {plan.fuera.length ? (
         <details className={s.plandetalle} open={!n}>
           <summary>{plan.fuera.length === 1 ? "1 queda fuera" : `${plan.fuera.length} quedan fuera`}</summary>

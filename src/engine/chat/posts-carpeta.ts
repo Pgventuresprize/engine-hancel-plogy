@@ -182,5 +182,19 @@ export function captionDeTextos(textos: { nombre: string; contenido: string }[])
   return null
 }
 
+const SIN_TILDES = /[\u0300-\u036f]/g
+/** Lo que convierte una confirmacion en otro pedido: pone peros, fechas o cambios. */
+const NO_CONFIRMA = /\d|\b(no|pero|aunque|cambia\w*|pasa\w*|mueve\w*|quita\w*|saca\w*|mejor|antes|despues|lunes|martes|miercoles|jueves|viernes|sabado|domingo|manana|hoy)\b/
+const CONFIRMA = /\b(si|dale|confirmo|confirmado|confirmalo|confirmalos|programa\w*|agenda\w*|hagale|hazlo|listo|ok|okay|de una|perfecto|sale|va)\b/
+
+/**
+ * Si el mensaje confirma la propuesta y no pide nada mas. La decide el codigo, no el
+ * agente: el texto de un archivo no puede escribir el mensaje de la persona.
+ */
+export function esConfirmacion(texto: string): boolean {
+  const t = texto.normalize("NFD").replace(SIN_TILDES, "").toLowerCase().trim()
+  return t.length > 0 && t.length <= 40 && !NO_CONFIRMA.test(t) && CONFIRMA.test(t)
+}
+
 /** Para saber si un post ya esta: espacios y mayusculas no lo hacen distinto. */
 export const huellaDeCaption = (caption: string) => caption.toLowerCase().replace(/\s+/g, " ").trim().slice(0, 120)

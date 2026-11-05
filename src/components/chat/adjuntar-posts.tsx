@@ -135,7 +135,8 @@ export function useAdjuntarPosts() {
 
       soltarUrls()
       const posts: PostSubido[] = preparado.posts.map((p) => {
-        const origen = validos.find((v) => v.nombre === p.nombre)
+        // Dos carpetas pueden llamarse igual: se casan por sus archivos, no por el nombre.
+        const origen = validos.find((v) => v.imagenes[0] === p.subidas[0]?.ruta)
         const archivo = p.subidas[0] ? porRuta.get(p.subidas[0].ruta) : undefined
         const portada = archivo ? URL.createObjectURL(archivo) : null
         if (portada) urls.current.push(portada)

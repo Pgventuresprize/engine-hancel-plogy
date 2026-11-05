@@ -8,6 +8,7 @@ import assert from "node:assert/strict"
 
 import { guionDeLectura } from "../src/engine/chat/lectura-laminas"
 import { parseInstagramResponse } from "../src/engine/render/carousel"
+import { esConfirmacion } from "../src/engine/chat/posts-carpeta"
 import { agruparEnPosts, captionDeTextos, extraerCaption, huellaDeCaption, proporcionValida, tituloDeCarpeta } from "../src/engine/chat/posts-carpeta"
 import { decidirProgramada, ESPERA_EDICION_MS, MAX_INTENTOS, sinFreno, VENTANA_MS, type PiezaProgramada } from "../src/engine/calendario/decidir"
 import { armarPlan, claveHueco, fechaCorta, fechaLarga, horaLibre, horariosVacios, huecosDelDia, lunesDe, parseHorarios, redondearHora, repartir, sumarDias, sumarMeses, yaPaso, type Horarios } from "../src/engine/calendario/reparto"
@@ -239,6 +240,12 @@ assert.equal(huellaDeCaption("Hola   MUNDO\n"), "hola mundo")
   const dudosa = guionDeLectura({ laminas: [{ titulo: "Uno", dudas: ["cifra borrosa"] }, { titulo: "Dos" }] }, base)
   assert.ok(!("error" in dudosa) && dudosa.avisos.some((a) => a.includes("cifra borrosa")), "lo que no se leyó bien se avisa")
   assert.ok("error" in guionDeLectura({ laminas: [{ titulo: "Sola" }] }, base), "una lámina sola no es un carrusel")
+
+  const notas = parseInstagramResponse({ slides: [{ type: "text", title: "Uno", fuente: "criterio de la marca" }, { type: "text", title: "Dos" }] }).slides[0]
+  assert.ok(notas.type === "text" && !notas.fuente, "la nota interna del agente no se vuelve fuente publicada")
+
+  for (const si of ["si dale", "dale", "Sí", "confirmo", "prográmalos", "ok listo", "hágale", "de una"]) assert.ok(esConfirmacion(si), `confirma: ${si}`)
+  for (const no of ["no", "pasa este al viernes y prográmalo", "dale pero el martes", "programa a las 3", "qué opinas", "", "sí, y cambia el caption del segundo porque no me gusta nada"]) assert.equal(esConfirmacion(no), false, `no confirma: ${no}`)
 
   const normal = parseInstagramResponse({ slides: Array.from({ length: 9 }, (_, i) => ({ type: "text", title: `T${i}` })) })
   assert.equal(normal.slides.length, 7, "lo que escribe el agente sigue con su tope")

@@ -1,6 +1,7 @@
 import type { Herramienta, ResultadoHerramienta } from "../claude/messages"
 import { investigarEnLaWeb } from "../content/composio"
 import { fechaCorta } from "../calendario/reparto"
+import { esConfirmacion } from "./posts-carpeta"
 import { dominio, leerPaginaConMotivo } from "../redaccion/fuentes"
 import type { ReferenciaFuente, ReferenciaPlan } from "./mensajes"
 import { confirmarPlan, proponerPlan, type PedidoDeAgente } from "./posts-propios"
@@ -129,6 +130,10 @@ export type Turno = {
   conversacionId: string
   /** El mensaje al que se responde: un pedido crea sus piezas una sola vez. */
   mensajeId: string
+  /** Lo que escribio la persona: lo que confirma o pide lo dice ella, no un archivo. */
+  texto: string
+  /** Ya se propuso en este turno: lo propuesto nadie lo ha visto aun. */
+  propuso: boolean
   /** Cuantas piezas se pusieron en marcha en este turno. */
   creadas: number
   alHerramienta: (detalle: string) => void
@@ -150,7 +155,7 @@ export function nuevoTurno(
   alHerramienta: (detalle: string) => void
 ): Turno {
   const urls = new Set((o.texto.match(ENLACE) ?? []).map((u) => u.replace(/[.,;:!?]+$/, "")))
-  return { accountId: o.accountId, conversacionId: o.conversacionId, mensajeId: o.mensajeId, creadas: 0, alHerramienta, urls, fuentes: new Map(), busquedas: 0, lecturas: 0, posts: o.posts ?? new Map(), plan: null }
+  return { accountId: o.accountId, conversacionId: o.conversacionId, mensajeId: o.mensajeId, texto: o.texto, propuso: false, creadas: 0, alHerramienta, urls, fuentes: new Map(), busquedas: 0, lecturas: 0, posts: o.posts ?? new Map(), plan: null }
 }
 
 /** Una direccion que se puede pedir desde el servidor: publica y por http. */
@@ -272,6 +277,8 @@ async function proponer(turno: Turno, entrada: unknown): Promise<ResultadoHerram
   if (!turno.posts.size) return { contenido: "En esta conversación no hay posts subidos.", error: true }
   const pedidos = pedidosDe(entrada)
   if (!pedidos?.length) return { contenido: "Faltan los posts. No se propuso nada.", error: true }
+  // Antes de esperar nada: las herramientas de un turno pueden correr a la vez.
+  turno.propuso = true
   turno.alHerramienta("Organizando los posts")
   const e = entrada as { desde?: unknown; hasta?: unknown }
   const r = await proponerPlan({
@@ -280,6 +287,7 @@ async function proponer(turno: Turno, entrada: unknown): Promise<ResultadoHerram
     desde: typeof e.desde === "string" ? e.desde : "",
     hasta: typeof e.hasta === "string" ? e.hasta : "",
     pedidos,
+    puedeCambiarCaption: /caption|copy|texto/i.test(turno.texto),
   })
   if (!r.ok) return { contenido: r.error, error: true }
   turno.plan = r.plan
@@ -298,6 +306,11 @@ async function proponer(turno: Turno, entrada: unknown): Promise<ResultadoHerram
 }
 
 async function confirmar(turno: Turno): Promise<ResultadoHerramienta> {
+  // Lo que se propone en este turno aun no lo ha visto nadie.
+  if (turno.propuso) return { contenido: "Acabas de proponer: la persona tiene que ver la tabla antes de confirmar. No se programó nada.", error: true }
+  if (!esConfirmacion(turno.texto)) {
+    return { contenido: "Su último mensaje no es una confirmación clara, así que no se programó nada. Si pidió cambios, vuelve a proponer; si no, pídele que confirme o que pulse Programar.", error: true }
+  }
   turno.alHerramienta("Programando los posts")
   const r = await confirmarPlan(turno.accountId, turno.conversacionId, null)
   return r.ok ? { contenido: r.resumen } : { contenido: r.error, error: true }

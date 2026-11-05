@@ -55,7 +55,17 @@ export type ReferenciaLote = { tipo: "lote"; piezas: string[]; fuera: { nombre: 
 export type ReferenciaPlan = {
   tipo: "plan"
   estado: "propuesto" | "programado"
-  filas: { pieceId: string; titulo: string; dia: string; hora: string; captionEscrito: boolean }[]
+  filas: {
+    pieceId: string
+    titulo: string
+    dia: string
+    hora: string
+    captionEscrito: boolean
+    /** La version propuesta: si la pieza cambia, confirmar no la aprueba. */
+    cambiado?: string | null
+    /** El que escribio el agente, para leerlo antes de confirmar. */
+    caption?: string
+  }[]
   fuera: { pieceId: string; titulo: string; motivo: string }[]
 }
 

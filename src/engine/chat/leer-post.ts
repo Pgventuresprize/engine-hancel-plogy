@@ -15,7 +15,7 @@ import { guionDeLectura, ORIGEN_SUBIDO, type GuionLeido } from "./lectura-lamina
 
 /** Transcribir es leer con cuidado, no pensar: no pide el modelo mas caro. */
 const MODELO_LECTURA = "claude-sonnet-5-5"
-const PLAZO_LECTURA_MS = 120_000
+const PLAZO_LECTURA_MS = 90_000
 /** Por turno: una conversacion con muchos posts no se queda leyendo. */
 const MAX_POR_TURNO = 3
 /** Basta para leer la letra de la lamina y pesa poco para mandarla entera. */
@@ -38,25 +38,33 @@ Responde solo con este JSON:
 - "figura": null salvo que la lámina tenga una tabla, comparación, flujo o conjunto de tarjetas. Entonces una figura {"tipo": "...", "titulo": "...", "items": [{"texto": "...", "nota": "...", "cifra": "...", "celdas": ["..."]}], "columnas": ["..."]}, con todo lo que dice y sin repetirlo en "items" ni en "cuerpo". TIPOS_FIGURA
 - "fotos": de 4 a 8 búsquedas para un banco de fotos, de 2 a 4 palabras en inglés, sobre lo que trata el carrusel.`
 
-/** Las laminas para mirarlas, con su numero delante. Reducidas: una lamina pesada tumba la llamada. */
-export async function cargarLaminas(urls: string[]): Promise<Bloque[]> {
+export type LaminaAMirar = { url: string; rotulo: string }
+
+/** Una lamina reducida: una pesada tumba la llamada entera, y en cada turno. */
+async function reducida({ url, rotulo }: LaminaAMirar): Promise<Bloque[]> {
   const sharp = (await import("sharp")).default
-  const cargadas = await Promise.all(
-    urls.map(async (url, i): Promise<Bloque[]> => {
-      const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
-      if (!res.ok) throw new Error(`No se pudo descargar la lámina ${i + 1} (${res.status}).`)
-      const datos = await sharp(Buffer.from(await res.arrayBuffer()))
-        .resize({ width: ANCHO_LAMINA, withoutEnlargement: true })
-        .flatten({ background: "#ffffff" })
-        .jpeg({ quality: 85 })
-        .toBuffer()
-      return [
-        { tipo: "texto", texto: `Lámina ${i + 1}:` },
-        { tipo: "imagen", mime: "image/jpeg", datos },
-      ]
-    })
-  )
-  return cargadas.flat()
+  const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
+  if (!res.ok) throw new Error(`No se pudo descargar ${rotulo.replace(/:$/, "")} (${res.status}).`)
+  const datos = await sharp(Buffer.from(await res.arrayBuffer()))
+    .resize({ width: ANCHO_LAMINA, withoutEnlargement: true })
+    .flatten({ background: "#ffffff" })
+    .jpeg({ quality: 85 })
+    .toBuffer()
+  return [
+    { tipo: "texto", texto: rotulo },
+    { tipo: "imagen", mime: "image/jpeg", datos },
+  ]
+}
+
+/** Para transcribir: todas o ninguna, porque un post sin una lamina saldria incompleto. */
+async function cargarLaminas(urls: string[]): Promise<Bloque[]> {
+  return (await Promise.all(urls.map((url, i) => reducida({ url, rotulo: `Lámina ${i + 1}:` })))).flat()
+}
+
+/** Para que el agente las vea al conversar: la que no cargue no tumba la respuesta. */
+export async function mirarLaminas(laminas: LaminaAMirar[]): Promise<Bloque[]> {
+  const cargadas = await Promise.allSettled(laminas.map(reducida))
+  return cargadas.flatMap((r) => (r.status === "fulfilled" ? r.value : []))
 }
 
 type PostPorLeer = {
@@ -146,7 +154,9 @@ async function leer(accountId: string, p: PostPorLeer, permitidas: readonly Tipo
 export async function leerPostsPendientes(
   accountId: string,
   ids: string[],
-  alLeer: (titulo: string) => void
+  alLeer: (titulo: string) => void,
+  /** Hasta cuando se empieza a leer: el agente tambien necesita su tiempo. */
+  hasta: number
 ): Promise<{ leidos: number; fallos: { titulo: string; motivo: string }[] }> {
   if (!ids.length) return { leidos: 0, fallos: [] }
   const { data, error } = await supabaseAdmin()
@@ -168,6 +178,7 @@ export async function leerPostsPendientes(
   let leidos = 0
   const fallos: { titulo: string; motivo: string }[] = []
   for (const p of pendientes) {
+    if (Date.now() > hasta) break
     const titulo = p.raw_news?.title ?? "este post"
     alLeer(titulo)
     try {
