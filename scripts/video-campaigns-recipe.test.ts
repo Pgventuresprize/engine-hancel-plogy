@@ -11,7 +11,7 @@ const brief=():Brief=>structuredClone(PREVIEW_BRIEF)
 const reference={url:"https://www.tiktok.com/@ana/video/1/",author:"ana",platform:"TIKTOK" as const,caption:"",views:1,likes:1,comments:null,shares:null,publishedAt:null,capturedAt:"",selectedByUser:true}
 const transcript="Los animadores me van a odiar por revelar esto, pero esta IA crea animaciones en minutos."
 const replica=():Piece=>({...planPieces({...brief(),count:1,mix:{replica:100,adaptacion:0,original:0}},"c",randomUUID)[0],reference,transcript})
-const raw={windowSeconds:4,spoken:transcript,spokenOutput:transcript,onScreen:["2 horas / 10 minutos"],visual:"Comparación",mechanic:"Enemigo y secreto",why:"Tensión",template:"Los [GREMIO] me van a odiar por revelar esto, pero [HERRAMIENTA] [RESULTADO]",anchors:["me van a odiar por revelar esto","en [TIEMPO] rápido"],slots:[{name:"GREMIO",guide:"oficio"}],care:"Confirmar",beats:[{role:"paso",what:"uno"}],retention:"Pasos",bait:false}
+const raw={windowSeconds:4,spoken:transcript,spokenOutput:transcript,onScreen:["2 horas / 10 minutos"],visual:"Comparación",mechanic:"Enemigo y secreto",why:"Tensión",template:"Los [GREMIO] me van a odiar por revelar esto, pero [HERRAMIENTA] [RESULTADO]",anchors:["me van a odiar por revelar esto","en [TIEMPO] muy rápido","pero"],slots:[{name:"GREMIO",guide:"oficio"}],care:"Confirmar",beats:[{role:"paso",what:"uno"}],retention:"Pasos",bait:false}
 const conFicha=(extra:Partial<Piece>={})=>{const p={...replica(),...extra};p.recipe=parseRecipe(raw,p);return p}
 const libreto=(voice:string,text="Texto"):Script=>({...structuredClone(PREVIEW_SCRIPT),hook:voice,narration:voice,shots:[{start:0,end:4,visual:"Plano",voice,text}]})
 
@@ -26,7 +26,7 @@ test("sin contexto visual la ficha no finge haber visto el video",()=>{
 })
 
 test("un ancla con hueco deja su parte fija y una ficha sin plantilla se rechaza",()=>{
- assert.deepEqual(conFicha().recipe?.anchors,["me van a odiar por revelar esto","rápido"])
+ assert.deepEqual(conFicha().recipe?.anchors,["me van a odiar por revelar esto","muy rápido"])
  assert.throws(()=>parseRecipe({},replica()),/plantilla/)
 })
 

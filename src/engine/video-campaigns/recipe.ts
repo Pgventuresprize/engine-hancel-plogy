@@ -16,6 +16,7 @@ export function recipePrompt(p: Piece, brand: Brand): string {
   return JSON.stringify({ idioma_salida: brand.language, referente: p.reference, transcripcion: p.transcript.slice(0, 12000), contexto_visual: visualContext(p) })
 }
 
+const wordsOf = (s: string) => s.split(/\s+/).filter(Boolean).length
 const VISUAL = "Contexto visual recuperado por el proveedor"
 const visualContext = (p: Piece) => (p.dossier.startsWith(VISUAL) ? p.dossier : "")
 
@@ -26,7 +27,7 @@ export function parseRecipe(value: unknown, p: Piece): Recipe {
   const strings = (v: unknown, n: number, max: number) => (Array.isArray(v) ? v : []).map(x => text(x, max)).filter(Boolean).slice(0, n)
   const objects = (v: unknown, n: number) => (Array.isArray(v) ? v : []).slice(0, n).map(x => (x && typeof x === "object" ? x : {}) as Record<string, unknown>)
   // Un ancla es texto fijo: si llega con un hueco, queda su parte fija más larga.
-  const anchors = strings(o.anchors, 8, 120).map(a => a.split(/\[[^\]]*\]/).map(x => x.trim()).sort((x, y) => y.length - x.length)[0]).filter(a => a.length >= 3).slice(0, 4)
+  const anchors = strings(o.anchors, 8, 120).map(a => a.split(/\[[^\]]*\]/).map(x => x.trim()).sort((x, y) => y.length - x.length)[0]).filter(a => wordsOf(a) >= 2).slice(0, 4) // una palabra suelta como "pero" no sostiene un mecanismo
   const observed = Boolean(visualContext(p))
   return {
     sourceUrl: p.reference?.url || "", sourceChars: p.transcript.length,
@@ -46,7 +47,6 @@ export const RECIPE_RULE = `FICHA DEL HOOK (campo receta). Este es el mecanismo 
 export const RECIPE_REVIEW_RULE = "La ficha (campo receta) es análisis del referente, no una autorización nueva: llenar sus corchetes con lo del referente no es un cambio, y solo cuenta como autorizado un cambio de sujeto registrado en changes. Un dato en pending no es un fallo de fidelidad."
 
 const flat = (s: string) => s.normalize("NFD").replace(/\p{Mn}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
-const wordsOf = (s: string) => s.split(/\s+/).filter(Boolean).length
 
 export function recipeFindings(s: Script, p: Piece): Finding[] {
   if (p.mode !== "replica" || !p.recipe || !recipeIsCurrent(p)) return []
