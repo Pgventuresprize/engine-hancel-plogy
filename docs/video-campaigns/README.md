@@ -148,3 +148,16 @@ Piloto pendiente al disponer del almacenamiento y conexiones reales: varias
 temáticas y las tres modalidades; referencia compleja seleccionada, transcripción,
 calidad de libreto/captions, guía de ejecución, latencia y consumo de servicios.
 Las pruebas sintéticas y de interfaz no sustituyen esa evaluación editorial real.
+
+## Pedidos y errores de validación
+
+Los porcentajes explícitos del pedido mandan sobre la representación del modelo.
+El intérprete acepta números, porcentajes escritos como texto y proporciones
+equivalentes; valida el total sin cambiar una mezcla contradictoria en silencio.
+Si faltan porcentajes que se completan, muestra la suposición.
+
+Las acciones del módulo devuelven un resultado serializable con éxito o mensaje
+para la persona. Los mensajes esperados no se lanzan al transporte de React, que
+los ocultaría en producción como error #441. Los errores internos conservan un
+mensaje genérico y detalle en el servidor; las redirecciones de Next se propagan.
+Pruebas adicionales: `node --import tsx --test scripts/video-campaigns-intake.test.ts`.

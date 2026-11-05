@@ -1,4 +1,5 @@
 import "server-only"
+import { CampaignActionError } from "./action-result"
 import { randomUUID, createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto"
 import { supabaseAdmin } from "../supabase-admin"
 import { perfilDe } from "../marca/perfil"
@@ -22,7 +23,7 @@ export async function campaignView(accountId: string, id: string): Promise<Campa
   const db=supabaseAdmin()
   const [c,p]=await Promise.all([db.from("vc2_campaigns").select("id,account_id,config,brand,paused,created_at").eq("id",id).eq("account_id",accountId).maybeSingle(),db.from("vc2_pieces").select("*").eq("campaign_id",id).eq("account_id",accountId)])
   if(c.error||p.error)throw new Error(c.error?.message||p.error?.message)
-  if(!c.data)throw new Error("No existe esa campaña en la cuenta activa.")
+  if(!c.data)throw new CampaignActionError("No existe esa campaña en la cuenta activa.")
   return {...c.data as Campaign,pieces:(p.data as PieceRow[]).sort((a,b)=>a.payload.order-b.payload.order)}
 }
 export async function createCampaign(accountId: string, id: string, input: unknown): Promise<string> {
@@ -32,24 +33,24 @@ export async function createCampaign(accountId: string, id: string, input: unkno
 }
 export async function getPiece(accountId: string,id: string): Promise<PieceRow> {
   const r=await supabaseAdmin().from("vc2_pieces").select("*").eq("id",id).eq("account_id",accountId).maybeSingle()
-  if(r.error)throw new Error(r.error.message);if(!r.data)throw new Error("No existe esa pieza en la cuenta activa.");return r.data as PieceRow
+  if(r.error)throw new Error(r.error.message);if(!r.data)throw new CampaignActionError("No existe esa pieza en la cuenta activa.");return r.data as PieceRow
 }
 export async function editPiece(row: PieceRow, payload: PieceRow["payload"], queue: boolean): Promise<void> {
   const r=await supabaseAdmin().rpc("vc2_edit",{p_piece:row.id,p_account:row.account_id,p_revision:row.revision,p_payload:payload,p_phase:payload.phase,p_queue:queue})
-  if(r.error)throw new Error(r.error.message);if(!r.data)throw new Error("La pieza está trabajando o cambió. Actualiza antes de editar.")
+  if(r.error)throw new Error(r.error.message);if(!r.data)throw new CampaignActionError("La pieza está trabajando o cambió. Actualiza antes de editar.")
 }
 function cipherKey(): Buffer {
   const secret=process.env.VIDEO_CAMPAIGN_ENCRYPTION_KEY||process.env.INGEST_SECRET
-  if(!secret)throw new Error("Falta una clave del servidor para cifrar la conexión Apify.")
+  if(!secret)throw new CampaignActionError("Falta una clave del servidor para cifrar la conexión Apify.")
   return createHash("sha256").update("vc2:"+secret).digest()
 }
 export async function saveApify(accountId: string, token: string): Promise<void> {
-  if(!token.trim()||token.length>500)throw new Error("Revisa la clave de Apify.")
+  if(!token.trim()||token.length>500)throw new CampaignActionError("Revisa la clave de Apify.")
   const iv=randomBytes(12), c=createCipheriv("aes-256-gcm",cipherKey(),iv)
   const data=Buffer.concat([c.update(token.trim(),"utf8"),c.final()])
   const encrypted=[iv,c.getAuthTag(),data].map(x=>x.toString("base64")).join(".")
   const r=await supabaseAdmin().from("vc2_settings").upsert({account_id:accountId,apify_ciphertext:encrypted,updated_at:new Date().toISOString()})
-  if(r.error)throw new Error("No se pudo guardar la conexión de Apify.")
+  if(r.error)throw new CampaignActionError("No se pudo guardar la conexión de Apify.")
 }
 export async function apifyToken(accountId: string): Promise<string> {
   const r=await supabaseAdmin().from("vc2_settings").select("apify_ciphertext").eq("account_id",accountId).maybeSingle()

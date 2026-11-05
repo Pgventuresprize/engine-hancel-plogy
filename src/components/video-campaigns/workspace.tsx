@@ -1,10 +1,24 @@
 "use client"
 import * as React from "react"
 import { Plus, ArrowLeft, Copy, Download, Play, Pause, RefreshCw, Sparkles, Check, ExternalLink, Settings2, Loader2 } from "lucide-react"
-import * as A from "@/app/campanas-video/actions"
+import * as ServerActions from "@/app/campanas-video/actions"
 import { MODES, MODE_LABEL, OBJECTIVE, CHANNELS, quotas, scriptMarkdown, type Brief, type Campaign, type CampaignView, type Mode, type PieceRow, type Piece, type Script } from "@/engine/video-campaigns/model"
+import { actionValue } from "@/engine/video-campaigns/action-result"
 import s from "./workspace.module.css"
 import { previewCampaign } from "@/engine/video-campaigns/preview"
+
+const A={
+  connectApify:async(...args:Parameters<typeof ServerActions.connectApify>)=>actionValue(await ServerActions.connectApify(...args)),
+  interpretRequest:async(...args:Parameters<typeof ServerActions.interpretRequest>)=>actionValue(await ServerActions.interpretRequest(...args)),
+  pause:async(...args:Parameters<typeof ServerActions.pause>)=>actionValue(await ServerActions.pause(...args)),
+  readCampaign:async(...args:Parameters<typeof ServerActions.readCampaign>)=>actionValue(await ServerActions.readCampaign(...args)),
+  readCampaigns:async(...args:Parameters<typeof ServerActions.readCampaigns>)=>actionValue(await ServerActions.readCampaigns(...args)),
+  restoreVersion:async(...args:Parameters<typeof ServerActions.restoreVersion>)=>actionValue(await ServerActions.restoreVersion(...args)),
+  startCampaign:async(...args:Parameters<typeof ServerActions.startCampaign>)=>actionValue(await ServerActions.startCampaign(...args)),
+  updateCampaignContext:async(...args:Parameters<typeof ServerActions.updateCampaignContext>)=>actionValue(await ServerActions.updateCampaignContext(...args)),
+  updatePiece:async(...args:Parameters<typeof ServerActions.updatePiece>)=>actionValue(await ServerActions.updatePiece(...args)),
+  versions:async(...args:Parameters<typeof ServerActions.versions>)=>actionValue(await ServerActions.versions(...args))
+}
 
 type Props={initialCampaigns:Campaign[];connected:{apify:boolean;claude:boolean};setup:string;accountName:string;timezone?:string;preview?:boolean}
 const statusLabel:Record<string,string>={queued:"En cola",working:"Trabajando",ready:"Listo para grabar",revision:"Necesita revisión",error:"Necesita un dato"}
@@ -64,7 +78,7 @@ export function CampaignWorkspace({initialCampaigns,connected,setup,accountName,
           <label className={s.label}>Material real de Plogy<textarea className={s.textarea} value={brief.material} placeholder="Casos, demostraciones, enlaces y recursos que sí podemos prometer." onChange={e=>setBrief({...brief,material:e.target.value})}/></label>
           <div className={s.row}>{CHANNELS.map(c=><label key={c} className={s.check}><input type="checkbox" checked={brief.channels.includes(c)} onChange={e=>setBrief({...brief,channels:e.target.checked?[...brief.channels,c]:brief.channels.filter(x=>x!==c)})}/>{c==="instagram"?"Instagram":c==="linkedin"?"LinkedIn":"TikTok"}</label>)}</div>
           <details className={s.details}><summary>Duración, conexiones y límites</summary><div className={s.form}><div className={s.grid2}><label className={s.label}>Duración orientativa (segundos)<input className={s.input} type="number" min={10} max={180} value={brief.duration} onChange={e=>setBrief({...brief,duration:Number(e.target.value)})}/><span className={s.hint}>Las réplicas conservan la duración que requiere el original.</span></label><label className={s.label}>Máximo de corridas nuevas de Apify<input className={s.input} type="number" min={0} max={40} value={brief.maxRuns} onChange={e=>setBrief({...brief,maxRuns:Number(e.target.value)})}/></label></div><p className={s.muted}>Claude: {connections.claude?"conectado desde la cuenta":"pendiente en Configuración"} · Apify: {connections.apify?"conectado":"pendiente"}</p><label className={s.label}>Conectar Apify<input className={s.input} type="password" autoComplete="off" value={token} onChange={e=>setToken(e.target.value)} placeholder="La clave se cifra y no vuelve al navegador"/></label><Button disabled={pending||!token||Boolean(setup)} onClick={()=>run(async()=>{setConnections(await A.connectApify(token));setToken("");setSuccess("Apify conectado.")})}><Settings2 size={14}/>Guardar conexión</Button></div></details>
-          <div className={s.divider}/><div className={s.row}><Button primary disabled={pending||Boolean(setup)} onClick={create}>{pending?<Loader2 size={15}/>:<Play size={15}/>}Generar campaña</Button><span className={s.hint}>Se usan las conexiones y la voz de la cuenta activa. El trabajo continúa al cerrar esta pantalla.</span></div>
+          <div className={s.divider}/><div className={s.row}><Button primary disabled={pending||interpreting||Boolean(setup)} onClick={create}>{pending?<Loader2 size={15}/>:<Play size={15}/>}Generar campaña</Button><span className={s.hint}>Se usan las conexiones y la voz de la cuenta activa. El trabajo continúa al cerrar esta pantalla.</span></div>
         </div></div>
       </>:<>
         <div className={s.hero}><div className={s.toolbar}><div><div className={s.eyebrow}>{view.config.start} → {view.config.end}</div><h2>{view.config.name}</h2><p className={s.muted}>{view.config.topics.map(t=>t.name).join(" · ")}</p></div><div className={s.row}><Button small disabled={pending} onClick={()=>run(async()=>{await A.pause(view.id,!view.paused);await refresh()})}>{view.paused?<Play size={13}/>:<Pause size={13}/>} {view.paused?"Reanudar":"Pausar"}</Button><Button small aria-label="Actualizar campaña" onClick={()=>run(refresh)} disabled={pending}><RefreshCw size={13}/></Button></div></div><div className={s.grid3}>{counts.map(({mode,count})=><div key={mode}><Tag mode={mode}/><div className={s.counter} style={{marginTop:7}}>{count}<span style={{fontSize:12,fontFamily:"inherit",color:"var(--muted-foreground)",marginLeft:8}}>{OBJECTIVE[mode]}</span></div></div>)}</div><p className={s.hint}>{completed} de {view.pieces.length} piezas con resultado · {view.paused?"Campaña pausada":"Actualización automática cada 10 s"}</p></div>
