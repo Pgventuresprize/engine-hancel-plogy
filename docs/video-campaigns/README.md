@@ -161,3 +161,27 @@ para la persona. Los mensajes esperados no se lanzan al transporte de React, que
 los ocultaría en producción como error #441. Los errores internos conservan un
 mensaje genérico y detalle en el servidor; las redirecciones de Next se propagan.
 Pruebas adicionales: `node --import tsx --test scripts/video-campaigns-intake.test.ts`.
+
+## Recuperación de campañas
+
+Las incidencias distinguen búsqueda, recuperación del original, generación,
+investigación, material pendiente y límites del proveedor. El resumen cuenta
+piezas listas, en revisión, con incidencias y en proceso; un error no equivale
+a una pieza producida. «Reintentar incidencias» conserva campaña, cupos y
+libretos guardados, y retoma exclusivamente las fases fallidas.
+
+La generación JSON aplica la política de razonamiento del gateway existente:
+desactivado cuando el modelo lo permite y salida ampliada para Opus 5.5.
+La búsqueda usa términos cortos del tema, sin anexar el objetivo editorial
+completo. Reutiliza resultados de corridas conocidas de la cuenta durante 24 h
+y recoge sus datasets sin volver a lanzarlas. Un proveedor fallido no elimina
+los resultados obtenidos del otro.
+
+Las réplicas pueden usar referencias históricas cuando ayudan a cubrir el tema:
+mantienen 60.000 vistas y 1.000 likes mínimos, y la interfaz señala que superan
+90 días y muestra su fecha. No se rebaja silenciosamente el umbral de alcance.
+Los límites de corridas existentes siguen vigentes; una respuesta HTTP de Apify
+se presenta con su causa, sin convertirla en una petición de datos al usuario.
+No se relanza automáticamente un inicio de resultado incierto.
+
+Pruebas: `node --import tsx --test scripts/video-campaigns-recovery.test.ts`.

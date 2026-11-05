@@ -16,12 +16,12 @@ export async function brandSnapshot(accountId: string): Promise<Brand> {
   return { name: p.nombre || "La marca", language: p.idioma || "es", identity: [p.que_hace,p.mensaje_central].filter(Boolean).join("\n"), voice: p.voz_si, avoid: p.voz_no, rules: [p.reglas,p.frases_prohibidas.join("; "),p.temas_vetados].filter(Boolean).join("\n"), examples: examples.filter(x=>x.activo).slice(0,3).map(x=>({text:x.texto.slice(0,6000),why:x.por_que})) }
 }
 export async function listCampaigns(accountId: string): Promise<Campaign[]> {
-  const r = await supabaseAdmin().from("vc2_campaigns").select("id,account_id,config,brand,paused,created_at").eq("account_id",accountId).order("created_at",{ascending:false}).limit(30)
+  const r = await supabaseAdmin().from("vc2_campaigns").select("id,account_id,config,brand,paused,created_at,runs_started").eq("account_id",accountId).order("created_at",{ascending:false}).limit(30)
   if(r.error) throw new Error(r.error.message); return r.data as Campaign[]
 }
 export async function campaignView(accountId: string, id: string): Promise<CampaignView> {
   const db=supabaseAdmin()
-  const [c,p]=await Promise.all([db.from("vc2_campaigns").select("id,account_id,config,brand,paused,created_at").eq("id",id).eq("account_id",accountId).maybeSingle(),db.from("vc2_pieces").select("*").eq("campaign_id",id).eq("account_id",accountId)])
+  const [c,p]=await Promise.all([db.from("vc2_campaigns").select("id,account_id,config,brand,paused,created_at,runs_started").eq("id",id).eq("account_id",accountId).maybeSingle(),db.from("vc2_pieces").select("*").eq("campaign_id",id).eq("account_id",accountId)])
   if(c.error||p.error)throw new Error(c.error?.message||p.error?.message)
   if(!c.data)throw new CampaignActionError("No existe esa campaña en la cuenta activa.")
   return {...c.data as Campaign,pieces:(p.data as PieceRow[]).sort((a,b)=>a.payload.order-b.payload.order)}

@@ -5,6 +5,38 @@ import { secretosDe } from "../secretos"
 import { supabaseAdmin } from "../supabase-admin"
 import { apifyToken } from "./repository"
 import { transcriptText } from "./transcript"
+import { modelOutputPolicy, apifyStartFailure } from "./runtime-policy"
+import { normalizeReference } from "./references"
+import type { Reference } from "./model"
+
+// Lee y termina de recoger corridas ya iniciadas. Nunca lanza una nueva.
+export async function cachedSearchPool(accountId:string):Promise<{references:Reference[];waiting:boolean}>{
+  const db=supabaseAdmin(),actors=["clockworks/tiktok-scraper","apify/instagram-hashtag-scraper"]
+  const r=await db.from("vc2_sources").select("key,actor,status,run_id,data,created_at").eq("account_id",accountId).in("actor",actors).gte("created_at",new Date(Date.now()-86400000).toISOString()).order("created_at",{ascending:false}).limit(24)
+  if(r.error)throw new Error(r.error.message)
+  const headers={Authorization:`Bearer ${await apifyToken(accountId)}`}
+  const collected=await Promise.all((r.data||[]).map(async row=>{
+    let data=Array.isArray(row.data)?row.data as Record<string,unknown>[]:[],waiting=false
+    if(row.run_id&&row.status!=="done"){
+      try{
+        const response=await fetch(`https://api.apify.com/v2/actor-runs/${encodeURIComponent(row.run_id)}`,{headers,signal:AbortSignal.timeout(15000)})
+        if(response.ok){
+          const run=(await response.json()).data
+          waiting=["READY","RUNNING","TIMING-OUT"].includes(run.status)
+          if(run.status==="SUCCEEDED"){
+            const response=await fetch(`https://api.apify.com/v2/datasets/${encodeURIComponent(run.defaultDatasetId)}/items?clean=true&limit=100`,{headers,signal:AbortSignal.timeout(20000)})
+            if(response.ok){
+              const items=await response.json()
+              if(Array.isArray(items)){data=items;await db.from("vc2_sources").update({status:"done",data:items,error:null}).eq("account_id",accountId).eq("key",row.key)}
+            }
+          }
+        }
+      }catch{/* Una lectura fallida no descarta los demás proveedores. */}
+    }
+    return {waiting,references:data.map(item=>normalizeReference(item,row.actor===actors[0]?"TIKTOK":"INSTAGRAM")).filter((x):x is Reference=>x!==null).map(x=>({...x,capturedAt:row.created_at}))}
+  }))
+  return {references:collected.flatMap(x=>x.references),waiting:collected.some(x=>x.waiting)}
+}
 
 export async function jsonModel(accountId: string, system: string, prompt: string, options: { web?: boolean; model?: string } = {}): Promise<{ text: string; model: string; usage: { input: number; output: number } }> {
   const s=await secretosDe(accountId)
@@ -14,10 +46,13 @@ export async function jsonModel(accountId: string, system: string, prompt: strin
   const headers: Record<string,string>={"content-type":"application/json","anthropic-version":"2023-06-01"}
   const oauth=!token.startsWith("sk-ant-api")&&!process.env.ANTHROPIC_API_KEY
   if(oauth){headers.authorization=`Bearer ${token}`;headers["anthropic-beta"]="oauth-2025-04-20"}else headers["x-api-key"]=token
-  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers,signal:AbortSignal.timeout(165000),body:JSON.stringify({model,max_tokens:8000,system:[...(oauth?[{type:"text",text:"You are Claude Code, Anthropic's official CLI for Claude."}]:[]),{type:"text",text:system}],messages:[{role:"user",content:prompt}],...(options.web?{tools:[{type:"web_search_20250305",name:"web_search",max_uses:4}]}:{})})})
-  const body=await res.json()
+  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers,signal:AbortSignal.timeout(165000),body:JSON.stringify({model,...modelOutputPolicy(model),system:[...(oauth?[{type:"text",text:"You are Claude Code, Anthropic's official CLI for Claude."}]:[]),{type:"text",text:system}],messages:[{role:"user",content:prompt}],...(options.web?{tools:[{type:"web_search_20250305",name:"web_search",max_uses:4}]}:{})})})
+  const body=await res.json().catch(()=>({}))
   if(!res.ok)throw new CampaignActionError(`Claude no pudo completar el paso (HTTP ${res.status}). Revisa la conexión y el modelo de la cuenta.`)
-  if(body.stop_reason==="max_tokens")throw new CampaignActionError("La respuesta se cortó por longitud. Reintenta con una pieza más acotada.")
+  if(body.stop_reason==="max_tokens"){
+    console.warn("[vc2] Límite de salida del modelo",{model,usage:body.usage,blocks:(body.content||[]).map((x:{type:string})=>x.type)})
+    throw new CampaignActionError("El modelo agotó el límite de salida antes de terminar. Reintenta este paso; no falta información del usuario.")
+  }
   const output=(body.content||[]).filter((x:{type:string})=>x.type==="text").map((x:{text:string})=>x.text).join("\n")
   if(!output)throw new CampaignActionError("Claude no devolvió texto utilizable.")
   return {text:output,model,usage:{input:Number(body.usage?.input_tokens||0)+Number(body.usage?.cache_read_input_tokens||0),output:Number(body.usage?.output_tokens||0)}}
@@ -38,14 +73,16 @@ export async function actorData(accountId: string,campaignId: string,actor: stri
     if(budget.error||!budget.data){await db.from("vc2_sources").update({status:"error",error:"Se alcanzó el límite de corridas de esta campaña."}).eq("account_id",accountId).eq("key",key);throw new Error("Se alcanzó el límite de corridas Apify de la campaña. Puedes aportar un enlace y transcripción.")}
     try {
       const response=await fetch(`https://api.apify.com/v2/acts/${actor.replace("/","~")}/runs`,{method:"POST",headers,body:JSON.stringify(input),signal:AbortSignal.timeout(25000)})
-      const body=await response.json()
-      if(!response.ok||!body.data?.id)throw new Error("Apify rechazó el inicio de la corrida.")
+      const body=await response.json().catch(()=>({}))
+      if(!response.ok)throw new CampaignActionError(apifyStartFailure(response.status,String(body.error?.type||"").replace(/[^a-z0-9_-]/gi,"").slice(0,80)))
+      if(!body.data?.id)throw new Error("Apify no devolvió el identificador de la corrida.")
       const update=await db.from("vc2_sources").update({status:"running",run_id:body.data.id}).eq("account_id",accountId).eq("key",key)
       if(update.error)throw new Error("No se pudo confirmar en el almacenamiento la corrida iniciada.")
       return {waiting:true}
-    }catch {
-      await db.from("vc2_sources").update({status:"error",error:"No se confirmó el resultado del inicio. Revisa la corrida en Apify antes de repetir para evitar gasto duplicado."}).eq("account_id",accountId).eq("key",key)
-      throw new Error("No se confirmó la corrida. Revisa Apify; puedes pegar la transcripción para continuar sin repetir el gasto.")
+    }catch(error) {
+      const message=error instanceof CampaignActionError?error.message:"No se confirmó el resultado del inicio. Revisa la corrida en Apify antes de repetir para evitar gasto duplicado."
+      await db.from("vc2_sources").update({status:"error",error:message}).eq("account_id",accountId).eq("key",key)
+      throw new Error(message)
     }
   }
   if(cached.data.status==="done")return {waiting:false,items:cached.data.data as Record<string,unknown>[]}
