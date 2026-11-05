@@ -74,5 +74,7 @@ export async function authClient(): Promise<SupabaseClient> {
 export async function usuarioActual(): Promise<User | null> {
   const supabase = await authClient()
   const { data } = await supabase.auth.getUser()
+  // Un usuario bloqueado no tiene sesion, aunque su token siga vigente.
+  if (data.user?.banned_until && new Date(data.user.banned_until).getTime() > Date.now()) return null
   return data.user ?? null
 }

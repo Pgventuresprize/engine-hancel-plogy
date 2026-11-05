@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 
-import { idDeCuentaActual } from "@/lib/accounts"
+import { idDeCuentaAdvance } from "@/lib/accounts"
 import { supabaseAdmin } from "@/engine/supabase-admin"
 import { muestraDeEstilo } from "@/engine/studio/plantillas"
 import { esTipo, normalizarEstilo, TIPOS, type EstiloPlantilla } from "@/lib/plantillas-catalogo"
@@ -33,7 +33,7 @@ async function tipoDe(id: string): Promise<string | null> {
     .from("content_templates")
     .select("tipo")
     .eq("id", id)
-    .eq("account_id", await idDeCuentaActual())
+    .eq("account_id", await idDeCuentaAdvance())
     .maybeSingle()
   return (data as { tipo: string | null } | null)?.tipo ?? null
 }
@@ -74,7 +74,7 @@ export async function crearEstilo(tipo: string): Promise<ActionResult> {
     const { data, error } = await supabaseAdmin()
       .from("content_templates")
       .insert({
-        account_id: await idDeCuentaActual(),
+        account_id: await idDeCuentaAdvance(),
         tipo,
         name: `${TIPOS[tipo].nombre} (variante)`,
         descripcion: TIPOS[tipo].descripcion,
@@ -95,7 +95,7 @@ export async function crearEstilo(tipo: string): Promise<ActionResult> {
 export async function generarMuestra(id: string): Promise<ActionResult> {
   try {
     if (!esTipo(await tipoDe(id))) return { ok: false, error: "Ese estilo no es de esta cuenta." }
-    const r = await muestraDeEstilo(id, await idDeCuentaActual())
+    const r = await muestraDeEstilo(id, await idDeCuentaAdvance())
     refrescar()
     return r.ok ? { ok: true, id } : r
   } catch (error) {
@@ -113,7 +113,7 @@ export async function borrarEstilo(id: string): Promise<ActionResult> {
       .from("content_templates")
       .delete()
       .eq("id", id)
-      .eq("account_id", await idDeCuentaActual())
+      .eq("account_id", await idDeCuentaAdvance())
     if (error) throw new Error(error.message)
     refrescar()
     return { ok: true }

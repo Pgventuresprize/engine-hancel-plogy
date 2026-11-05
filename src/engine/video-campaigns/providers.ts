@@ -53,9 +53,15 @@ export async function jsonModel(accountId: string, system: string, prompt: strin
     console.warn("[vc2] Límite de salida del modelo",{model,usage:body.usage,blocks:(body.content||[]).map((x:{type:string})=>x.type)})
     throw new CampaignActionError("El modelo agotó el límite de salida antes de terminar. Reintenta este paso; no falta información del usuario.")
   }
+  await anotarConsumo(accountId,model,body.usage)
   const output=(body.content||[]).filter((x:{type:string})=>x.type==="text").map((x:{text:string})=>x.text).join("\n")
   if(!output)throw new CampaignActionError("Claude no devolvió texto utilizable.")
   return {text:output,model,usage:{input:Number(body.usage?.input_tokens||0)+Number(body.usage?.cache_read_input_tokens||0),output:Number(body.usage?.output_tokens||0)}}
+}
+/** Lo mismo que anota engine/claude/messages.ts, para que el consumo lo cuente. Nunca lanza: la llamada ya se pago. */
+async function anotarConsumo(accountId: string,modelo: string,usage: Record<string,number>|undefined){
+  const deCache=Number(usage?.cache_read_input_tokens||0),cacheEscrita=Number(usage?.cache_creation_input_tokens||0)
+  try{await supabaseAdmin().from("pipeline_events").insert({account_id:accountId,run_id:null,kind:"claude.uso",label:"video-campana",detail:{paso:"video-campana",modelo,entrada:Number(usage?.input_tokens||0)+deCache+cacheEscrita,salida:Number(usage?.output_tokens||0),deCache,cacheEscrita}})}catch{/* Silencio deliberado. */}
 }
 // Solo escribe caché y presupuesto propios. Un inicio de corrida de resultado incierto nunca se relanza automáticamente.
 export async function actorData(accountId: string,campaignId: string,actor: string,input: Record<string,unknown>,kind: "search"|"transcript"): Promise<{ waiting: true }|{ waiting:false; items: Record<string,unknown>[] }> {

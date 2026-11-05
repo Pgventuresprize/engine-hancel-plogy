@@ -3,16 +3,20 @@
 import { revalidatePath } from "next/cache"
 
 import { cambiarCuenta } from "@/app/cuenta/actions"
-import type { Plan } from "@/engine/accounts"
+import { registrarActividad } from "@/engine/admin/actividad"
 import { actualizarEmpresa, agregarMiembro, cambiarRol, crearEmpresa, quitarMiembro, reenviarInvitacion, type Rol } from "@/engine/empresas"
-import { exigirOwner } from "@/lib/accounts"
+import { cuentaActual, exigirOwner } from "@/lib/accounts"
+import { supabaseAdmin } from "@/engine/supabase-admin"
 import { usuarioActual } from "@/lib/supabase/auth"
 import { origenDeLaPeticion } from "@/lib/supabase/origen"
 
 /**
- * La gestion de la empresa abierta (nombre, plan, miembros) y la creacion de
- * empresas nuevas. Gestionar la empresa es cosa de sus owners; crear una
- * empresa nueva lo puede cualquier usuario, y queda como su owner.
+ * La gestion de la empresa abierta (nombre, miembros) y la creacion de empresas
+ * nuevas. Gestionar la empresa es cosa de sus owners; crear una empresa nueva lo
+ * puede cualquier usuario, y queda como su owner.
+ *
+ * El plan no se cambia desde aqui: lo decide un administrador en /admin. Si no,
+ * cualquier owner podria subirse a Advance solo.
  */
 
 export type Resultado = { ok: true; aviso?: string } | { ok: false; error: string }
@@ -26,8 +30,27 @@ async function comoOwner<T>(fn: (accountId: string) => Promise<T>): Promise<T | 
   }
 }
 
-export async function guardarEmpresa(campos: { name: string; plan: Plan }): Promise<Resultado> {
-  const r = await comoOwner((id) => actualizarEmpresa(id, campos))
+async function correoDe(userId: string): Promise<string> {
+  const { data } = await supabaseAdmin().auth.admin.getUserById(userId)
+  return data.user?.email ?? userId
+}
+
+/** Deja constancia de un cambio de accesos hecho por un owner. */
+async function anotarAcceso(accion: string, sobre: string, detalle: string, usuarioId?: string) {
+  const [cuenta, yo] = await Promise.all([cuentaActual(), usuarioActual()])
+  await registrarActividad({
+    actor: yo?.email ? { id: yo.id, email: yo.email } : null,
+    tipo: "acceso",
+    accion,
+    sobre,
+    accountId: cuenta.id,
+    usuarioId,
+    detalle: `${detalle} en ${cuenta.name}.`,
+  })
+}
+
+export async function guardarEmpresa(campos: { name: string }): Promise<Resultado> {
+  const r = await comoOwner((id) => actualizarEmpresa(id, { name: campos.name }))
   revalidatePath("/", "layout")
   return r.ok ? { ok: true, aviso: "Empresa guardada." } : r
 }
@@ -42,6 +65,7 @@ export async function invitarMiembro(email: string, rol: Rol): Promise<Resultado
   revalidatePath("/configuracion/empresa")
   if (!r.ok) return r
   const correo = email.trim().toLowerCase()
+  await anotarAcceso("Invitó a un miembro", correo, rol)
   return {
     ok: true,
     aviso:
@@ -61,6 +85,7 @@ export async function reenviarInvitacionMiembro(userId: string): Promise<Resulta
 export async function cambiarRolMiembro(userId: string, rol: Rol): Promise<Resultado> {
   const r = await comoOwner((id) => cambiarRol(id, userId, rol))
   revalidatePath("/configuracion/empresa")
+  if (r.ok) await anotarAcceso("Cambió el rol", await correoDe(userId), rol, userId)
   return r
 }
 
@@ -69,14 +94,17 @@ export async function quitarMiembroDeEmpresa(userId: string): Promise<Resultado>
   if (yo?.id === userId) return { ok: false, error: "No puedes quitarte a ti mismo; pídeselo a otro owner." }
   const r = await comoOwner((id) => quitarMiembro(id, userId))
   revalidatePath("/configuracion/empresa")
+  if (r.ok) await anotarAcceso("Quitó a un miembro", await correoDe(userId), "Quitado", userId)
   return r
 }
 
-export async function nuevaEmpresa(nombre: string, plan: Plan): Promise<Resultado> {
+/** Toda empresa nueva empieza en Basic: subirla a Advance es cosa de un administrador. */
+export async function nuevaEmpresa(nombre: string): Promise<Resultado> {
   const yo = await usuarioActual()
   if (!yo) return { ok: false, error: "Sesión caducada: vuelve a entrar." }
-  const r = await crearEmpresa(nombre, plan, yo.id)
+  const r = await crearEmpresa(nombre, "basic", yo.id)
   if (!r.ok) return r
+  await registrarActividad({ actor: yo.email ? { id: yo.id, email: yo.email } : null, tipo: "plataforma", accion: "Creó una empresa", sobre: nombre.trim(), accountId: r.id, detalle: "Empresa creada en Basic." })
   // Se abre la empresa recien creada.
   await cambiarCuenta(r.slug)
   return { ok: true, aviso: `Empresa creada. Ahora estás en ella: conecta sus servicios en Conexiones.` }
