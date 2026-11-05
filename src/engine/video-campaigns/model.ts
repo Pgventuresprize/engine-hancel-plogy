@@ -37,8 +37,9 @@ export type Piece = {
   status: "queued" | "working" | "revision" | "ready" | "error"; error: string
   edits: boolean; correctionCount: number; model: string; usage: { input: number; output: number }; ctaOverride?: string; instruction?: string
   productionStatus: "guion" | "grabando" | "editando" | "terminado"; videoUrl: string
+  discovery?: { query:string; historical:boolean; searched:boolean; forceSearch:boolean; warnings:string[] }
 }
-export type Campaign = { id: string; account_id: string; config: Brief; brand: Brand; paused: boolean; created_at: string }
+export type Campaign = { id: string; account_id: string; config: Brief; brand: Brand; paused: boolean; created_at: string; runs_started?:number }
 export type Brand = { name: string; language: string; identity: string; voice: string; avoid: string; rules: string; examples: { text: string; why: string }[] }
 export type PieceRow = { id: string; account_id: string; campaign_id: string; revision: number; payload: Piece }
 export type CampaignView = Campaign & { pieces: PieceRow[] }

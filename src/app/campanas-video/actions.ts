@@ -10,6 +10,7 @@ import { parseObject, parseScript, userReference, text, UUID, type Brief, type P
 import { actionResult, CampaignActionError } from "@/engine/video-campaigns/action-result"
 import { normalizeIntake, explicitMix } from "@/engine/video-campaigns/intake"
 import { workOne } from "@/engine/video-campaigns/worker"
+import { retryPhase } from "@/engine/video-campaigns/runtime-policy"
 
 async function readyAccount(){const a=await exigirAdvance();if(!await configured())throw new CampaignActionError("Falta aplicar la migración de almacenamiento de Campañas de video.");return a.id}
 function id(value:string){if(!UUID.test(value))throw new CampaignActionError("Identificador inválido.");return value}
@@ -36,7 +37,9 @@ async function updatePieceImpl(pieceId:string,revision:number,command:unknown){
   const c=command as Record<string,unknown>,p=structuredClone(row.payload)
   const campaign=await campaignView(accountId,row.campaign_id)
   let queue=false
-  if(c.kind==="script"){
+  if(c.kind==="retry"){
+    p.phase=retryPhase(p);p.status="queued";p.error="";p.review=null;queue=true
+  }else if(c.kind==="script"){
     p.script=parseScript(c.script,campaign.config.channels);p.edits=true;p.review=null;p.phase="review";p.status="queued";queue=true
   }else if(c.kind==="reference"){
     if(p.mode!=="replica")throw new CampaignActionError("Esta pieza no pertenece al cupo de réplicas.")
@@ -62,9 +65,10 @@ async function updatePieceImpl(pieceId:string,revision:number,command:unknown){
   }else throw new CampaignActionError("Acción desconocida.")
   await editPiece(row,p,queue);if(queue)wake(accountId);return campaignView(accountId,row.campaign_id)
 }
-async function updateCampaignContextImpl(campaignId:string,input:{offer:string;cta:string;material:string}){
+async function updateCampaignContextImpl(campaignId:string,input:{offer:string;cta:string;material:string;maxRuns?:number}){
   const accountId=await readyAccount(),c=await campaignView(accountId,id(campaignId))
-  const config:Brief={...c.config,offer:text(input.offer,2000),cta:text(input.cta,1000),material:text(input.material,20000)}
+  if(input.maxRuns!==undefined&&(!Number.isInteger(input.maxRuns)||input.maxRuns<0||input.maxRuns>40))throw new CampaignActionError("El límite de corridas debe ser un entero entre 0 y 40.")
+  const config:Brief={...c.config,offer:text(input.offer,2000),cta:text(input.cta,1000),material:text(input.material,20000),maxRuns:input.maxRuns??c.config.maxRuns}
   const r=await supabaseAdmin().rpc("vc2_context",{p_campaign:c.id,p_account:accountId,p_config:config})
   if(r.error)throw new Error(r.error.message)
   if(!r.data)throw new CampaignActionError("Hay una pieza trabajando. Pausa la campaña y espera a que termine la pasada antes de cambiar el contexto.")
@@ -85,6 +89,17 @@ async function restoreVersionImpl(pieceId:string,versionId:string,revision:numbe
 }
 async function newRequestIdImpl(){await exigirAdvance();return randomUUID()}
 
+async function retryCampaignImpl(campaignId:string){
+  const accountId=await readyAccount(),campaign=await campaignView(accountId,id(campaignId))
+  let queued=0,skipped=0
+  for(const row of campaign.pieces.filter(row=>row.payload.status==="error")){
+    const payload={...row.payload,phase:retryPhase(row.payload),status:"queued" as const,error:"",review:null}
+    try{await editPiece(row,payload,true);queued++}catch{skipped++}
+  }
+  if(queued)wake(accountId)
+  return {campaign:await campaignView(accountId,campaign.id),queued,skipped}
+}
+
 export async function readCampaigns(...args:Parameters<typeof readCampaignsImpl>){return actionResult(()=>readCampaignsImpl(...args))}
 export async function readCampaign(...args:Parameters<typeof readCampaignImpl>){return actionResult(()=>readCampaignImpl(...args))}
 export async function startCampaign(...args:Parameters<typeof startCampaignImpl>){return actionResult(()=>startCampaignImpl(...args))}
@@ -96,3 +111,4 @@ export async function updateCampaignContext(...args:Parameters<typeof updateCamp
 export async function versions(...args:Parameters<typeof versionsImpl>){return actionResult(()=>versionsImpl(...args))}
 export async function restoreVersion(...args:Parameters<typeof restoreVersionImpl>){return actionResult(()=>restoreVersionImpl(...args))}
 export async function newRequestId(...args:Parameters<typeof newRequestIdImpl>){return actionResult(()=>newRequestIdImpl(...args))}
+export async function retryCampaign(...args:Parameters<typeof retryCampaignImpl>){return actionResult(()=>retryCampaignImpl(...args))}
