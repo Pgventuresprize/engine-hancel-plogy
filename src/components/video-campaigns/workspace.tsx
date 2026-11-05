@@ -4,6 +4,7 @@ import { Plus, ArrowLeft, Copy, Download, Play, Pause, RefreshCw, Sparkles, Chec
 import * as ServerActions from "@/app/campanas-video/actions"
 import { MODES, MODE_LABEL, OBJECTIVE, CHANNELS, quotas, scriptMarkdown, type Brief, type Campaign, type CampaignView, type Mode, type PieceRow, type Piece, type Script } from "@/engine/video-campaigns/model"
 import { pieceErrorLabel } from "@/engine/video-campaigns/runtime-policy"
+import { recipeIsCurrent } from "@/engine/video-campaigns/recipe"
 import { actionValue } from "@/engine/video-campaigns/action-result"
 import s from "./workspace.module.css"
 import { previewCampaign } from "@/engine/video-campaigns/preview"
@@ -134,6 +135,7 @@ function PieceEditor({row,campaign,pending,onBack,onAction,onRestore}:{row:Piece
     {tab==="source"&&<>{p.mode==="replica"?<div className={s.form}>
       {p.discovery&&<div className={s.notice}><p>Consulta: {p.discovery.query}</p>{p.discovery.historical&&<p>Referencia histórica: supera 90 días. Se mantuvieron los mínimos de 60.000 vistas y 1.000 likes.</p>}{p.discovery.warnings.map((warning,i)=><p key={i}>{warning}</p>)}</div>}
       {p.reference&&<div className={s.source}><a href={p.reference.url} target="_blank" rel="noreferrer">{p.reference.url}</a><div className={s.stats}><span>{p.reference.views?.toLocaleString()??"Sin dato"} vistas</span><span>{p.reference.likes?.toLocaleString()??"Sin dato"} likes</span><span>{p.reference.selectedByUser?"Elegida por ti":"Descubierta"}</span><span>{p.reference.publishedAt?.slice(0,10)||"Sin fecha publicada"}</span></div></div>}
+      {p.recipe&&recipeIsCurrent(p)&&<div className={s.notice}><strong>Qué hizo funcionar el hook</strong><p>{p.recipe.mechanic}</p><p>{p.recipe.why}</p><p>Plantilla: {p.recipe.template}</p>{p.recipe.anchors.length>0&&<p>Se conserva literal: {p.recipe.anchors.join(" · ")}</p>}<p>{p.recipe.visualObserved?`Apertura observada: ${p.recipe.visual}`:"El video no se observó: la apertura visual es una propuesta."}</p>{p.recipe.care&&<p>Para ajustar a mano: {p.recipe.care}</p>}</div>}
       <label className={s.label}>Referencia elegida<input className={s.input} value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://www.instagram.com/reel/…/"/></label>
       <label className={s.label}>Transcripción original<textarea className={s.textarea} style={{minHeight:180}} value={transcript} onChange={e=>setTranscript(e.target.value)} placeholder="Si la plataforma no entrega el audio, pega aquí el texto completo."/></label>
       <Button primary disabled={pending||working||!url.trim()} onClick={()=>onAction({kind:"reference",url,transcript})}>Generar réplica de esta referencia</Button>

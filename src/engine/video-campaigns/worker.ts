@@ -10,6 +10,7 @@ import { technicalReview, parseEditorialReview } from "./quality"
 import { parseScript, text, type Concept, type Phase } from "./model"
 import { objectWithFormatRecovery } from "./json-response"
 import { shortSearchQuery, topicAffinity } from "./runtime-policy"
+import { RECIPE_SYSTEM, needsRecipe, parseRecipe, recipePrompt } from "./recipe"
 
 type Job={id:string;piece_id:string;account_id:string;phase:Phase;lease:string}
 async function runPhase(job: Job): Promise<void> {
@@ -104,6 +105,9 @@ async function runPhase(job: Job): Promise<void> {
       p.concepts=(Array.isArray(result.concepts)?result.concepts:[]).slice(0,3).map((v):Concept=>{const c=v as Record<string,unknown>;return {title:text(c.title,200),premise:text(c.premise,1500),tension:text(c.tension,1500),demonstration:text(c.demonstration,2000),payoff:text(c.payoff,1500),conversion:text(c.conversion,1500)}})
       if(p.concepts.length!==3||p.concepts.some(c=>!c.premise||!c.demonstration||!c.conversion))throw new Error("Los conceptos no tienen situación, demostración y vínculo con la oferta suficientes.")
       phase="write"
+    }else if(phase==="write"&&needsRecipe(p)){
+      // Paso propio dentro de la fase: la ficha queda guardada y la siguiente pasada escribe con ella.
+      p.recipe=parseRecipe(await call(RECIPE_SYSTEM,recipePrompt(p,brand)),p)
     }else if(phase==="write"){
       const prompt=writerPrompt(b,p,brand)
       if(p.instruction)prompt.prompt+=`\nCAMBIO EXPRESO DEL USUARIO O REVISIÓN: ${p.instruction}\nVERSIÓN ANTERIOR: ${JSON.stringify(p.script)}\nConserva lo que no necesita cambio. El CTA explícito manda.`
