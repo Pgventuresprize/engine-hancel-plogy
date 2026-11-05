@@ -129,6 +129,7 @@ export function RegistroForm() {
         </EncabezadoAcceso>
         <Campo id="empresa" etiqueta="Nombre de tu empresa o marca" placeholder="Mi marca" autoComplete="organization" minLength={2} autoFocus />
         <Campo id="email" etiqueta="Correo" type="email" placeholder="tu@correo.com" autoComplete="email" />
+        <Campo id="telefono" etiqueta="Celular" type="tel" placeholder="+57 300 000 0000" autoComplete="tel" inputMode="tel" maxLength={32} pattern="+?[ds()-]{7,24}" title="Escribe tu celular, con indicativo si es de otro país." />
         <Campo id="password" etiqueta="Contraseña" type="password" autoComplete="new-password" minLength={8} placeholder="Mínimo 8 caracteres" />
         <Campo id="repetida" etiqueta="Repítela" type="password" autoComplete="new-password" minLength={8} />
         <VerificacionHumana reinicio={resultado} />
