@@ -154,7 +154,8 @@ export function RegistroForm({ paises, paisInicial }: { paises: Pais[]; paisInic
         <EncabezadoAcceso titulo="Crea tu cuenta">
           Tu marca empieza en blanco: subes tu kit, conectas tus servicios y los agentes trabajan para ti.
         </EncabezadoAcceso>
-        <Campo id="empresa" etiqueta="Nombre de tu empresa o marca" placeholder="Mi marca" autoComplete="organization" minLength={2} autoFocus />
+        <Campo id="nombre" etiqueta="Tu nombre" placeholder="Nombre y apellido" autoComplete="name" minLength={2} maxLength={120} autoFocus />
+        <Campo id="empresa" etiqueta="Nombre de tu empresa o marca" placeholder="Mi marca" autoComplete="organization" minLength={2} />
         <Campo id="email" etiqueta="Correo" type="email" placeholder="tu@correo.com" autoComplete="email" />
         <CampoCelular paises={paises} paisInicial={paisInicial} />
         <Campo id="password" etiqueta="Contraseña" type="password" autoComplete="new-password" minLength={8} placeholder="Mínimo 8 caracteres" />
