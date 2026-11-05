@@ -1,9 +1,11 @@
 import type { Metadata } from "next"
+import { headers } from "next/headers"
 import Link from "next/link"
 
 import { registroAbierto } from "@/app/(acceso)/actions"
 import { EncabezadoAcceso } from "@/components/auth/encabezado"
 import { RegistroForm } from "@/components/auth/formularios"
+import { listaDePaises, paisConocido } from "@/lib/paises"
 
 export const metadata: Metadata = {
   title: "Crear cuenta · Plogy Studio",
@@ -29,5 +31,9 @@ export default async function RegistroPage() {
     )
   }
 
-  return <RegistroForm />
+  // Vercel dice desde que pais llega la visita. Solo elige con que abre el
+  // selector: no se guarda, y sin ese dato la persona elige.
+  const paisInicial = paisConocido((await headers()).get("x-vercel-ip-country"))
+
+  return <RegistroForm paises={listaDePaises()} paisInicial={paisInicial} />
 }

@@ -12,10 +12,12 @@ import {
 } from "@/app/(acceso)/actions"
 import { EncabezadoAcceso } from "@/components/auth/encabezado"
 import { CampoContrasena } from "@/components/auth/campo-contrasena"
+import { SelectorPais } from "@/components/auth/selector-pais"
 import { VerificacionHumana } from "@/components/auth/verificacion-humana"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import type { Pais } from "@/lib/paises"
 
 /**
  * Los formularios de acceso que no son el login: recuperar la contraseña,
@@ -37,6 +39,31 @@ function Campo({
       <Label htmlFor={id}>{etiqueta}</Label>
       {/* Las contraseñas llevan el ojo para verlas, como en el login. */}
       {type === "password" ? <CampoContrasena {...comun} /> : <Input type={type} {...comun} />}
+    </div>
+  )
+}
+
+/** El celular va en dos partes: el pais trae el indicativo y el numero va sin el. */
+function CampoCelular({ paises, paisInicial }: { paises: Pais[]; paisInicial: string }) {
+  return (
+    <div className="grid gap-2">
+      <Label htmlFor="telefono">Celular</Label>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <SelectorPais paises={paises} paisInicial={paisInicial} />
+        <Input
+          id="telefono"
+          name="telefono"
+          type="tel"
+          required
+          placeholder="300 000 0000"
+          autoComplete="tel-national"
+          inputMode="tel"
+          maxLength={20}
+          pattern="[\d\s\(\)\-]{4,20}"
+          title="Escribe el número sin el indicativo."
+          className="h-11 bg-white/85"
+        />
+      </div>
     </div>
   )
 }
@@ -117,7 +144,7 @@ export function ContrasenaForm({ email, primera }: { email: string; primera: boo
   )
 }
 
-export function RegistroForm() {
+export function RegistroForm({ paises, paisInicial }: { paises: Pais[]; paisInicial: string }) {
   const [resultado, enviar, pendiente] = React.useActionState<EnvioResult, FormData>(registrarse, undefined)
   if (resultado && "ok" in resultado) return <Enviado texto={resultado.ok} />
 
@@ -129,7 +156,7 @@ export function RegistroForm() {
         </EncabezadoAcceso>
         <Campo id="empresa" etiqueta="Nombre de tu empresa o marca" placeholder="Mi marca" autoComplete="organization" minLength={2} autoFocus />
         <Campo id="email" etiqueta="Correo" type="email" placeholder="tu@correo.com" autoComplete="email" />
-        <Campo id="telefono" etiqueta="Celular" type="tel" placeholder="+57 300 000 0000" autoComplete="tel" inputMode="tel" maxLength={32} pattern="\+?[\d\s\(\)\-]{7,24}" title="Escribe tu celular, con indicativo si es de otro país." />
+        <CampoCelular paises={paises} paisInicial={paisInicial} />
         <Campo id="password" etiqueta="Contraseña" type="password" autoComplete="new-password" minLength={8} placeholder="Mínimo 8 caracteres" />
         <Campo id="repetida" etiqueta="Repítela" type="password" autoComplete="new-password" minLength={8} />
         <VerificacionHumana reinicio={resultado} />
