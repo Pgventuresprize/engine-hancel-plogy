@@ -11,6 +11,7 @@ import {
 } from "@/app/(acceso)/actions"
 import { EncabezadoAcceso } from "@/components/auth/encabezado"
 import { CampoContrasena } from "@/components/auth/campo-contrasena"
+import { VerificacionHumana } from "@/components/auth/verificacion-humana"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -91,6 +92,8 @@ export function LoginForm({
                 className="h-11 bg-white/85"
               />
             </div>
+
+            <VerificacionHumana reinicio={resultado} tambien={reenvio} />
 
             {resultado?.error ? (
               <div role="alert" className="text-destructive flex flex-col items-start gap-1 text-sm">

@@ -26,6 +26,13 @@ export type EnvioResult = { error: string } | { ok: string } | undefined
 
 const CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const MINIMO = 8
+// De 7 a 15 digitos (el maximo internacional), con o sin indicativo.
+const CELULAR = /^\+?[\d\s()-]{7,24}$/
+
+function celularValido(celular: string): boolean {
+  const digitos = celular.replace(/\D/g, "").length
+  return CELULAR.test(celular) && digitos >= 7 && digitos <= 15
+}
 
 /** El enlace de los correos: vuelve al mismo origen desde el que se pidio. */
 async function volverA(): Promise<string> {
@@ -47,6 +54,7 @@ export async function iniciarSesion(_previo: LoginResult, form: FormData): Promi
   if (!email || !password) {
     return { error: "Escribe el correo y la contraseña." }
   }
+  if (!(await pasoElCaptcha(form))) return { error: CAPTCHA_FALLO }
 
   const supabase = await authClient()
   const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -83,6 +91,7 @@ export async function cerrarSesion(): Promise<void> {
 export async function reenviarConfirmacion(_previo: EnvioResult, form: FormData): Promise<EnvioResult> {
   const email = String(form.get("email") ?? "").trim().toLowerCase()
   if (!CORREO.test(email)) return { error: "Escribe tu correo." }
+  if (!(await pasoElCaptcha(form))) return { error: CAPTCHA_FALLO }
 
   const supabase = await authClient()
   const { error } = await supabase.auth.resend({ type: "signup", email, options: { emailRedirectTo: await volverA() } })
@@ -143,18 +152,21 @@ export async function registroAbierto(): Promise<boolean> {
  *
  * La empresa no se crea aqui sino al confirmar el correo (`/auth/confirm`):
  * hasta entonces nadie sabe si el correo es de quien lo escribio. Su nombre
- * espera en `user_metadata`.
+ * espera en `user_metadata`, junto al celular de contacto. No va en el campo
+ * `phone` de Supabase: ese es para entrar por SMS.
  */
 export async function registrarse(_previo: EnvioResult, form: FormData): Promise<EnvioResult> {
   if (!(await registroAbierto())) return { error: "Por ahora solo se entra por invitación." }
 
   const empresa = String(form.get("empresa") ?? "").trim()
   const email = String(form.get("email") ?? "").trim().toLowerCase()
+  const telefono = String(form.get("telefono") ?? "").trim()
   const password = String(form.get("password") ?? "")
   const repetida = String(form.get("repetida") ?? "")
 
   if (empresa.length < 2) return { error: "Ponle un nombre a tu empresa o marca." }
   if (!CORREO.test(email)) return { error: "Ese correo no es válido." }
+  if (!celularValido(telefono)) return { error: "Escribe un celular válido, con indicativo si es de otro país." }
   if (password.length < MINIMO) return { error: `La contraseña tiene que tener al menos ${MINIMO} caracteres.` }
   if (password !== repetida) return { error: "Las dos contraseñas no coinciden." }
   if (!(await pasoElCaptcha(form))) return { error: CAPTCHA_FALLO }
@@ -163,7 +175,7 @@ export async function registrarse(_previo: EnvioResult, form: FormData): Promise
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { emailRedirectTo: await volverA(), data: { empresa } },
+    options: { emailRedirectTo: await volverA(), data: { empresa, telefono } },
   })
   if (error) {
     if (error.code === "weak_password") return { error: "Esa contraseña es demasiado fácil de adivinar: usa una más larga o con más variedad." }
