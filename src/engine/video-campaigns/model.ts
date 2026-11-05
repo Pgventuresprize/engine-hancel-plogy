@@ -1,5 +1,6 @@
 import { CampaignActionError } from "./action-result"
 import { parseModelObject } from "./json-response"
+import type { Recipe } from "./recipe"
 // Contratos exclusivos del módulo aditivo; no cambian tipos del motor existente.
 export const MODES = ["replica", "adaptacion", "original"] as const
 export type Mode = typeof MODES[number]
@@ -39,6 +40,7 @@ export type Piece = {
   edits: boolean; correctionCount: number; model: string; usage: { input: number; output: number }; ctaOverride?: string; instruction?: string
   productionStatus: "guion" | "grabando" | "editando" | "terminado"; videoUrl: string
   discovery?: { query:string; historical:boolean; searched:boolean; forceSearch:boolean; warnings:string[] }
+  recipe?: Recipe | null
 }
 export type Campaign = { id: string; account_id: string; config: Brief; brand: Brand; paused: boolean; created_at: string; runs_started?:number }
 export type Brand = { name: string; language: string; identity: string; voice: string; avoid: string; rules: string; examples: { text: string; why: string }[] }

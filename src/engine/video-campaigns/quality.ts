@@ -1,5 +1,6 @@
 import type { Brief, Finding, Piece, Script } from "./model"
 import { isCtaPolicy } from "./runtime-policy"
+import { recipeFindings } from "./recipe"
 const normalized = (s: string) => s.normalize("NFD").replace(/\p{Mn}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
 export function technicalReview(s: Script, p: Piece, b: Brief): Finding[] {
   const out: Finding[] = []
@@ -33,6 +34,7 @@ export function technicalReview(s: Script, p: Piece, b: Brief): Finding[] {
   const availableEvidence=normalized([b.material,p.transcript,p.dossier,...p.sources.map(x=>x.text)].join(" "))
   for (const c of s.claims) if (c.kind !== "hypothesis" && (!c.evidence || (c.source && !sourceUrls.has(c.source) && c.source !== p.reference?.url && c.source !== "material_usuario"))) block("claim_evidence", c.text, "Una afirmación no está vinculada al material disponible.", "Atribuye la evidencia real o formula una hipótesis explícita.")
   for (const c of s.claims) if(c.kind!=="hypothesis"&&c.evidence&&!availableEvidence.includes(normalized(c.evidence)))block("claim_evidence",c.text,"El fragmento de evidencia no aparece en los insumos.","Cita el fragmento real, conserva sus condiciones o plantea una hipótesis explícita.")
+  out.push(...recipeFindings(s, p))
   return out
 }
 export function parseEditorialReview(value: unknown): Finding[] {
