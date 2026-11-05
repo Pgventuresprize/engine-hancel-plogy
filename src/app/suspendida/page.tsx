@@ -33,7 +33,7 @@ export default async function SuspendidaPage() {
         </p>
         {otras.length > 0 ? <CambiarEmpresa empresas={otras.map((c) => ({ slug: c.slug, name: c.name }))} /> : null}
         {admin ? (
-          <Button variant="outline" render={<Link href="/admin" />}>
+          <Button nativeButton={false} variant="outline" render={<Link href="/admin" />}>
             Ir a Administración
           </Button>
         ) : null}

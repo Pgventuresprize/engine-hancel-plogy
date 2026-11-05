@@ -28,7 +28,7 @@ export default async function AdminActividadPage({ searchParams }: { searchParam
       title="Actividad"
       descripcion="Todo lo que pasa en la plataforma y quién lo hizo. No se puede editar ni borrar."
       acciones={
-        <Button variant="outline" render={<a href={`/admin/actividad/csv?tipo=${filtro.id}`} />}>
+        <Button nativeButton={false} variant="outline" render={<a href={`/admin/actividad/csv?tipo=${filtro.id}`} />}>
           <DownloadIcon />
           Exportar CSV
         </Button>
@@ -36,7 +36,7 @@ export default async function AdminActividadPage({ searchParams }: { searchParam
     >
       <div className="flex flex-wrap gap-2">
         {FILTROS.map((f) => (
-          <Button key={f.id} size="sm" variant={f.id === filtro.id ? "default" : "outline"} render={<Link href={f.id === "todo" ? "/admin/actividad" : `/admin/actividad?tipo=${f.id}`} />}>
+          <Button nativeButton={false} key={f.id} size="sm" variant={f.id === filtro.id ? "default" : "outline"} render={<Link href={f.id === "todo" ? "/admin/actividad" : `/admin/actividad?tipo=${f.id}`} />}>
             {f.texto}
           </Button>
         ))}

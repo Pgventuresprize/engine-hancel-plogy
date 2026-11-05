@@ -89,7 +89,7 @@ export function EmpresasLista({ empresas }: { empresas: Fila[] }) {
                     </TableCell>
                     <TableCell className="text-muted-foreground">{fechaCorta(e.ultimaActividad)}</TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="icon-sm" aria-label={`Abrir ${e.name}`} render={<Link href={`/admin/empresas/${e.id}`} />}>
+                      <Button nativeButton={false} variant="ghost" size="icon-sm" aria-label={`Abrir ${e.name}`} render={<Link href={`/admin/empresas/${e.id}`} />}>
                         <ChevronRightIcon />
                       </Button>
                     </TableCell>

@@ -34,8 +34,10 @@ Los siguientes administradores se nombran desde `/admin/accesos`.
 
 **Empresa suspendida.** Nadie entra (`cuentaActual` manda a `/suspendida`, que no muestra
 el motivo) y los motores la saltan: los ticks por `todasLasCuentas`, y el chat y las
-campañas de video en sus colas de Postgres (`chat_despachar`, `vc2_claim`). Nada se
-borra, y lo que estaba en cola sigue al reactivarla.
+campañas de video en sus colas de Postgres (`chat_despachar`, `vc2_claim`), y los
+buzones de contenido en `procesarBuzon`. Nada se borra, y lo que estaba en cola sigue al
+reactivarla. Lo único que puede terminar después de suspender es lo que ya estaba
+haciéndose en ese instante; no empieza nada nuevo.
 
 **Usuario bloqueado.** Se le pone un bloqueo en Supabase Auth y se borran sus sesiones.
 `usuarioActual` y el proxy lo rechazan aunque su token siga vigente. Sus empresas siguen

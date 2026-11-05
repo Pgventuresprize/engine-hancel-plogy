@@ -47,7 +47,7 @@ export default async function AdminResumenPage() {
                   </div>
                   <div className="text-muted-foreground text-sm">{a.texto}</div>
                 </div>
-                <Button variant="outline" size="sm" render={<Link href={a.href} />}>
+                <Button nativeButton={false} variant="outline" size="sm" render={<Link href={a.href} />}>
                   Abrir
                 </Button>
               </div>
@@ -64,7 +64,7 @@ export default async function AdminResumenPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <CardTitle className="text-base">Quién más consume</CardTitle>
-            <Button variant="outline" size="sm" render={<Link href="/admin/consumo" />}>
+            <Button nativeButton={false} variant="outline" size="sm" render={<Link href="/admin/consumo" />}>
               Ver consumo
             </Button>
           </CardHeader>
@@ -85,7 +85,7 @@ export default async function AdminResumenPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <CardTitle className="text-base">Últimos cambios</CardTitle>
-            <Button variant="outline" size="sm" render={<Link href="/admin/actividad" />}>
+            <Button nativeButton={false} variant="outline" size="sm" render={<Link href="/admin/actividad" />}>
               Ver actividad
             </Button>
           </CardHeader>

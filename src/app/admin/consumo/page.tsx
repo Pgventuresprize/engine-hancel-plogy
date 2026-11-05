@@ -28,7 +28,7 @@ export default async function AdminConsumoPage({ searchParams }: { searchParams:
       acciones={
         <div className="flex gap-2">
           {[7, DIAS_PANEL].map((d) => (
-            <Button key={d} size="sm" variant={rango === d ? "default" : "outline"} render={<Link href={d === DIAS_PANEL ? "/admin/consumo" : `/admin/consumo?dias=${d}`} />}>
+            <Button nativeButton={false} key={d} size="sm" variant={rango === d ? "default" : "outline"} render={<Link href={d === DIAS_PANEL ? "/admin/consumo" : `/admin/consumo?dias=${d}`} />}>
               {d} días
             </Button>
           ))}
@@ -93,7 +93,7 @@ export default async function AdminConsumoPage({ searchParams }: { searchParams:
                       <TableCell className="text-right tabular-nums">{e.piezas ? formatTokens(e.tokens / e.piezas) : "—"}</TableCell>
                       <TableCell className="text-right tabular-nums">{cambio === null ? "—" : `${cambio > 0 ? "+" : ""}${cambio} %`}</TableCell>
                       <TableCell>
-                        <Button variant="ghost" size="icon-sm" aria-label={`Abrir ${e.name}`} render={<Link href={`/admin/empresas/${e.id}`} />}>
+                        <Button nativeButton={false} variant="ghost" size="icon-sm" aria-label={`Abrir ${e.name}`} render={<Link href={`/admin/empresas/${e.id}`} />}>
                           <ChevronRightIcon />
                         </Button>
                       </TableCell>

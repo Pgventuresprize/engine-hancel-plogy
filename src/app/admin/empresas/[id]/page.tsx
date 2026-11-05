@@ -60,7 +60,7 @@ export default async function AdminEmpresaPage({ params }: { params: Promise<{ i
       }
     >
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="ghost" size="sm" className="-ml-2" render={<Link href="/admin/empresas" />}>
+        <Button nativeButton={false} variant="ghost" size="sm" className="-ml-2" render={<Link href="/admin/empresas" />}>
           <ArrowLeftIcon />
           Empresas
         </Button>

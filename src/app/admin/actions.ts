@@ -148,9 +148,15 @@ export async function darAcceso(accountId: string, correoUsuario: string, rol: R
   return comoAdmin(async (yo) => {
     const e = await empresa(accountId)
     if (!e) return fallo("Esa empresa no existe.")
-    const r = await agregarMiembro(accountId, correoUsuario, rol, await volverA())
-    if (!r.ok) return fallo(r.error)
     const correo = correoUsuario.trim().toLowerCase()
+    // agregarMiembro le pisa el rol a quien ya esta: podria dejar la empresa sin owner.
+    const existente = await usuarioPorCorreo(correo)
+    if (existente) {
+      const { data } = await supabaseAdmin().from("account_members").select("user_id").eq("account_id", accountId).eq("user_id", existente.id).maybeSingle()
+      if (data) return fallo(`${correo} ya es miembro de ${e.name}. Para cambiarle el rol, usa su fila.`)
+    }
+    const r = await agregarMiembro(accountId, correo, rol, await volverA())
+    if (!r.ok) return fallo(r.error)
     return hecho(yo, r.invitado ? `Le mandamos una invitación a ${correo}.` : `${correo} ya puede entrar a ${e.name}.`, {
       tipo: "acceso",
       accion: "Dio acceso",
