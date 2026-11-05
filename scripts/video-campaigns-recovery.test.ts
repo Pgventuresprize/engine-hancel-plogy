@@ -1,8 +1,27 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { modelOutputPolicy, shortSearchQuery, topicAffinity, pieceErrorLabel, retryPhase, apifyStartFailure } from "../src/engine/video-campaigns/runtime-policy"
+import { technicalReview } from "../src/engine/video-campaigns/quality"
+import { reviewPrompt } from "../src/engine/video-campaigns/prompts"
 import { collectSearchResults, normalizeReference, rankReferences } from "../src/engine/video-campaigns/references"
 import { previewCampaign } from "../src/engine/video-campaigns/preview"
+import { parseModelObject, objectWithFormatRecovery } from "../src/engine/video-campaigns/json-response"
+
+test("recupera saltos literales y citas sin cambiar la voz ni aceptar truncamientos",()=>{
+ assert.deepEqual(parseModelObject('```json\n{"narration":"primera línea\nsegunda línea", "evidence":"<cite index=\"1\">hecho</cite>"}\n```'),{narration:"primera línea\nsegunda línea",evidence:"hecho"})
+ assert.deepEqual(parseModelObject('{"narration":"Escapado: \\"texto\\" y \\\\n"}'),{narration:'Escapado: "texto" y \\n'})
+ assert.throws(()=>parseModelObject('{"narration":"incompleta"'),/formato inválido/)
+})
+
+test("repara formato una sola vez y conserva el error si sigue inválido",async()=>{
+ let calls=0
+ assert.deepEqual(await objectWithFormatRecovery('{"ok":true}',async()=>{calls++;return '{}'}),{ok:true})
+ assert.equal(calls,0)
+ assert.deepEqual(await objectWithFormatRecovery('{incorrecto}',async invalid=>{calls++;assert.equal(invalid,'{incorrecto}');return '{"ok":true}'}),{ok:true})
+ assert.equal(calls,1)
+ await assert.rejects(objectWithFormatRecovery('{incorrecto}',async()=>{calls++;return '{incorrecto}'}),/formato inválido/)
+ assert.equal(calls,2)
+})
 
 test("el razonamiento no consume por defecto la salida del JSON",()=>{
  assert.deepEqual(modelOutputPolicy("claude-sonnet-5"),{max_tokens:8000,thinking:{type:"disabled"}})
@@ -43,4 +62,14 @@ test("reintentar una revisión conserva el libreto y vuelve a revisar",()=>{
  assert.equal(retryPhase({...p,phase:"review"}),"review")
  assert.equal(retryPhase({...p,phase:"write"}),"write")
  assert.equal(retryPhase({...p,phase:"done"}),"review")
+})
+
+test("un CTA condicional se audita como política; el literal sigue protegido",()=>{
+ const c=previewCampaign(),p=c.pieces.find(x=>x.payload.script)!.payload,s=p.script!
+ const brief={...c.config,cta:"Condicional: 'Síguenos' en el resto; 2 videos deben llevar el CTA alternativo 'Comenta Plogy'."}
+ assert.ok(!technicalReview({...s,cta:"Síguenos"},p,brief).some(x=>x.rule==="cta_changed"))
+ assert.ok(technicalReview({...s,cta:"Síguenos"},p,{...brief,cta:"Comenta Plogy"}).some(x=>x.rule==="cta_changed"))
+ const reference={...p.reference!,caption:"Automatiza los procesos manuales de tu empresa"}
+ assert.equal(topicAffinity(reference,{name:"IA para el Estado/gobiernos",focus:"",weight:1,references:[]}),0)
+ assert.match(reviewPrompt(c.config,{...p,mode:"replica"},c.brand).system,/reference_topic/)
 })

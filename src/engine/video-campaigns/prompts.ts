@@ -23,7 +23,7 @@ export function writerPrompt(b: Brief, p: Piece, brand: Brand): { system: string
 }
 export function reviewPrompt(b: Brief, p: Piece, brand: Brand): { system: string; prompt: string } {
   const criteria = p.mode === "replica"
-    ? "Compara original y traducción con la versión final. Bloquea omisiones o cambios no autorizados, traducción infiel o atribuciones falsas. No exijas novedad, paráfrasis ni cambiar el hook. No bloquees por dificultad de producción ni por primera persona."
+    ? "Compara original y traducción con la versión final. Bloquea omisiones o cambios no autorizados, traducción infiel o atribuciones falsas. Comprueba también que el referente trate el tema y caso de uso concreto: IA genérica para empresas no acredita IA para gobiernos. Si no coincide, devuelve reference_topic con nivel block y pide otra referencia, sin reescribir una réplica para fingir afinidad. No exijas novedad, paráfrasis ni cambiar el hook. No bloquees por dificultad de producción ni por primera persona."
     : p.mode === "adaptacion"
       ? "Comprueba cada afirmación contra el material, sus reservas y fuentes. Revisa progresión, criterio propio, hook cumplido y conclusión. Bloquea relleno genérico y causalidades inventadas."
       : "Revisa concepto, situación concreta, tensión, demostración y relación con oferta/conversión. Bloquea relleno intercambiable entre marcas, humor forzado, cursilería, moraleja vacía y hook sin recompensa."
