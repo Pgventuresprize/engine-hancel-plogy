@@ -673,8 +673,8 @@ function PanelPieza({ pieza, newsId }: { pieza: PiezaDelTablero; newsId: string 
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={pending || publicada}
-                    title="Vuelve a dibujar y subir las imagenes desde el guion original"
+                    disabled={pending || publicada || pieza.payload.postPropio}
+                    title={pieza.payload.postPropio ? "Este post se subió ya hecho: no hay guion del que redibujarlo." : "Vuelve a dibujar y subir las imagenes desde el guion original"}
                   />
                 }
               >

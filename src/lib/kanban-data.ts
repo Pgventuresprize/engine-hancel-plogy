@@ -65,6 +65,8 @@ export type PiezaDelTablero = {
     avisosKit?: string[]
     modoDiseno?: ModoDiseno
     disenoLibre?: { puntaje: number | null }
+    /** Lo subio una persona ya hecho: no hay guion del que redibujarlo. */
+    postPropio?: boolean
   }
   published_at: string | null
   linkedin_urn: string | null

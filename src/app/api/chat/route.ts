@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { crearConversacion } from "@/engine/chat/pedidos"
+import { loteDe } from "@/engine/chat/posts-propios"
 import { actualizarTrabajos } from "@/engine/chat/trabajos"
 import { estadoChat, noticiasConAngulo } from "@/lib/chat-data"
 import { dispararPasada, sesionChat } from "@/lib/chat-sesion"
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
     texto?: unknown
     noticia?: NoticiaAdjunta | null
     agentes?: unknown
+    lote?: unknown
   } | null
   const texto = typeof body?.texto === "string" ? body.texto.trim().slice(0, 8000) : ""
   if (!texto) return NextResponse.json({ error: "El mensaje está vacío." }, { status: 400 })
@@ -67,7 +69,8 @@ export async function POST(request: Request) {
       : null
 
   try {
-    const { conversacionId, disparar, responder } = await crearConversacion({ ...sesion, texto, noticia, agentes })
+    const lote = await loteDe(sesion.accountId, body?.lote)
+    const { conversacionId, disparar, responder } = await crearConversacion({ ...sesion, texto, noticia, agentes, referencias: lote ? [lote] : [] })
     dispararPasada(disparar)
     return NextResponse.json({ id: conversacionId, responder })
   } catch (e) {

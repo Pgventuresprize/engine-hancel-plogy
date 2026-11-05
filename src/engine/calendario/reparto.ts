@@ -142,3 +142,71 @@ export function repartir<P extends { red: string }>(opciones: {
   }
   return { plan, sobran: cola.length }
 }
+
+/** Lo que el agente pide para un post. `vence` es el ultimo momento en que sirve; vacio si no caduca. */
+export type PedidoPlan = { id: string; red: string; vence: string; dia: string; hora: string }
+
+const DIA_VALIDO = /^\d{4}-\d{2}-\d{2}$/
+
+/** "2026-11-05" sirve todo el dia; "2026-11-05 19:30", hasta esa hora. */
+const finDe = (vence: string) => (vence.length === 10 ? `${vence} 23:59` : vence)
+
+/** Hacia arriba: el tick pasa cada cinco minutos y antes de la hora pedida no se publica. */
+export function redondearHora(hora: string): string | null {
+  const min = Math.ceil(aMin(hora) / PASO_MINUTOS) * PASO_MINUTOS
+  return min < 24 * 60 ? aHora(min) : null
+}
+
+/**
+ * El plan de un lote: primero los posts con dia y hora pedidos, despues el resto en
+ * los huecos libres, y lo que caduca antes va primero. Lo decide esto y no el
+ * agente: un calculo no se equivoca de dia. Nada queda sin decir por que.
+ */
+export function armarPlan(o: {
+  pedidos: PedidoPlan[]
+  desde: string
+  hasta: string
+  horarios: Horarios
+  ocupadas: Set<string>
+  ahora: { dia: string; hora: string }
+}): { filas: { id: string; dia: string; hora: string }[]; fuera: { id: string; motivo: string }[] } {
+  const ocupadas = new Set(o.ocupadas)
+  const filas: { id: string; dia: string; hora: string }[] = []
+  const fuera: { id: string; motivo: string }[] = []
+  const sirve = (p: PedidoPlan, dia: string, hora: string) => !p.vence || `${dia} ${hora}` <= finDe(p.vence)
+
+  for (const p of o.pedidos.filter((x) => x.dia || x.hora)) {
+    if (!DIA_VALIDO.test(p.dia) || !HORA_VALIDA.test(p.hora)) {
+      fuera.push({ id: p.id, motivo: "Le falta el día o la hora." })
+      continue
+    }
+    const redondeada = redondearHora(p.hora)
+    const hora = redondeada ? horaLibre(p.dia, redondeada, p.red, ocupadas) : null
+    if (!hora) fuera.push({ id: p.id, motivo: "No queda sitio ese día." })
+    else if (yaPaso(p.dia, hora, o.ahora)) fuera.push({ id: p.id, motivo: "Esa hora ya pasó." })
+    else if (!sirve(p, p.dia, hora)) fuera.push({ id: p.id, motivo: `Esa hora es después de cuando deja de servir (${p.vence}).` })
+    else {
+      ocupadas.add(claveHueco(p.red, p.dia, hora))
+      filas.push({ id: p.id, dia: p.dia, hora })
+    }
+  }
+
+  const resto = o.pedidos
+    .filter((x) => !x.dia && !x.hora)
+    // Estable: lo que no caduca conserva el orden en que llego.
+    .sort((a, b) => {
+      const [x, y] = [a.vence ? finDe(a.vence) : "~", b.vence ? finDe(b.vence) : "~"]
+      return x < y ? -1 : x > y ? 1 : 0
+    })
+  const { plan } = repartir({ piezas: resto, desde: o.desde, hasta: o.hasta, horarios: o.horarios, ocupadas, ahora: o.ahora })
+  const colocados = new Set<string>()
+  for (const { pieza, dia, hora } of plan) {
+    colocados.add(pieza.id)
+    if (sirve(pieza, dia, hora)) filas.push({ id: pieza.id, dia, hora })
+    else fuera.push({ id: pieza.id, motivo: `No cabe antes de que deje de servir (${pieza.vence}).` })
+  }
+  for (const p of resto) if (!colocados.has(p.id)) fuera.push({ id: p.id, motivo: "No queda hueco en esas fechas." })
+
+  filas.sort((a, b) => `${a.dia} ${a.hora}`.localeCompare(`${b.dia} ${b.hora}`))
+  return { filas, fuera }
+}

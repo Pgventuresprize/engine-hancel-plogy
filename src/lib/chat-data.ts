@@ -4,7 +4,7 @@ import type { AgenteChat, Mensaje, NoticiaAdjunta } from "@/engine/chat/mensajes
 import type { TrabajoChat } from "@/engine/chat/trabajos"
 import { supabaseAdmin } from "@/engine/supabase-admin"
 import { nombreDe } from "@/lib/chat-nombre"
-import type { EstadoChat, FilaConversacion, Hilo, MensajeUI, TrabajoUI } from "@/lib/chat-tipos"
+import type { LoteUI, PlanUI, EstadoChat, FilaConversacion, Hilo, MensajeUI, TrabajoUI } from "@/lib/chat-tipos"
 
 /**
  * Lo que lee la pantalla del chat. Todo acotado a la cuenta: las tablas tienen
@@ -111,7 +111,15 @@ export async function hiloDe(accountId: string, conversacionId: string): Promise
 
   // Las miniaturas: la portada de cada carrusel que el hilo enseña como tarjeta.
   const lista = (mensajes ?? []) as Mensaje[]
-  const piezas = [...new Set(lista.flatMap((m) => (m.referencias ?? []).flatMap((r) => (r.tipo === "pieza" && r.red === "instagram" ? [r.pieceId] : []))))]
+  const piezas = [
+    ...new Set(
+      lista.flatMap((m) =>
+        (m.referencias ?? []).flatMap((r) =>
+          r.tipo === "pieza" && r.red === "instagram" ? [r.pieceId] : r.tipo === "lote" ? r.piezas.slice(0, 6) : r.tipo === "plan" ? r.filas.map((f) => f.pieceId) : []
+        )
+      )
+    ),
+  ]
   const portada = new Map<string, string>()
   if (piezas.length) {
     const { data: filas } = await supabase.from("content_pieces").select("id, payload").eq("account_id", accountId).in("id", piezas)
@@ -120,6 +128,9 @@ export async function hiloDe(accountId: string, conversacionId: string): Promise
       if (Array.isArray(imagenes) && typeof imagenes[0] === "string") portada.set(f.id, imagenes[0])
     }
   }
+
+  // Solo la ultima propuesta se puede confirmar.
+  const ultimoPlan = [...lista].reverse().find((m) => (m.referencias ?? []).some((r) => r.tipo === "plan"))?.id ?? null
 
   // Quien escribio cada mensaje se guarda por id; el nombre se pone al leer.
   const autores = new Map<string, string>()
@@ -143,6 +154,14 @@ export async function hiloDe(accountId: string, conversacionId: string): Promise
         referencias: (m.referencias ?? []).flatMap((r) => (r.tipo === "pieza" ? [{ ...r, miniatura: portada.get(r.pieceId) ?? null }] : [])),
         fuentes: (m.referencias ?? []).filter((r) => r.tipo === "fuente"),
         marcas: (m.selecciones ?? []).map((x) => x.etiqueta),
+        lote: (m.referencias ?? []).flatMap((r): LoteUI[] =>
+          r.tipo === "lote" ? [{ posts: r.piezas.length, miniaturas: r.piezas.slice(0, 6).flatMap((id) => portada.get(id) ?? []), fuera: r.fuera }] : []
+        )[0] ?? null,
+        plan: (m.referencias ?? []).flatMap((r): PlanUI[] =>
+          r.tipo === "plan"
+            ? [{ estado: r.estado, vigente: m.id === ultimoPlan, fuera: r.fuera, filas: r.filas.map((f) => ({ ...f, miniatura: portada.get(f.pieceId) ?? null })) }]
+            : []
+        )[0] ?? null,
         creado: m.created_at,
       })
     ),

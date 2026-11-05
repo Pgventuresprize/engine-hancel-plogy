@@ -2,13 +2,25 @@
 
 import * as React from "react"
 
-import type { AgenteChat, MensajeUI, ReferenciaUI, TrabajoUI } from "@/lib/chat-tipos"
+import { fechaCorta } from "@/engine/calendario/reparto"
+import type { AgenteChat, LoteUI, MensajeUI, PlanUI, ReferenciaUI, TrabajoUI } from "@/lib/chat-tipos"
 
 import s from "./chat.module.css"
 import { AG, Avatar, cx, hora, iniciales, puntaje } from "./comun"
 
 /** Un mensaje del hilo: de quien escribe, la linea del coordinador o un agente con sus tarjetas. */
-export function MensajeVista({ m, montado, onAbrirPieza }: { m: MensajeUI; montado: boolean; onAbrirPieza: (r: ReferenciaUI) => void }) {
+export function MensajeVista({
+  m,
+  montado,
+  onAbrirPieza,
+  onConfirmarPlan,
+}: {
+  m: MensajeUI
+  montado: boolean
+  onAbrirPieza: (r: ReferenciaUI) => void
+  /** Programa la propuesta. Devuelve si salio bien. */
+  onConfirmarPlan?: (mensajeId: string) => Promise<boolean>
+}) {
   const esUsuario = m.rol === "usuario"
   const agente = m.agente ?? "coordinador"
   const nombre = esUsuario ? (m.autor ?? "Tú") : AG[agente].nombre
@@ -59,10 +71,100 @@ export function MensajeVista({ m, montado, onAbrirPieza }: { m: MensajeUI; monta
             ))}
           </div>
         ) : null}
+        {m.lote ? <LoteVista lote={m.lote} /> : null}
         {m.referencias.map((r) => (
           <TarjetaPieza key={`${r.pieceId}-${r.version ?? 0}`} r={r} onAbrir={() => onAbrirPieza(r)} />
         ))}
+        {m.plan ? <PlanVista plan={m.plan} onConfirmar={onConfirmarPlan ? () => onConfirmarPlan(m.id) : undefined} /> : null}
       </div>
+    </div>
+  )
+}
+
+function LoteVista({ lote }: { lote: LoteUI }) {
+  return (
+    <div className={s.lote}>
+      {lote.miniaturas.length ? (
+        <span className={s.adjminis} aria-hidden="true">
+          {lote.miniaturas.map((u) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={u} src={u} alt="" loading="lazy" />
+          ))}
+        </span>
+      ) : null}
+      <span className={s.cm}>
+        {lote.posts} {lote.posts === 1 ? "post adjunto" : "posts adjuntos"}
+        {lote.fuera.length ? ` · ${lote.fuera.length} no se subieron` : ""}
+      </span>
+      {lote.fuera.length ? (
+        <ul className={s.planfuera}>
+          {lote.fuera.map((f) => (
+            <li key={f.nombre}>
+              <b>{f.nombre}:</b> {f.motivo}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  )
+}
+
+/** La propuesta: lo que entra, cuando y lo que se queda fuera con su motivo. */
+function PlanVista({ plan, onConfirmar }: { plan: PlanUI; onConfirmar?: () => Promise<boolean> }) {
+  const [ocupado, setOcupado] = React.useState(false)
+  const programado = plan.estado === "programado"
+  const n = plan.filas.length
+
+  return (
+    <div className={s.plan}>
+      <div className={s.planh}>
+        {programado ? (n === 1 ? "1 post programado" : `${n} posts programados`) : `Propuesta: ${n} ${n === 1 ? "post" : "posts"}`}
+      </div>
+      {n ? (
+        <ul className={s.planlista}>
+          {plan.filas.map((f) => (
+            <li key={f.pieceId}>
+              <span className={s.planfoto} aria-hidden="true">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {f.miniatura ? <img src={f.miniatura} alt="" loading="lazy" /> : null}
+              </span>
+              <a href={`/estudio?pieza=${f.pieceId}`} target="_blank" rel="noopener noreferrer" className={s.plantitulo} title="Abrir su ficha">
+                {f.titulo}
+              </a>
+              {f.captionEscrito ? <span className={s.planmarca} title="Lo escribió el agente: léelo antes de confirmar">Caption nuevo</span> : null}
+              <span className={s.planhora}>
+                {fechaCorta(f.dia)}, {f.hora}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {plan.fuera.length ? (
+        <details className={s.plandetalle} open={!n}>
+          <summary>{plan.fuera.length === 1 ? "1 queda fuera" : `${plan.fuera.length} quedan fuera`}</summary>
+          <ul className={s.planfuera}>
+            {plan.fuera.map((f) => (
+              <li key={f.pieceId}>
+                <b>{f.titulo}:</b> {f.motivo}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+      {!programado && !plan.vigente ? <p className={s.cm}>La reemplazó una propuesta más nueva.</p> : null}
+      {!programado && plan.vigente && n > 0 && onConfirmar ? (
+        <button
+          type="button"
+          className={s.plango}
+          disabled={ocupado}
+          onClick={() => {
+            setOcupado(true)
+            void onConfirmar().finally(() => setOcupado(false))
+          }}
+        >
+          {ocupado ? "Programando…" : `Programar ${n === 1 ? "el post" : `${n} posts`}`}
+        </button>
+      ) : null}
     </div>
   )
 }

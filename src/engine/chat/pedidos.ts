@@ -1,7 +1,7 @@
 import { tituloProvisional } from "@/lib/chat-titulo"
 
 import { supabaseAdmin } from "../supabase-admin"
-import { escribirMensaje, type AgenteChat, type NoticiaAdjunta, type Seleccion } from "./mensajes"
+import { escribirMensaje, type AgenteChat, type NoticiaAdjunta, type Referencia, type Seleccion } from "./mensajes"
 import { empezarTrabajos, reanudarConversacion, type RedChat } from "./trabajos"
 
 /**
@@ -24,6 +24,8 @@ export type Pedido = {
   noticia: NoticiaAdjunta | null
   /** Lo elegido en "¿Quien trabaja?". El coordinador va siempre. */
   agentes: ("instagram" | "linkedin" | "revisor")[]
+  /** Los posts subidos con el mensaje. */
+  referencias?: Referencia[]
 }
 
 const NOMBRE: Record<AgenteChat, string> = {
@@ -73,6 +75,7 @@ export async function crearConversacion(p: Pedido): Promise<{ conversacionId: st
     contenido: p.texto,
     noticia: p.noticia,
     agentesPedidos: p.agentes,
+    referencias: p.referencias,
   })
   if (!p.noticia || !p.agentes.length) return { conversacionId, disparar: [], responder: true }
   const disparar = await repartir({ ...p, noticia: p.noticia }, conversacionId, mensaje.id)
@@ -128,6 +131,8 @@ export async function seguirConversacion(p: {
   texto: string
   /** Lo marcado en el panel de la pieza para este pedido. */
   selecciones?: Seleccion[]
+  /** Los posts subidos con el mensaje. */
+  referencias?: Referencia[]
 }): Promise<{ disparar: RedChat[]; responder: boolean }> {
   const supabase = supabaseAdmin()
   const { data: conv } = await supabase
@@ -139,7 +144,7 @@ export async function seguirConversacion(p: {
     .maybeSingle()
   if (!conv) throw new Error("Esa conversación no existe o está en la papelera.")
 
-  await escribirMensaje({ accountId: p.accountId, conversacionId: p.conversacionId, rol: "usuario", autor: p.usuarioId, contenido: p.texto, selecciones: p.selecciones })
+  await escribirMensaje({ accountId: p.accountId, conversacionId: p.conversacionId, rol: "usuario", autor: p.usuarioId, contenido: p.texto, selecciones: p.selecciones, referencias: p.referencias })
 
   const { count } = await supabase
     .from("chat_trabajos")

@@ -33,6 +33,17 @@ export type ReferenciaUI = ReferenciaPieza & {
   miniatura: string | null
 }
 
+/** Los posts subidos con un mensaje. */
+export type LoteUI = { posts: number; miniaturas: string[]; fuera: { nombre: string; motivo: string }[] }
+
+/** La propuesta de cuando sale cada post. Solo la ultima de la conversacion se puede confirmar. */
+export type PlanUI = {
+  estado: "propuesto" | "programado"
+  vigente: boolean
+  filas: { pieceId: string; titulo: string; dia: string; hora: string; captionEscrito: boolean; miniatura: string | null }[]
+  fuera: { pieceId: string; titulo: string; motivo: string }[]
+}
+
 export type MensajeUI = {
   id: string
   rol: RolMensaje
@@ -45,6 +56,8 @@ export type MensajeUI = {
   fuentes: ReferenciaFuente[]
   /** Lo que marco en la pieza para este pedido: "L1 · Titulo". */
   marcas: string[]
+  lote: LoteUI | null
+  plan: PlanUI | null
   creado: string
 }
 

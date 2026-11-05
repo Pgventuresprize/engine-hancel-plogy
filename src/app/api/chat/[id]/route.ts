@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 
 import { limpiarSelecciones } from "@/engine/chat/editar"
 import { seguirConversacion } from "@/engine/chat/pedidos"
+import { loteDe } from "@/engine/chat/posts-propios"
 import { dispararPasada, sesionChat } from "@/lib/chat-sesion"
 
 export const dynamic = "force-dynamic"
@@ -16,17 +17,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const sesion = await sesionChat()
   if (!sesion) return NextResponse.json({ error: "Sin sesión" }, { status: 401 })
   const { id } = await params
-  const body = (await request.json().catch(() => null)) as { texto?: unknown; selecciones?: unknown } | null
+  const body = (await request.json().catch(() => null)) as { texto?: unknown; selecciones?: unknown; lote?: unknown } | null
   const texto = typeof body?.texto === "string" ? body.texto.trim().slice(0, 8000) : ""
   if (!texto) return NextResponse.json({ error: "El mensaje está vacío." }, { status: 400 })
 
   try {
+    const lote = await loteDe(sesion.accountId, body?.lote)
     const { disparar, responder } = await seguirConversacion({
       accountId: sesion.accountId,
       conversacionId: id,
       usuarioId: sesion.usuarioId,
       texto,
       selecciones: limpiarSelecciones(body?.selecciones),
+      referencias: lote ? [lote] : [],
     })
     dispararPasada(disparar)
     return NextResponse.json({ responder })

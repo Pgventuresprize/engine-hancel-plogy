@@ -20,6 +20,7 @@ import { AvisoVista, ModalBorrar, type Aviso, type PedidoBorrar } from "./dialog
 import { MenuFunciones } from "./menu-funciones"
 import { PanelConversaciones } from "./panel-conversaciones"
 import { PanelPieza } from "./panel-pieza"
+import type { LoteEnviado } from "./adjuntar-posts"
 import { Portada, type Eleccion } from "./portada"
 
 /** Cada cuanto se mira el avance mientras algo trabaja. */
@@ -339,7 +340,7 @@ export function ChatApp(props: {
 
   // ------------------------------------------------------------ pedir trabajo
 
-  const enviarPortada = async (texto: string, noticia: NoticiaAdjunta | null, eleccion: Eleccion): Promise<boolean> => {
+  const enviarPortada = async (texto: string, noticia: NoticiaAdjunta | null, eleccion: Eleccion, lote: LoteEnviado | null): Promise<boolean> => {
     const agentes = (["instagram", "linkedin", "revisor"] as AgenteElegible[]).filter((k) => eleccion[k])
     const ahora = new Date().toISOString()
     setProvisional({
@@ -353,7 +354,7 @@ export function ChatApp(props: {
         ocupado: "coordinador",
         borrada: null,
       },
-      mensajes: [{ id: "nuevo", rol: "usuario", agente: null, autor: props.usuario.nombre, contenido: texto, noticia, referencias: [], fuentes: [], marcas: [], creado: ahora }],
+      mensajes: [{ id: "nuevo", rol: "usuario", agente: null, autor: props.usuario.nombre, contenido: texto, noticia, referencias: [], fuentes: [], marcas: [], lote: lote ? { posts: lote.ids.length, miniaturas: [], fuera: lote.fuera } : null, plan: null, creado: ahora }],
       trabajos: [],
     })
     setEnviando(true)
@@ -362,7 +363,7 @@ export function ChatApp(props: {
       const r = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ texto, noticia, agentes }),
+        body: JSON.stringify({ texto, noticia, agentes, lote }),
       })
       const data = (await r.json().catch(() => ({}))) as { id?: string; responder?: boolean; error?: string }
       if (!r.ok || !data.id) throw new Error(data.error ?? "No se pudo enviar.")
@@ -383,7 +384,24 @@ export function ChatApp(props: {
     }
   }
 
-  const enviarEnConversacion = async (texto: string): Promise<boolean> => {
+  /** El boton de la propuesta. El hilo trae el resultado; solo el fallo se avisa aqui. */
+  const confirmarPlan = async (mensajeId: string): Promise<boolean> => {
+    const id = activaRef.current
+    if (!id) return false
+    try {
+      const r = await fetch(`/api/chat/${id}/plan`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mensajeId }) })
+      const data = (await r.json().catch(() => ({}))) as { error?: string }
+      if (!r.ok) throw new Error(data.error ?? "No se pudo programar.")
+      version.current++
+      await refrescar()
+      return true
+    } catch (e) {
+      avisar(e instanceof Error ? e.message : "No se pudo programar.")
+      return false
+    }
+  }
+
+  const enviarEnConversacion = async (texto: string, lote: LoteEnviado | null): Promise<boolean> => {
     const id = activaRef.current
     if (!id) return false
     const ahora = new Date().toISOString()
@@ -406,6 +424,8 @@ export function ChatApp(props: {
                   referencias: [],
                   fuentes: [],
                   marcas: marcadas.map((m) => m.etiqueta),
+                  lote: lote ? { posts: lote.ids.length, miniaturas: [], fuera: lote.fuera } : null,
+                  plan: null,
                   creado: ahora,
                 },
               ],
@@ -419,7 +439,7 @@ export function ChatApp(props: {
       const r = await fetch(`/api/chat/${id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ texto, selecciones: marcadas }),
+        body: JSON.stringify({ texto, selecciones: marcadas, lote }),
       })
       const data = (await r.json().catch(() => ({}))) as { responder?: boolean; error?: string }
       if (!r.ok) {
@@ -554,6 +574,7 @@ export function ChatApp(props: {
               onNueva={nueva}
               onBorrar={() => activa && pedirBorrar(activa)}
               onEnviar={enviarEnConversacion}
+              onConfirmarPlan={confirmarPlan}
               onDetener={() => void detener()}
               onAbrirPieza={abrirPieza}
               marcas={marcas}

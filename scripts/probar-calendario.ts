@@ -6,8 +6,9 @@
  */
 import assert from "node:assert/strict"
 
+import { agruparEnPosts, captionDeTextos, extraerCaption, huellaDeCaption, proporcionValida, tituloDeCarpeta } from "../src/engine/chat/posts-carpeta"
 import { decidirProgramada, ESPERA_EDICION_MS, MAX_INTENTOS, sinFreno, VENTANA_MS, type PiezaProgramada } from "../src/engine/calendario/decidir"
-import { claveHueco, fechaCorta, fechaLarga, horaLibre, horariosVacios, huecosDelDia, lunesDe, parseHorarios, repartir, sumarDias, sumarMeses, yaPaso, type Horarios } from "../src/engine/calendario/reparto"
+import { armarPlan, claveHueco, fechaCorta, fechaLarga, horaLibre, horariosVacios, huecosDelDia, lunesDe, parseHorarios, redondearHora, repartir, sumarDias, sumarMeses, yaPaso, type Horarios } from "../src/engine/calendario/reparto"
 
 const AHORA = new Date("2026-11-04T17:00:00.000Z")
 const hace = (ms: number) => new Date(AHORA.getTime() - ms).toISOString()
@@ -123,5 +124,77 @@ assert.equal(r.plan.length, 0, "sin horarios no reparte")
 
 r = repartir({ ...base, desde: "2026-11-02", hasta: "2036-11-02", ahora: { dia: "2026-11-01", hora: "00:00" }, piezas: Array.from({ length: 500 }, (_, i) => ig(String(i))) })
 assert.ok(r.plan.length < 100, "un rango enorme tiene tope")
+
+// ------------------------------------------------------------- plan de un lote
+const pedido = (id: string, cambios: Partial<{ vence: string; dia: string; hora: string }> = {}) => ({ id, red: "instagram", vence: "", dia: "", hora: "", ...cambios })
+const hor: Horarios = { instagram: { "4": ["10:00", "18:00", "20:00"], "5": ["10:00"] }, linkedin: {} }
+const lote = { desde: "2026-11-05", hasta: "2026-11-06", horarios: hor, ocupadas: new Set<string>(), ahora: { dia: "2026-11-05", hora: "09:00" } }
+assert.equal(redondearHora("14:32"), "14:35")
+assert.equal(redondearHora("14:30"), "14:30")
+assert.equal(redondearHora("23:58"), null)
+
+let p = armarPlan({ ...lote, pedidos: [pedido("a"), pedido("b", { vence: "2026-11-05 19:30" })] })
+assert.deepEqual(p.filas, [{ id: "b", dia: "2026-11-05", hora: "10:00" }, { id: "a", dia: "2026-11-05", hora: "18:00" }], "lo que caduca va primero")
+
+p = armarPlan({ ...lote, pedidos: [pedido("a", { vence: "2026-11-05 09:30" })] })
+assert.equal(p.filas.length, 0, "no se publica despues de que deje de servir")
+assert.match(p.fuera[0].motivo, /deje de servir/)
+
+p = armarPlan({ ...lote, pedidos: [pedido("a", { dia: "2026-11-05", hora: "14:32" }), pedido("b", { dia: "2026-11-05", hora: "14:35" })] })
+assert.deepEqual(p.filas.map((f) => f.hora), ["14:35", "14:40"], "hora pedida, redondeada, y sin chocar")
+
+p = armarPlan({ ...lote, pedidos: [pedido("a", { dia: "2026-11-05", hora: "08:00" })] })
+assert.match(p.fuera[0].motivo, /ya pasó/)
+
+p = armarPlan({ ...lote, pedidos: [pedido("a", { dia: "2026-11-05" })] })
+assert.match(p.fuera[0].motivo, /falta/)
+
+p = armarPlan({ ...lote, ocupadas: new Set([claveHueco("instagram", "2026-11-05", "10:00")]), pedidos: [pedido("a")] })
+assert.equal(p.filas[0].hora, "18:00", "lo ya programado se respeta")
+
+p = armarPlan({ ...lote, pedidos: ["a", "b", "c", "d", "e"].map((x) => pedido(x)) })
+assert.equal(p.filas.length, 4)
+assert.equal(p.fuera[0].id, "e", "lo que no cabe se dice")
+
+// ------------------------------------------------------------------- carpetas
+const carpeta = (rutas: string[]) => rutas.map((ruta) => ({ ruta, tamano: 1000 }))
+let posts = agruparEnPosts(carpeta([
+  "piezas/047-estilo/brief.md", "piezas/047-estilo/textos.md", "piezas/047-estilo/generar.py",
+  "piezas/047-estilo/assets/mood-1.jpg", "piezas/047-estilo/exports/_hoja.jpg",
+  "piezas/047-estilo/exports/slide-10.png", "piezas/047-estilo/exports/slide-02.png",
+  "piezas/050-idea/textos.md", "piezas/050-idea/exports/slide-01.png",
+  "piezas/_comun/logo.png", "piezas/vacia/notas.md",
+]))
+assert.deepEqual(posts.map((x) => x.nombre), ["047-estilo", "050-idea"], "cada subcarpeta con imagenes es un post")
+assert.deepEqual(posts[0].imagenes, ["piezas/047-estilo/exports/slide-02.png", "piezas/047-estilo/exports/slide-10.png"], "las finales, en orden numerico, sin assets ni _hoja")
+assert.deepEqual(posts[0].textos, ["piezas/047-estilo/brief.md", "piezas/047-estilo/textos.md"])
+
+posts = agruparEnPosts(carpeta(["047-estilo/textos.md", "047-estilo/assets/a.jpg", "047-estilo/exports/slide-01.png"]))
+assert.equal(posts.length, 1, "la carpeta de un post sola es un post, no dos")
+assert.deepEqual(posts[0].imagenes, ["047-estilo/exports/slide-01.png"])
+
+posts = agruparEnPosts(carpeta(["foto-2.jpg", "foto-10.jpg", "foto-1.jpg", "caption.txt"]))
+assert.equal(posts.length, 1, "unas fotos sueltas son un post")
+assert.deepEqual(posts[0].imagenes, ["foto-1.jpg", "foto-2.jpg", "foto-10.jpg"])
+
+posts = agruparEnPosts(carpeta(["lote/mio/1.jpg", "lote/mio/2.jpg", "lote/tuyo/1.png"]))
+assert.equal(posts.length, 2, "sin nombres conocidos tambien funciona")
+
+posts = agruparEnPosts(carpeta(Array.from({ length: 38 }, (_, i) => `026-motion/exports/slide-${i + 1}.png`)))
+assert.match(posts[0].problema ?? "", /38 láminas/, "mas de 10 no se sube")
+
+assert.deepEqual(agruparEnPosts(carpeta(["a/notas.md"])), [], "sin imagenes no hay post")
+assert.equal(tituloDeCarpeta("047-tu-estilo-en-un-parrafo"), "Tu estilo en un parrafo")
+
+// -------------------------------------------------------------------- captions
+const md = "# Textos\n\nEstado: BORRADOR.\n\n## Caption de Instagram\n\nHola mundo.\n\nSegunda línea.\n\n#Uno #Dos\n\n### Hashtags elegidos\n\n- #Uno: tema.\n\n## Post de LinkedIn\n\nOtra cosa."
+assert.deepEqual(extraerCaption(md), { caption: "Hola mundo.\n\nSegunda línea.", hashtags: ["#Uno", "#Dos"] }, "la seccion exacta, tal cual")
+assert.deepEqual(extraerCaption("Texto suelto del post.\n#Tag"), { caption: "Texto suelto del post.", hashtags: ["#Tag"] }, "un archivo sin secciones es el caption")
+assert.equal(extraerCaption("# Brief\n\nFecha: lunes.\n\n## Fotos\n\nDe banco."), null, "sin seccion de caption no se adivina")
+assert.equal(extraerCaption("x".repeat(3000)), null, "un texto largo sin secciones no es un caption")
+assert.equal(captionDeTextos([{ nombre: "brief.md", contenido: "# Brief\n\nNada." }, { nombre: "textos.md", contenido: md }])?.hashtags.length, 2)
+assert.equal(huellaDeCaption("Hola   MUNDO\n"), "hola mundo")
+assert.equal(proporcionValida(1080, 1350), true)
+assert.equal(proporcionValida(1080, 1920), false, "9:16 no entra en un carrusel")
 
 console.log(`\n${casos.length + 1} casos de decision y las reglas de fechas, huecos y reparto correctos`)

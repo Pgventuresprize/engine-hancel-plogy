@@ -1,7 +1,9 @@
 import type { Herramienta, ResultadoHerramienta } from "../claude/messages"
 import { investigarEnLaWeb } from "../content/composio"
+import { fechaCorta } from "../calendario/reparto"
 import { dominio, leerPaginaConMotivo } from "../redaccion/fuentes"
-import type { ReferenciaFuente } from "./mensajes"
+import type { ReferenciaFuente, ReferenciaPlan } from "./mensajes"
+import { confirmarPlan, proponerPlan, type PedidoDeAgente } from "./posts-propios"
 import { agentesApagados, despachar, empezarLote, type PedidoPieza, type RedChat } from "./trabajos"
 
 /**
@@ -51,7 +53,7 @@ export const HERRAMIENTAS_CHAT: Herramienta[] = [
   },
   {
     name: "crear_piezas",
-    description: `Pone a trabajar al equipo en piezas nuevas sobre los temas que digas: cada una se investiga, le decide el ángulo su agente, se escribe, se diseña y la revisa el Revisor. Úsala cuando la persona pida crear carruseles o posts y haya dicho de qué y cuántos. Si pidió ideas o que investigues y propongas, propón primero y espera a que confirme. Máximo ${MAX_PIEZAS_POR_PEDIDO} piezas por pedido. Una sola llamada con todas.`,
+    description: `Pone a trabajar al equipo en piezas nuevas sobre los temas que digas: cada una se investiga desde cero, le decide el ángulo su agente, se escribe, se diseña y la revisa el Revisor. No conserva el texto de ninguna pieza: nunca la uses para rehacer, mejorar o rediseñar una que ya existe. Úsala cuando la persona pida crear carruseles o posts y haya dicho de qué y cuántos. Si pidió ideas o que investigues y propongas, propón primero y espera a que confirme. Máximo ${MAX_PIEZAS_POR_PEDIDO} piezas por pedido. Una sola llamada con todas.`,
     strict: true,
     input_schema: {
       type: "object",
@@ -79,6 +81,48 @@ export const HERRAMIENTAS_CHAT: Herramienta[] = [
   },
 ]
 
+/** Solo si hay posts subidos en la conversacion: sin ellos no tienen sobre que actuar. */
+export const HERRAMIENTAS_POSTS: Herramienta[] = [
+  {
+    name: "proponer_programacion",
+    description: `Arma la propuesta de cuándo sale cada post de POSTS ADJUNTOS y se la enseña a la persona como tabla. No programa ni aprueba nada: eso pasa al confirmar. Las fechas y horas las reparte el sistema en los horarios de la marca; tú solo das los posts que entran, cuáles caducan y las horas que la persona haya pedido. Incluye todos los posts, también los que dejas fuera. Para corregir una propuesta, vuelve a llamarla entera.`,
+    strict: true,
+    input_schema: {
+      type: "object",
+      properties: {
+        desde: { type: "string", description: "Primer día del reparto, AAAA-MM-DD. Vacío: hoy." },
+        hasta: { type: "string", description: "Último día del reparto, AAAA-MM-DD. Vacío: dos semanas." },
+        posts: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              post: { type: "string", description: "La etiqueta del post: A1, A2..." },
+              incluir: { type: "boolean", description: "False si no debe salir: ya venció, está repetido o algo le falta." },
+              motivo: { type: "string", description: "Por qué queda fuera, en una frase. Vacío si entra." },
+              vence: { type: "string", description: "Último momento en que sirve, si habla de una fecha o evento: AAAA-MM-DD o AAAA-MM-DD HH:MM. Vacío si no caduca." },
+              dia: { type: "string", description: "AAAA-MM-DD solo si la persona pidió un día para este post. Vacío si lo reparte el sistema." },
+              hora: { type: "string", description: "HH:MM en 24 horas solo si la persona pidió una hora. Vacío si lo reparte el sistema." },
+              caption: { type: "string", description: "Solo si dice SIN CAPTION o la persona pidió cambiarlo. Vacío en los demás: el del archivo va tal cual." },
+              hashtags: { type: "array", items: { type: "string" }, description: "Los hashtags del caption que escribes. Vacío si no escribes caption." },
+            },
+            required: ["post", "incluir", "motivo", "vence", "dia", "hora", "caption", "hashtags"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["desde", "hasta", "posts"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "confirmar_programacion",
+    description: "Programa la última propuesta tal como se ve en la tabla: aprueba los posts y les pone su fecha. Úsala solo si el último mensaje de la persona confirma la propuesta sin pedir cambios. Si pide cambios, vuelve a proponer.",
+    strict: true,
+    input_schema: { type: "object", properties: {}, required: [], additionalProperties: false },
+  },
+]
+
 /** Lo que se lleva la cuenta durante una respuesta. */
 export type Turno = {
   accountId: string
@@ -93,16 +137,20 @@ export type Turno = {
   fuentes: Map<string, ReferenciaFuente>
   busquedas: number
   lecturas: number
+  /** Los posts subidos en la conversacion: etiqueta del prompt a id de pieza. */
+  posts: Map<string, string>
+  /** La propuesta de este turno, si la hubo: va como tabla en el mensaje. */
+  plan: ReferenciaPlan | null
 }
 
 const ENLACE = /https?:\/\/[^\s<>()"']+/g
 
 export function nuevoTurno(
-  o: { accountId: string; conversacionId: string; mensajeId: string; texto: string },
+  o: { accountId: string; conversacionId: string; mensajeId: string; texto: string; posts?: Map<string, string> },
   alHerramienta: (detalle: string) => void
 ): Turno {
   const urls = new Set((o.texto.match(ENLACE) ?? []).map((u) => u.replace(/[.,;:!?]+$/, "")))
-  return { accountId: o.accountId, conversacionId: o.conversacionId, mensajeId: o.mensajeId, creadas: 0, alHerramienta, urls, fuentes: new Map(), busquedas: 0, lecturas: 0 }
+  return { accountId: o.accountId, conversacionId: o.conversacionId, mensajeId: o.mensajeId, creadas: 0, alHerramienta, urls, fuentes: new Map(), busquedas: 0, lecturas: 0, posts: o.posts ?? new Map(), plan: null }
 }
 
 /** Una direccion que se puede pedir desde el servidor: publica y por http. */
@@ -204,12 +252,65 @@ async function crearPiezas(turno: Turno, entrada: unknown): Promise<ResultadoHer
   return { contenido: `Listo: ${piezas.length} ${piezas.length === 1 ? "pieza en marcha" : "piezas en marcha"}. Se ven como tarjetas en la conversación y avisan al terminar; el Revisor dictamina al final.` }
 }
 
+function pedidosDe(entrada: unknown): PedidoDeAgente[] | null {
+  const lista = (entrada as { posts?: unknown } | null)?.posts
+  if (!Array.isArray(lista)) return null
+  const texto = (v: unknown) => (typeof v === "string" ? v : "")
+  return (lista as Record<string, unknown>[]).map((p) => ({
+    post: texto(p?.post).trim().toUpperCase(),
+    incluir: p?.incluir !== false,
+    motivo: texto(p?.motivo),
+    vence: texto(p?.vence),
+    dia: texto(p?.dia),
+    hora: texto(p?.hora),
+    caption: texto(p?.caption),
+    hashtags: Array.isArray(p?.hashtags) ? (p.hashtags as unknown[]).filter((h): h is string => typeof h === "string") : [],
+  }))
+}
+
+async function proponer(turno: Turno, entrada: unknown): Promise<ResultadoHerramienta> {
+  if (!turno.posts.size) return { contenido: "En esta conversación no hay posts subidos.", error: true }
+  const pedidos = pedidosDe(entrada)
+  if (!pedidos?.length) return { contenido: "Faltan los posts. No se propuso nada.", error: true }
+  turno.alHerramienta("Organizando los posts")
+  const e = entrada as { desde?: unknown; hasta?: unknown }
+  const r = await proponerPlan({
+    accountId: turno.accountId,
+    etiquetas: turno.posts,
+    desde: typeof e.desde === "string" ? e.desde : "",
+    hasta: typeof e.hasta === "string" ? e.hasta : "",
+    pedidos,
+  })
+  if (!r.ok) return { contenido: r.error, error: true }
+  turno.plan = r.plan
+  const filas = r.plan.filas.map((f) => `- ${f.titulo}: ${fechaCorta(f.dia)}, ${f.hora}${f.captionEscrito ? " (caption tuyo)" : ""}`)
+  const fuera = r.plan.fuera.map((f) => `- ${f.titulo}: ${f.motivo}`)
+  return {
+    contenido: [
+      "Propuesta lista. Estas son las fechas reales: el sistema pudo mover una hora para que caiga cada cinco minutos o no choque, así que si mencionas una, que sea esta y no la que pidió la persona.",
+      filas.join("\n") || "No entra ningún post.",
+      fuera.length ? `Fuera:\n${fuera.join("\n")}` : "",
+      "La persona ya la ve como tabla: no la repitas. Di en una o dos frases qué conviene mirar y pide que confirme. Todavía no hay nada programado.",
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+  }
+}
+
+async function confirmar(turno: Turno): Promise<ResultadoHerramienta> {
+  turno.alHerramienta("Programando los posts")
+  const r = await confirmarPlan(turno.accountId, turno.conversacionId, null)
+  return r.ok ? { contenido: r.resumen } : { contenido: r.error, error: true }
+}
+
 /** Corre lo que pidio el agente. Lo que no conoce vuelve como error, no tumba la respuesta. */
 export function ejecutorDe(turno: Turno): (nombre: string, entrada: unknown) => Promise<ResultadoHerramienta> {
   return async (nombre, entrada) => {
     if (nombre === "buscar_web") return buscarWeb(turno, entrada)
     if (nombre === "leer_pagina") return leerPagina(turno, entrada)
     if (nombre === "crear_piezas") return crearPiezas(turno, entrada)
+    if (nombre === "proponer_programacion") return proponer(turno, entrada)
+    if (nombre === "confirmar_programacion") return confirmar(turno)
     return { contenido: `No existe la herramienta ${nombre}.`, error: true }
   }
 }

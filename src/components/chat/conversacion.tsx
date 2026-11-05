@@ -4,6 +4,7 @@ import * as React from "react"
 
 import type { AgenteChat, FilaConversacion, Hilo, Marca, ReferenciaUI } from "@/lib/chat-tipos"
 
+import { BarraAdjuntos, BotonAdjuntar, PEDIDO_POR_DEFECTO, useAdjuntarPosts, zonaDeSoltar, type LoteEnviado } from "./adjuntar-posts"
 import s from "./chat.module.css"
 import { AG, autoAltura, Avatar, cx, I, Ico, ORDEN_AGENTES, useFuera } from "./comun"
 import { EnVivoVista, MensajeVista, PensandoVista, TrabajoVista } from "./mensaje"
@@ -22,7 +23,8 @@ export function Conversacion(props: {
   onRenombrar: () => void
   onNueva: () => void
   onBorrar: () => void
-  onEnviar: (texto: string) => Promise<boolean>
+  onEnviar: (texto: string, lote: LoteEnviado | null) => Promise<boolean>
+  onConfirmarPlan: (mensajeId: string) => Promise<boolean>
   onDetener: () => void
   onAbrirPieza: (r: ReferenciaUI) => void
   /** Lo marcado en la pieza del panel: va con el mensaje. */
@@ -33,6 +35,9 @@ export function Conversacion(props: {
   const { fila, hilo } = props
   const [mas, setMas] = React.useState(false)
   const [texto, setTexto] = React.useState("")
+  const [encima, setEncima] = React.useState(false)
+  const [falloLote, setFalloLote] = React.useState<string | null>(null)
+  const adj = useAdjuntarPosts()
   const masRef = React.useRef<HTMLDivElement>(null)
   const campo = React.useRef<HTMLTextAreaElement>(null)
   const caja = React.useRef<HTMLDivElement>(null)
@@ -75,12 +80,21 @@ export function Conversacion(props: {
   }, [abierta])
 
   const enviar = async () => {
-    const t = texto.trim()
-    if (!t || respondiendo || trabajando) return
+    const t = texto.trim() || (adj.listo ? PEDIDO_POR_DEFECTO : "")
+    if (!t || respondiendo || trabajando || adj.ocupado) return
+    setFalloLote(null)
+    let lote: LoteEnviado | null = null
+    try {
+      lote = await adj.enviarLote()
+    } catch (e) {
+      setFalloLote(e instanceof Error ? e.message : "No se pudieron guardar los posts.")
+      return
+    }
     setTexto("")
     requestAnimationFrame(() => autoAltura(campo.current, 160))
-    const ok = await props.onEnviar(t)
-    if (!ok) setTexto(t)
+    const ok = await props.onEnviar(t, lote)
+    if (ok) adj.terminar()
+    else setTexto(t)
   }
 
   const piezas = hilo ? hilo.mensajes.reduce((n, m) => n + m.referencias.length, 0) : 0
@@ -148,7 +162,7 @@ export function Conversacion(props: {
           ) : (
             items.map((it) =>
               it.m ? (
-                <MensajeVista key={it.clave} m={it.m} montado={props.montado} onAbrirPieza={props.onAbrirPieza} />
+                <MensajeVista key={it.clave} m={it.m} montado={props.montado} onAbrirPieza={props.onAbrirPieza} onConfirmarPlan={props.onConfirmarPlan} />
               ) : it.t ? (
                 <TrabajoVista key={it.clave} t={it.t} />
               ) : null
@@ -184,7 +198,10 @@ export function Conversacion(props: {
             ) : null}
           </div>
         ) : null}
-        <div className={s.dockc}>
+        <BarraAdjuntos adj={adj} />
+        {falloLote ? <div className={cx(s.adjbarra, s.adjerror)} role="alert">{falloLote}</div> : null}
+        <div className={cx(s.dockc, encima && s.encima)} {...zonaDeSoltar(adj, setEncima)}>
+          <BotonAdjuntar adj={adj} className={s.sq36} />
           <label className={s.sr} htmlFor="mensaje-chat">Mensaje para los agentes</label>
           <textarea
             id="mensaje-chat"
@@ -219,7 +236,7 @@ export function Conversacion(props: {
               type="button"
               className={cx(s.sq36, s.go)}
               aria-label="Enviar"
-              disabled={!texto.trim() || respondiendo || props.faltante || !hilo}
+              disabled={(!texto.trim() && !adj.listo) || adj.ocupado || respondiendo || props.faltante || !hilo}
               onClick={() => void enviar()}
             >
               <Ico d={I.flecha} />

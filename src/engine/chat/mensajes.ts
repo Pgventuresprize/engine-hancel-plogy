@@ -45,7 +45,21 @@ export type ReferenciaPieza = {
 /** Una pagina de donde salio lo que dice el mensaje. */
 export type ReferenciaFuente = { tipo: "fuente"; url: string; titulo: string; medio: string }
 
-export type Referencia = ReferenciaPieza | ReferenciaFuente
+/** Posts ya hechos que la persona subio con este mensaje. */
+export type ReferenciaLote = { tipo: "lote"; piezas: string[]; fuera: { nombre: string; motivo: string }[] }
+
+/**
+ * La propuesta de cuando sale cada post. Vive en el mensaje porque es lo que la
+ * persona vio: confirmar programa exactamente esto, no algo recalculado.
+ */
+export type ReferenciaPlan = {
+  tipo: "plan"
+  estado: "propuesto" | "programado"
+  filas: { pieceId: string; titulo: string; dia: string; hora: string; captionEscrito: boolean }[]
+  fuera: { pieceId: string; titulo: string; motivo: string }[]
+}
+
+export type Referencia = ReferenciaPieza | ReferenciaFuente | ReferenciaLote | ReferenciaPlan
 
 export type Mensaje = {
   id: string

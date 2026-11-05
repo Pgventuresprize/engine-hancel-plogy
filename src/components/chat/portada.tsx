@@ -4,8 +4,9 @@ import * as React from "react"
 
 import type { AgenteElegible, NoticiaAdjunta } from "@/lib/chat-tipos"
 
+import { BarraAdjuntos, BotonAdjuntar, PEDIDO_POR_DEFECTO, useAdjuntarPosts, zonaDeSoltar, type LoteEnviado } from "./adjuntar-posts"
 import s from "./chat.module.css"
-import { AG, autoAltura, Avatar, I, Ico, puntaje, useFuera } from "./comun"
+import { AG, autoAltura, Avatar, cx, I, Ico, puntaje, useFuera } from "./comun"
 
 export type Eleccion = Record<AgenteElegible, boolean>
 
@@ -20,12 +21,15 @@ export function Portada(props: {
   enviando: boolean
   onAbrirNoticias: () => void
   /** Devuelve false si no se pudo enviar: el texto se queda. */
-  onEnviar: (texto: string, noticia: NoticiaAdjunta | null, eleccion: Eleccion) => Promise<boolean>
+  onEnviar: (texto: string, noticia: NoticiaAdjunta | null, eleccion: Eleccion, lote: LoteEnviado | null) => Promise<boolean>
 }) {
   const [texto, setTexto] = React.useState("")
   const [noticia, setNoticia] = React.useState<NoticiaAdjunta | null>(null)
   const [eleccion, setEleccion] = React.useState<Eleccion>({ instagram: true, linkedin: true, revisor: true })
   const [pop, setPop] = React.useState<"noticias" | "agentes" | null>(null)
+  const [encima, setEncima] = React.useState(false)
+  const [falloLote, setFalloLote] = React.useState<string | null>(null)
+  const adj = useAdjuntarPosts()
   const campo = React.useRef<HTMLTextAreaElement>(null)
   const compositor = React.useRef<HTMLDivElement>(null)
   const cerrarPop = React.useCallback(() => setPop(null), [])
@@ -36,13 +40,22 @@ export function Portada(props: {
   }, [])
 
   const enviar = async () => {
-    const t = texto.trim()
-    if (!t || props.enviando) return
+    const t = texto.trim() || (adj.listo ? PEDIDO_POR_DEFECTO : "")
+    if (!t || props.enviando || adj.ocupado) return
     setPop(null)
-    const ok = await props.onEnviar(t, noticia, eleccion)
+    setFalloLote(null)
+    let lote: LoteEnviado | null = null
+    try {
+      lote = await adj.enviarLote()
+    } catch (e) {
+      setFalloLote(e instanceof Error ? e.message : "No se pudieron guardar los posts.")
+      return
+    }
+    const ok = await props.onEnviar(t, lote ? null : noticia, eleccion, lote)
     if (ok) {
       setTexto("")
       setNoticia(null)
+      adj.terminar()
     }
   }
 
@@ -88,7 +101,7 @@ export function Portada(props: {
           <p>Escríbele al equipo. El coordinador reparte el trabajo entre Instagram, LinkedIn y el revisor.</p>
         </div>
 
-        <div className={s.composer} ref={compositor}>
+        <div className={cx(s.composer, encima && s.encima)} ref={compositor} {...zonaDeSoltar(adj, setEncima)}>
           {noticia ? (
             <div className={s.newschip}>
               <div className={s.score}>{puntaje(noticia.puntaje)}</div>
@@ -101,6 +114,8 @@ export function Portada(props: {
               </button>
             </div>
           ) : null}
+          <BarraAdjuntos adj={adj} />
+          {falloLote ? <div className={cx(s.adjbarra, s.adjerror)} role="alert">{falloLote}</div> : null}
           <label className={s.sr} htmlFor="mensaje-portada">Mensaje para los agentes</label>
           <textarea
             id="mensaje-portada"
@@ -136,9 +151,9 @@ export function Portada(props: {
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{etiqueta}</span>
               <Ico d={I.abajo} style={{ width: 14, height: 14 }} />
             </button>
+            <BotonAdjuntar adj={adj} className={s.chip} etiqueta="Adjuntar posts" />
             <span className={s.grow} />
-            <span className={s.hint}>↵ enviar · ⇧↵ nueva línea</span>
-            <button type="button" className={s.send} disabled={!texto.trim() || props.enviando} onClick={() => void enviar()}>
+            <button type="button" className={s.send} disabled={(!texto.trim() && !adj.listo) || adj.ocupado || props.enviando} onClick={() => void enviar()}>
               {props.enviando ? "Enviando…" : "Enviar"}
               <Ico d={I.flecha} />
             </button>
