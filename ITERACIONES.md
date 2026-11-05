@@ -714,10 +714,13 @@ Hecho en la rama `acceso` (2026-11-03): "¿Olvidaste tu contraseña?", registro 
 empresa propia en basic, invitaciones por correo y `/auth/confirm` para todos los
 enlaces. Lo que quedó para después:
 
-### Captcha en el registro
-- **Qué es:** Turnstile de Cloudflare en `/registro` y `/recuperar` (Supabase lo
-  acepta con `captchaToken`).
-- **Cuándo:** si llega spam. Mientras tanto, `REGISTRO_ABIERTO=no` lo cierra.
+### Captcha en el resto del acceso
+- **Hecho:** Turnstile en `/registro` y `/recuperar`, validado en las acciones de
+  servidor (`lib/turnstile.ts`). El captcha de Supabase sigue apagado: tambien
+  exige token en el login.
+- **Falta:** "Reenviar confirmación" del login manda correo sin captcha. Hoy lo
+  frena el limite de Supabase.
+- **Cuándo:** si llega spam por ahí.
 
 ### Entrar con un enlace y cambiar el correo
 - **Qué es:** "Entrar con un enlace" (enlace mágico) en el login y un formulario
