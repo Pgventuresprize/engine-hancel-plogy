@@ -1,4 +1,5 @@
 import type { Brief, Finding, Piece, Script } from "./model"
+import { isCtaPolicy } from "./runtime-policy"
 const normalized = (s: string) => s.normalize("NFD").replace(/\p{Mn}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
 export function technicalReview(s: Script, p: Piece, b: Brief): Finding[] {
   const out: Finding[] = []
@@ -15,7 +16,7 @@ export function technicalReview(s: Script, p: Piece, b: Brief): Finding[] {
   if (!normalized(s.shots[0]?.voice || "").includes(normalized(s.hook))) block("hook", s.hook, "El hook no aparece en la apertura.", "Pon el hook al inicio de la voz.")
   const all = [s.narration, ...Object.values(s.captions), ...s.production].join("\n")
   if (s.pending.length || /\[(?:POR CONFIRMAR|PENDIENTE|TODO|FALTA)[^\]]*\]/i.test(all)) block("pending", "", "Hay datos o material pendientes.", "Mantén la pieza en borrador hasta resolver los pendientes.")
-  if (b.cta && normalized(s.cta) !== normalized(b.cta)) block("cta_changed", s.cta, "Se cambió el CTA explícito.", "Conserva el CTA indicado por la persona.")
+  if (b.cta && !isCtaPolicy(b.cta) && normalized(s.cta) !== normalized(b.cta)) block("cta_changed", s.cta, "Se cambió el CTA explícito.", "Conserva el CTA indicado por la persona.")
   if (s.cta && !normalized(s.narration).includes(normalized(s.cta))) block("cta_missing", s.cta, "El CTA no aparece en la narración.", "Incluye el CTA sin añadir acciones contradictorias.")
   for (const channel of b.channels) if (!s.captions[channel]?.trim()) block("caption", channel, "Falta un caption solicitado.", "Escribe la variante de ese canal.")
   if (p.mode === "replica" && (!p.reference || !p.transcript.trim())) block("source", "", "Falta el original recuperado.", "Completa la extracción; no inventes el fragmento.")

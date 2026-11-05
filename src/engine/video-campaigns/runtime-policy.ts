@@ -20,6 +20,11 @@ export function topicAffinity(reference:Reference,topic:Topic):number{
   const matches=terms.filter(w=>new RegExp("\\b"+w.replace(/es$|s$/,"")+"(?:es|s)?\\b").test(source))
   return matches.length
 }
+// Una política con varias alternativas se audita semánticamente. Un CTA literal
+// conserva la comparación exacta que protege las instrucciones del usuario.
+export function isCtaPolicy(cta:string):boolean{
+  return /\b(condicional|principalmente|en el resto|cta alternativo|se usa solo|deben llevar)\b/i.test(cta)
+}
 export function pieceErrorLabel(piece:Pick<Piece,"phase"|"error">):string{
   if(/Define la oferta|Falta seleccionar la referencia|Falta material respaldado|no recuper.*voz|Pega.*transcrip/i.test(piece.error))return "Necesita material"
   if(/límite de corridas|presupuesto/i.test(piece.error))return "Límite de búsqueda"

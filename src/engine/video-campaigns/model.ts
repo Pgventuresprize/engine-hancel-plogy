@@ -1,4 +1,5 @@
 import { CampaignActionError } from "./action-result"
+import { parseModelObject } from "./json-response"
 // Contratos exclusivos del módulo aditivo; no cambian tipos del motor existente.
 export const MODES = ["replica", "adaptacion", "original"] as const
 export type Mode = typeof MODES[number]
@@ -118,13 +119,7 @@ export function userReference(url: string): Reference {
   return { url: referenceUrl(url), author: "", platform: new URL(url).hostname.endsWith("tiktok.com") ? "TIKTOK" : "INSTAGRAM", caption: "", views: null, likes: null, comments: null, shares: null, publishedAt: null, capturedAt: new Date().toISOString(), selectedByUser: true }
 }
 export function parseObject(input: string): Record<string, unknown> {
-  const s = input.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")
-  const start = s.indexOf("{"), end = s.lastIndexOf("}")
-  let result: unknown
-  try { result=JSON.parse(s.slice(start, end + 1)) }
-  catch { throw new CampaignActionError("El modelo no devolvió una respuesta válida. Vuelve a interpretar el pedido.") }
-  if (!result || typeof result !== "object" || Array.isArray(result)) throw new CampaignActionError("El modelo no devolvió un objeto válido.")
-  return result as Record<string,unknown>
+  return parseModelObject(input)
 }
 export function parseScript(input: unknown, channels: Channel[]): Script {
   if (!input || typeof input !== "object") throw new CampaignActionError("El modelo no devolvió un libreto.")
