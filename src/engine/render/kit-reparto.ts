@@ -269,7 +269,7 @@ export function laminasDeGuionClasico(
     return {
       // El que pidio quien escribio; si no lo trae, el que se deduce del texto.
       tipo: s.tipoLamina && s.tipoLamina !== "portada" && s.tipoLamina !== "cierre" ? s.tipoLamina : deducido,
-      textos: { titulo: limpio(s.title), cuerpo: limpio(s.body), antetitulo: limpio(s.lead) },
+      textos: { titulo: limpio(s.title), cuerpo: limpio(s.body), antetitulo: limpio(s.lead), fuente: limpio(s.fuente) },
       listas: items.length >= 2 ? { items } : {},
       ...(s.figura ? { figura: s.figura } : {}),
     }

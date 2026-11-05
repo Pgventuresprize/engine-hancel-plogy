@@ -383,6 +383,10 @@ export const CIERRE_POR_DEFECTO: Cierre = {
 
 /** Lo que el usuario puede cambiar desde la interfaz. */
 export type Estilo = {
+  /** Solo al rehacer una pieza: lo que se pidio para esta version, para el maquetador. */
+  pedidoVisual?: string
+  /** Solo al rehacer una pieza: busca foto en toda plantilla que la admita. */
+  masFotos?: boolean
   paleta: Paleta
   /** Los colores propios de la marca, si los guardo. Mandan sobre la paleta. */
   colores: ColoresMarca | null

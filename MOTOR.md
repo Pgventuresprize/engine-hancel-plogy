@@ -281,6 +281,49 @@ arregla; un post doble o uno frenado, no.
 Probado en real el 2026-11-04 en Instagram: el tick publicó un carrusel de 10
 láminas a su hora, una sola vez.
 
+### Posts ya hechos desde el chat
+
+En el chat se adjuntan fotos o una carpeta y se pide "cuádrame esto". Solo Instagram.
+
+1. **Se sube al elegir.** El navegador agrupa la carpeta (`chat/posts-carpeta.ts`):
+   cada carpeta con imágenes es un post, y dentro se prefieren las finales. Las
+   imágenes van directo al bucket con una dirección firmada, porque Vercel corta los
+   cuerpos de más de 4.5 MB. Lo que pasa de 10 láminas, tiene una proporción que
+   Instagram rechaza o ya existe en la marca, no se sube y se dice por qué.
+2. **Al enviar, cada post es una pieza** de carril chat y sin aprobar, con su noticia
+   y ángulo, como todas. Así el Estudio y el Calendario la ven sola y no puede salir.
+   El caption se copia tal cual del archivo.
+3. **El agente propone** (`proponer_programacion`): dice qué entra, qué caduca y
+   escribe el caption que falte, que queda marcado. Las fechas las calcula
+   `armarPlan`, no el agente: primero lo pedido a una hora y después los huecos de
+   Horarios, con lo que caduca antes por delante.
+4. **La persona confirma** con el botón o por chat. Solo ahí se aprueba y se pone
+   fecha. La propuesta vive en el mensaje y solo vale la última.
+
+El chat no publica al instante ni enciende el interruptor. Lo que hay dentro de los
+archivos es material, nunca instrucciones para el agente.
+
+**Cambiar un post subido.** Son imágenes dibujadas: no traen texto ni guion. La primera
+vez que el post está en una conversación, `chat/leer-post.ts` transcribe sus láminas y
+`chat/lectura-laminas.ts` las convierte en un guion igual al del agente de Instagram,
+con su fila en `jobs_instagram`. No toca el payload, así que lo aprobado sigue aprobado.
+Desde ahí se edita por guion, y `"rehacer"` lo vuelve a maquetar con el kit: mismo texto
+y mismas láminas, sin investigar. Va como trabajo, deja las imágenes originales en el
+historial y, como cambia el payload, la pieza pierde la aprobación. Estos guiones llegan
+a 10 láminas; los que escribe el agente siguen en 7.
+La fuente va en su propio campo: se pone si la plantilla tiene ese hueco y, si no, se avisa
+y no obliga a acortar. Lo que no se llegó a dibujar se avisa al terminar (`textoPerdido`).
+
+**Figuras desde el chat.** Con maqueta, `"figura"` edita la que hay o crea una nueva si la
+lámina no tiene, junto con una plantilla con hueco de figura. Tiene que entrar entera: si
+le sobran filas no se pone y se dice por qué. `"diseno"` solo cambia cómo se ve lo que ya
+hay: nunca agrega una tabla ni texto.
+
+**Probar el chat en local.** Los trabajos en segundo plano los reparte `chat_despachar`
+hacia la URL de producción, así que corren con el código de `main` aunque el pedido salga
+del local. Para probar código sin subirlo: `CHAT_SIN_DESPACHO=1` en `.env.local` y correr
+`scripts/pasada-chat.ts <conversacion>` después de enviar el mensaje.
+
 ---
 
 ## El estudio

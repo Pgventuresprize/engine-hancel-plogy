@@ -259,7 +259,7 @@ export function necesitanFoto(variantes: Variante[]): boolean[] {
  * llegar torcido: se aceptan las variantes plausibles y se recorta al maximo que
  * Instagram admite en vez de fallar por un slide de mas.
  */
-export function parseSlides(valor: unknown): Slide[] {
+export function parseSlides(valor: unknown, tope = MAX_SLIDES): Slide[] {
   const bruto = Array.isArray(valor) ? valor : []
   const slides: Slide[] = []
 
@@ -295,10 +295,11 @@ export function parseSlides(valor: unknown): Slide[] {
       items: items.length ? items : null,
       ...(tipoLamina ? { tipoLamina } : {}),
       ...(figura ? { figura } : {}),
+      ...(texto(obj.fuente) ? { fuente: texto(obj.fuente) } : {}),
     })
   }
 
-  return slides.slice(0, MAX_SLIDES)
+  return slides.slice(0, tope)
 }
 
 function texto(valor: unknown): string | null {

@@ -92,6 +92,7 @@ function guionComoTexto(g: Guion, slides: Slide[]): string {
       s.title ? `  título: ${s.title}` : "",
       s.body ? `  cuerpo: ${s.body}` : "",
       s.items?.length ? `  puntos:\n${s.items.map((t) => `    - ${t}`).join("\n")}` : "",
+      s.fuente ? `  fuente (solo si la plantilla tiene ese hueco): ${s.fuente}` : "",
       s.figura ? `  figura: ${s.figura.tipo} con ${s.figura.items.length} elementos (la pone el sistema)` : "",
     ]
       .filter(Boolean)
@@ -167,7 +168,9 @@ function fuenteDe(g: Guion, slides: Slide[], i: number): { propio: string; permi
   const s = slides[i]
   const propio =
     s.type === "photo_hook" ? (s.hook ?? "") : [s.lead, s.title, s.body, ...(s.items ?? [])].filter(Boolean).join(" ")
-  return { propio, permitido: i === 0 ? `${propio} ${g.antetitulo}` : propio }
+  // La fuente se puede poner, pero no obliga: pocas plantillas tienen donde.
+  const fuente = s.type === "text" ? (s.fuente ?? "") : ""
+  return { propio, permitido: [propio, fuente, i === 0 ? g.antetitulo : ""].filter(Boolean).join(" ") }
 }
 
 /**
@@ -181,7 +184,9 @@ export async function maquetar(
   g: Guion,
   slides: Slide[],
   modelo = MODELO_MAQUETA,
-  esfuerzo: "low" | "medium" | "high" = ESFUERZO_MAQUETA
+  esfuerzo: "low" | "medium" | "high" = ESFUERZO_MAQUETA,
+  /** Lo que se pidio para esta version: elige las plantillas, no cambia el texto. */
+  pedido?: string
 ): Promise<{ laminas: LaminaKit[]; descartadas: number[]; motivos?: string[]; error?: string }> {
   const automaticas = laminasDeGuionClasico(slides, g.antetitulo, g.cierre)
   const { texto: cat, porClave } = catalogo(kc.plantillas)
@@ -191,7 +196,7 @@ export async function maquetar(
     model: modelo,
     esfuerzo,
     system: SISTEMA_MAQUETA,
-    prompt: `CATÁLOGO DEL KIT (${kc.kit.nombre})${ritmo}\n\n${cat}\n\nEL CARRUSEL ESCRITO\n\n${guionComoTexto(g, slides)}`,
+    prompt: `CATÁLOGO DEL KIT (${kc.kit.nombre})${ritmo}\n\n${cat}\n\nEL CARRUSEL ESCRITO\n\n${guionComoTexto(g, slides)}${pedido ? `\n\nLO QUE SE PIDIÓ PARA ESTA VERSIÓN\n\n${pedido}\n\nElige las plantillas pensando en esto. El texto no cambia: todo lo escrito va entero, sin acortarlo.` : ""}`,
     // Con todo el catalogo delante piensa largo, y lo que piensa sale del mismo
     // presupuesto que la respuesta: con 4000 se quedaba sin texto.
     maxTokens: 12000,

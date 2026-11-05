@@ -30,6 +30,8 @@ export type SlideTexto = {
   tipoLamina?: string | null
   /** Con kit de diseño: la figura que construye la lamina (barras, tabla, niveles...). */
   figura?: Figura | null
+  /** De donde sale el dato. Va en el hueco de fuente de la plantilla, si tiene. */
+  fuente?: string | null
 }
 
 export type SlidePortada = {

@@ -13,7 +13,6 @@ import { paginasDeFuente } from "./kit-libre"
 import { cargarFotosLibre, claveKit, guionLibreDe, parseEstadoLibre, type EstadoLibre, type FotoGuardada } from "./kit-libre-pasos"
 import { cerrarNavegador, dibujarLaminas, type LaminaDibujada, type OpcionesDibujo, type Problema } from "./navegador"
 import { BancoDeFotos, descargarFotoPexels, pexelsConfigurado } from "./pexels"
-import { MAX_SLIDES } from "./render"
 import { subirCarrusel, subirImagenSuelta } from "./storage"
 import type { Slide } from "./templates"
 import type { Estilo } from "./theme"
@@ -212,7 +211,7 @@ export async function generarCarruselKit(
   }
   // Hasta el tope de Instagram, contando el cierre.
   const { slides, avisos: avisosFiguras } = figurasComprobadas(
-    guion.slides.slice(0, MAX_SLIDES - (guion.cierre ? 1 : 0)),
+    guion.slides.slice(0, guion.maxLaminas - (guion.cierre ? 1 : 0)),
     news,
     figurasDelKit(kc.kit.parciales)
   )
@@ -223,12 +222,12 @@ export async function generarCarruselKit(
   const mecanico = estilo.diseno === "mecanico"
   let maqueta: Awaited<ReturnType<typeof maquetar>> = mecanico
     ? { laminas: laminasDeGuionClasico(slides, guion.antetitulo, guion.cierre), descartadas: [] }
-    : await maquetar(accountId, kc, guion, slides)
+    : await maquetar(accountId, kc, guion, slides, undefined, undefined, estilo.pedidoVisual)
   // Una plantilla con huecos obligatorios que el reparto automatico no sabe
   // llenar (la palabra y la respuesta de un cierre de DM) deja la lamina sin
   // sitio: el maquetador se prueba otra vez antes de dibujar con el respaldo.
   if (!mecanico && repartirKit(kc.plantillas, maqueta.laminas, kc.kit.sistema.ritmo, fotosDelKit).some((r) => r === null)) {
-    const otra = await maquetar(accountId, kc, guion, slides)
+    const otra = await maquetar(accountId, kc, guion, slides, undefined, undefined, estilo.pedidoVisual)
     if (otra.descartadas.length < maqueta.descartadas.length) maqueta = otra
   }
   const laminas = maqueta.laminas
@@ -290,7 +289,7 @@ export async function generarCarruselKit(
   })
   // Las fotos que lleva un carrusel del kit de este largo (el kit lo cuenta en
   // uno tipico de 7): hasta ahi, una plantilla con foto opcional tambien la busca fuera.
-  const objetivo = Math.round((fotosDelKit * repartidas.length) / 7)
+  const objetivo = estilo.masFotos ? repartidas.length : Math.round((fotosDelKit * repartidas.length) / 7)
   for (const [i, r] of repartidas.entries()) {
     if (fotoDe[i] || r.plantilla.foto.usa === "no") continue
     const faltan = fotoDe.filter(Boolean).length < objetivo

@@ -325,7 +325,7 @@ export async function restaurarVersion(accountId: string, pieceId: string, n: nu
   if (jobId && v.guion) await supabase.from(tabla).update({ respuesta: v.guion }).eq("id", jobId)
   await supabase.from("content_pieces").update({ payload: v.payload }).eq("id", pieceId).eq("account_id", accountId)
 
-  if (f.network === "instagram") {
+  if (f.network === "instagram" && !v.payload.postPropio) {
     try {
       // Sin maqueta (una version de antes de guardarla) se vuelve a maquetar desde su guion.
       const sinMaqueta = !v.payload.maqueta && v.payload.modoDiseno !== "inteligencia"

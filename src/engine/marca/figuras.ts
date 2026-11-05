@@ -77,7 +77,7 @@ export const LIMITES_FIGURA: Record<TipoFigura, { min: number; max: number; text
   niveles: { min: 2, max: 5, texto: 26, nota: 60, titulo: 60 },
   flujo: { min: 2, max: 4, texto: 24, nota: 50, titulo: 60 },
   pastillas: { min: 2, max: 10, texto: 24, nota: 0, titulo: 60 },
-  tabla: { min: 2, max: 5, texto: 24, nota: 0, titulo: 60 },
+  tabla: { min: 2, max: 6, texto: 24, nota: 0, titulo: 60 },
   cifras: { min: 1, max: 3, texto: 40, nota: 70, titulo: 60 },
   checklist: { min: 2, max: 4, texto: 50, nota: 60, titulo: 60 },
   opciones: { min: 2, max: 4, texto: 30, nota: 50, titulo: 80 },

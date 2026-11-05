@@ -661,14 +661,36 @@ las piezas por tema en paralelo (2026-11-03).
 
 ## Calendario
 
-### Adjuntar un post ya hecho desde el chat
-- **Qué es:** subir de 1 a 10 fotos en el chat con su texto y decirle al agente
-  "cuádramelo para las 14:30". Dos herramientas nuevas: crear el post propio y
-  programar una pieza. No publica al instante ni enciende el interruptor.
-- **Decidido con Luciano (2026-11-04):** solo Instagram al principio, cuenta como
-  aprobado al subirlo y el texto va tal cual.
-- **Estado:** plan aprobado, sin construir. Mientras tanto, los posts 047 y 050 se
-  cargaron a mano como piezas con `payload.postPropio`.
+### Fuentes de los posts subidos que no caben
+- **Qué es:** al rehacer un post subido, pocas plantillas tienen hueco de fuente, así que
+  esa línea se pierde y solo se avisa. Faltaría una plantilla con pie o repetir la fuente
+  en una sola lámina.
+- **Cuándo:** si se rehacen seguido posts con fuentes.
+
+### Rehacer un post desde la conversación de su lote
+- **Qué es:** los posts de un lote no quedan ligados a esa conversación. Para cambiar uno
+  hay que abrirlo desde el Estudio con "Abrir en el chat".
+- **Cuándo:** si cuesta ir y volver con lotes grandes.
+
+### Ver en el chat qué pieza se está señalando
+- **Qué es:** abrir una pieza en el panel ya la señala para el agente, pero la conversación
+  no lo muestra, y da la impresión de que no cuenta.
+- **Cuándo:** con la siguiente tanda de ajustes del chat.
+
+### Crear una figura en un carrusel sin maqueta
+- **Qué es:** por guion, `"figura"` solo edita una que ya exista. Crearla funciona con
+  maqueta, que es como queda todo carrusel después de rehacerlo.
+- **Cuándo:** si aparece un carrusel de diseño libre que la necesite.
+
+### Subir a LinkedIn desde una carpeta
+- **Qué es:** el texto de LinkedIn ya viene en muchas carpetas, pero subir posts
+  ahora es solo para Instagram.
+- **Cuándo:** al conectar LinkedIn.
+
+### Espaciar los posts de un lote por tema
+- **Qué es:** hoy el reparto llena huecos en orden, con lo que caduca primero. Podría
+  alternar noticias y contenido para que no salgan dos parecidos seguidos.
+- **Cuándo:** si un lote grande sale mal repartido.
 
 ### Foto propia en LinkedIn
 - **Qué es:** hoy LinkedIn dibuja su tarjeta en vez de usar la imagen de la pieza.

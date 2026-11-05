@@ -26,6 +26,8 @@ import {
 import { ejecutorDe, fuentesDe, HERRAMIENTAS_CHAT, HERRAMIENTAS_POSTS, MAX_PIEZAS_POR_PEDIDO, nuevoTurno } from "./herramientas"
 import { postsParaElAgente } from "./posts-propios"
 import { escribirMensaje, type AgenteChat, type Mensaje, type Referencia } from "./mensajes"
+import { cargarLaminas, leerPostsPendientes } from "./leer-post"
+import { MAX_LAMINAS } from "./posts-carpeta"
 import { anuncioDePieza, despachar, empezarCambios } from "./trabajos"
 
 /**
@@ -176,6 +178,7 @@ async function textoDePieza(p: Pieza): Promise<string> {
       .filter(Boolean)
       .join("\n\n")
   }
+  if (p.network === "instagram" && p.payload.postPropio && !p.job_instagram_id) return "(Se subió como imágenes y sus láminas aún no se han leído.)"
   if (p.network === "instagram" && p.job_instagram_id) {
     const { data } = await supabaseAdmin().from("jobs_instagram").select("respuesta").eq("id", p.job_instagram_id).maybeSingle()
     const respuesta = (data as { respuesta?: unknown } | null)?.respuesta
@@ -207,7 +210,7 @@ function textoDeRevision(r: Revision | null): string {
 }
 
 /** Las piezas de la conversacion, con su texto y su revision, para el contexto. */
-async function piezasDeConversacion(accountId: string, conversacionId: string): Promise<{ id: string; red: string; titulo: string; texto: string }[]> {
+async function piezasDeConversacion(accountId: string, conversacionId: string): Promise<{ id: string; red: string; titulo: string; texto: string; subida: string[] }[]> {
   const supabase = supabaseAdmin()
   const { data: enlaces } = await supabase.from("conversacion_piezas").select("piece_id").eq("conversacion_id", conversacionId)
   const ids = ((enlaces ?? []) as { piece_id: string }[]).map((e) => e.piece_id)
@@ -234,6 +237,8 @@ async function piezasDeConversacion(accountId: string, conversacionId: string): 
       id: p.id,
       red: p.network,
       titulo: titulos.get(p.content_angle_id) ?? "sin título",
+      // Un post subido no se puede entender solo por su texto: su diseño esta en la imagen.
+      subida: p.payload.postPropio && Array.isArray(p.payload.images) ? (p.payload.images as string[]) : [],
       texto: [
         `## ${p.network === "instagram" ? "Carrusel de Instagram" : "Post de LinkedIn"} (${p.status === "approved" ? "aprobado" : p.status === "published" ? "publicado" : "borrador"})`,
         angulos.get(p.content_angle_id) ?? "",
@@ -283,7 +288,8 @@ const OFICIO_COORDINADOR = `Eres el coordinador del equipo de agentes de conteni
 const CONTRATO_POSTS = `
 
 Sobre los POSTS ADJUNTOS:
-- Son posts que la persona ya hizo: salen tal cual, sin rediseñarlos ni reescribirlos.
+- Son posts que la persona ya hizo: salen tal cual, sin rediseñarlos ni reescribirlos. Si te piden cambiar uno, di que lo abra desde el Estudio con "Abrir en el chat": desde ahí se puede rehacer sin perder su contenido.
+- A1, A2... son etiquetas tuyas, la persona no las ve: háblale de cada post por su título.
 - Para organizarlos usa proponer_programacion. Da día y hora solo a los posts para los que la persona los pidió; a los demás déjalos vacíos y el sistema los reparte en sus horarios. No calcules fechas ni inventes horas.
 - Si un post habla de una fecha o un evento, pon en vence hasta cuándo sirve. Si ya pasó, déjalo fuera con el motivo. Sirve hasta antes de que empiece: una clase del jueves a las 19:30 vence ese jueves a las 19:30.
 - Si dice SIN CAPTION, escríbelo tú con la voz de la marca a partir de sus láminas. Quedará marcado para que la persona lo lea. Si trae caption, no lo cambies salvo que te lo pidan.
@@ -318,7 +324,7 @@ Hablas con ${persona}, del equipo de la marca, en una conversación donde tambi�
 - Cuando hables de una pieza, di dónde (lámina, párrafo) y el texto exacto.
 ${cambiar}
 ${agente === "revisor" ? "- Tú no creas piezas: si te piden una, sugiere pedírsela a @Coordinador.\n" : ""}${editables.length > 1 ? `- Tienes varias piezas, con una etiqueta (P1, P2...) que es solo para el bloque de cambios: la persona no la conoce, así que háblale de cada pieza por su título. P1 es la que marcó o tiene abierta. Si habla de "los carruseles", "los posts" o "todos", cambia todas las que digan eso. Si habla de una sola y no está claro cuál, y no la marcó ni la tiene abierta, pregunta cuál antes de cambiar nada.\n` : ""}- Si te hablan de algo que de verdad es de otro agente, dilo y sugiere escribirle con @Instagram, @LinkedIn, @Revisor o @Coordinador.
-- No inventes datos de la noticia ni de la marca: si algo no está en lo que tienes delante, dilo.${investigar}${editables.length ? `
+${agente === "revisor" ? "" : `- crear_piezas hace contenido nuevo desde cero: investiga y escribe otro texto. Nunca la uses para rehacer, mejorar o rediseñar una pieza que ya existe, aunque te pidan conservar lo que dice. Eso se hace en la pieza, sin crear otra. Si no puedes leerla, dilo y no lances nada.\n`}- No inventes datos de la noticia ni de la marca: si algo no está en lo que tienes delante, dilo.${investigar}${editables.length ? `
 
 ${contratoDeCambios(editables.map((e) => e.modo), editables.length > 1)}` : ""}`
 }
@@ -449,9 +455,17 @@ export async function responder(o: {
   const ultimo = [...mensajes].reverse().find((m) => m.rol === "usuario")
   if (!ultimo) throw new Error("No hay mensaje al que responder.")
 
-  const piezas = await piezasDeConversacion(o.accountId, o.conversacionId)
+  let piezas = await piezasDeConversacion(o.accountId, o.conversacionId)
   const agente = await quienResponde(o.accountId, mensajes, piezas, o.piezaAbierta ?? null)
   o.alAgente(agente)
+
+  // Un post subido son imagenes: sin leerlas, el agente hablaria de algo que no ve.
+  const lectura = await leerPostsPendientes(
+    o.accountId,
+    piezas.filter((p) => p.subida.length).map((p) => p.id),
+    (titulo) => o.alHerramienta?.(`Leyendo las láminas de "${titulo}"`)
+  )
+  if (lectura.leidos) piezas = await piezasDeConversacion(o.accountId, o.conversacionId)
 
   const anteriores = mensajes.filter((m) => m.id !== ultimo.id)
   const charla = await transcripcion(o.accountId, o.conversacionId, anteriores, o.persona)
@@ -487,6 +501,9 @@ export async function responder(o: {
   // Lo que el agente tiene delante.
   const contexto: string[] = []
   const otras = propias.filter((p) => !objetivos.some((x) => x.pieza.id === p.id))
+  if (lectura.fallos.length) {
+    contexto.push(`# LÁMINAS QUE NO SE PUDIERON LEER\n\n${lectura.fallos.map((f) => `- ${f.titulo}: ${f.motivo}`).join("\n")}\n\nEs un fallo del sistema, no algo que la persona pueda arreglar: dilo en una frase, sin suponer lo que dicen, sin lanzar nada en su lugar y sin pedirle que pegue el texto o lo suba otra vez.`)
+  }
   if (objetivos.length) {
     const fichas = objetivos.map((x) => `${objetivos.length > 1 ? `## ${x.etiqueta}: "${x.pieza.titulo}"\n\n` : ""}${x.pieza.texto.split("\n\n").slice(0, 2).join("\n\n")}\n\n${textoEditable(x.editable)}`)
     contexto.push(`# ${objetivos.length > 1 ? "TUS PIEZAS, TAL COMO LAS PUEDES CAMBIAR" : "TU PIEZA, TAL COMO LA PUEDES CAMBIAR"}\n\n${fichas.join("\n\n")}`)
@@ -521,6 +538,7 @@ export async function responder(o: {
     .filter(Boolean)
     .join("\n\n")
 
+  const laminasAMirar = objetivos.flatMap((x) => x.pieza.subida).slice(0, MAX_LAMINAS)
   const llamada = {
     paso: `chat-${agente}`,
     accountId: o.accountId,
@@ -528,6 +546,8 @@ export async function responder(o: {
     system: { fijo, resto: `${contratoDeChat(agente, o.persona, editables, await fechaDeHoy(o.accountId))}${postsSubidos ? CONTRATO_POSTS : ""}` },
     prompt,
     imagenes: postsSubidos?.imagenes,
+    // Se mira lo que se va a cambiar: "esta muy plano" no se juzga con el texto.
+    bloques: laminasAMirar.length ? await cargarLaminas(laminasAMirar).catch(() => undefined) : undefined,
     // Con la pieza delante, el bloque de cambios puede traer laminas enteras; y
     // lo investigado se cuenta en mas que unas frases.
     maxTokens: editables.length > 1 || postsSubidos ? 8000 : agente !== "revisor" ? 4000 : 1500,

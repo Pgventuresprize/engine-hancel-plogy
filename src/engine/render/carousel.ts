@@ -5,6 +5,8 @@ import type { FotoDeBiblioteca } from "../marca/imagenes-modelo"
 import { supabaseAdmin } from "../supabase-admin"
 import { terminosDeBusqueda } from "./keywords"
 import type { KitDelCarrusel, MaquetaGuardada, ProblemaDibujo } from "./kit-carrusel"
+import { ORIGEN_SUBIDO } from "../chat/lectura-laminas"
+import { MAX_LAMINAS } from "../chat/posts-carpeta"
 import { BancoDeFotos, descargarFotoPexels, pexelsConfigurado } from "./pexels"
 import {
   descargarFoto,
@@ -255,10 +257,15 @@ export function parseInstagramResponse(respuesta: unknown): {
   antetitulo: string
   /** El diseño libre de la pieza, si la marca lo usa (render/kit-libre-pasos.ts), tal cual se guardo. */
   disenoLibre: unknown
+  /** Cuantas laminas caben, contando el cierre. */
+  maxLaminas: number
 } {
   const raiz = (respuesta ?? {}) as Record<string, unknown>
+  // El tope de siempre es para lo que escribe el agente. Un post subido ya tiene las
+  // suyas, y recortarlo le quitaria contenido a alguien que no lo pidio.
+  const maxLaminas = raiz.origen === ORIGEN_SUBIDO ? MAX_LAMINAS : MAX_SLIDES
 
-  const slides = parseSlides(raiz.slides).map((slide) =>
+  const slides = parseSlides(raiz.slides, maxLaminas).map((slide) =>
     slide.type === "photo_hook"
       ? { ...slide, hook: slide.hook ? arreglarOrtografia(slide.hook) : slide.hook }
       : {
@@ -313,6 +320,7 @@ export function parseInstagramResponse(respuesta: unknown): {
     plan: planDelGuion(raiz.slides),
     antetitulo,
     disenoLibre: raiz.diseno_libre ?? null,
+    maxLaminas,
   }
 }
 
@@ -443,7 +451,7 @@ async function generarCarruselSatori(
   // de las laminas del guion para que no se pierda entre ellas. Si el guion ya
   // llega al tope de Instagram se recorta una lamina para hacerle sitio, en vez
   // de pasarse.
-  if (cierre && slides.length >= MAX_SLIDES) slides.length = MAX_SLIDES - 1
+  if (cierre && slides.length >= guion.maxLaminas) slides.length = guion.maxLaminas - 1
 
   // Hay laminas con foto si hay de donde sacarla: la biblioteca de la marca o Pexels.
   const conBiblioteca = Boolean(estilo.usarFotos && news?.account_id && (await hayFotosEnBiblioteca(news.account_id)))
@@ -722,7 +730,7 @@ async function generarCarruselPlogy(
 ): Promise<CarouselPayload> {
   const { renderPlogy, fotoEnByN, repartirPlogy } = await import("./plogy")
   const { caption, hashtags, fotos, elemento } = guion
-  const slides = guion.slides.slice(0, MAX_SLIDES - 1)
+  const slides = guion.slides.slice(0, guion.maxLaminas - 1)
 
   const terminos = fotos.length > 0 ? fotos : terminosDeBusqueda(news, nichos, estilo.fotosLiterales)
   const banco = new BancoDeFotos(terminos)

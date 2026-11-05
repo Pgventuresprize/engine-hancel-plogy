@@ -6,6 +6,8 @@
  */
 import assert from "node:assert/strict"
 
+import { guionDeLectura } from "../src/engine/chat/lectura-laminas"
+import { parseInstagramResponse } from "../src/engine/render/carousel"
 import { agruparEnPosts, captionDeTextos, extraerCaption, huellaDeCaption, proporcionValida, tituloDeCarpeta } from "../src/engine/chat/posts-carpeta"
 import { decidirProgramada, ESPERA_EDICION_MS, MAX_INTENTOS, sinFreno, VENTANA_MS, type PiezaProgramada } from "../src/engine/calendario/decidir"
 import { armarPlan, claveHueco, fechaCorta, fechaLarga, horaLibre, horariosVacios, huecosDelDia, lunesDe, parseHorarios, redondearHora, repartir, sumarDias, sumarMeses, yaPaso, type Horarios } from "../src/engine/calendario/reparto"
@@ -193,7 +195,54 @@ assert.deepEqual(extraerCaption("Texto suelto del post.\n#Tag"), { caption: "Tex
 assert.equal(extraerCaption("# Brief\n\nFecha: lunes.\n\n## Fotos\n\nDe banco."), null, "sin seccion de caption no se adivina")
 assert.equal(extraerCaption("x".repeat(3000)), null, "un texto largo sin secciones no es un caption")
 assert.equal(captionDeTextos([{ nombre: "brief.md", contenido: "# Brief\n\nNada." }, { nombre: "textos.md", contenido: md }])?.hashtags.length, 2)
+assert.equal(captionDeTextos([{ nombre: "Post LinkedIn.txt", contenido: "Texto de LinkedIn." }, { nombre: "Mensaje DM.txt", contenido: "Hola." }]), null, "el texto de otra red no es el caption")
+assert.equal(captionDeTextos([{ nombre: "Mensaje DM.txt", contenido: "Hola." }, { nombre: "Caption Instagram.txt", contenido: "El bueno.\n#Tag" }])?.caption, "El bueno.")
 assert.equal(huellaDeCaption("Hola   MUNDO\n"), "hola mundo")
+{
+  const base = { caption: "El texto", hashtags: ["#ia"], permitidas: ["tabla"] as const }
+  const leidas = [
+    { rol: "portada", antetitulo: "CONTENIDO CON IA", titulo: "Qué herramienta usar", cuerpo: "Lo nuevo de las semanas." },
+    ...Array.from({ length: 6 }, (_, i) => ({ rol: "contenido", titulo: `Título ${i + 2}`, cuerpo: `Cuerpo ${i + 2}` })),
+    { rol: "cierre", titulo: "Guárdalo", cuerpo: "Sígueme para más." },
+  ]
+  const g = guionDeLectura({ laminas: leidas, fotos: ["ai tools desk"] }, base)
+  assert.ok(!("error" in g))
+  const p = parseInstagramResponse(g.respuesta)
+  assert.equal(p.slides.length, 7, "las 7 interiores se conservan")
+  assert.equal(p.cierre?.titulo, "Guárdalo", "y el cierre va aparte: 8 láminas, no 7")
+  assert.equal(p.maxLaminas, 10)
+  assert.equal(p.caption, "El texto", "el caption es el de la pieza, no el leído")
+  assert.equal(p.antetitulo, "CONTENIDO CON IA")
+  const portada = p.slides[0]
+  assert.ok(portada.type === "text" && portada.body === "Lo nuevo de las semanas.", "la portada conserva su subtítulo")
+
+  const conLista = guionDeLectura({ laminas: [{ titulo: "Portada", items: ["Imagen", "Video"] }, { titulo: "Dos" }] }, base)
+  assert.ok(!("error" in conLista))
+  assert.equal(parseInstagramResponse(conLista.respuesta).slides.length, 3, "la lista de la portada pasa a su propia lámina")
+  assert.equal(conLista.avisos.length, 1, "y lo avisa")
+
+  const larga = guionDeLectura({ laminas: [{ titulo: "Portada" }, { titulo: "Lista", items: ["a", "b", "c", "d", "e", "f", "g"] }] }, base)
+  assert.ok(!("error" in larga))
+  const lista = parseInstagramResponse(larga.respuesta).slides[1]
+  assert.ok(lista.type === "text" && lista.items?.length === 5 && lista.body === "f\ng", "lo que no cabe en la lista baja al cuerpo")
+
+  const sinKit = guionDeLectura({ laminas: [{ titulo: "Portada" }, { titulo: "Tabla", figura: { tipo: "tabla", items: [{ celdas: ["Kling", "Video"] }, { celdas: ["CapCut", "Edición"] }] } }] }, { ...base, permitidas: [] })
+  assert.ok(!("error" in sinKit))
+  const tabla = parseInstagramResponse(sinKit.respuesta).slides[1]
+  assert.ok(tabla.type === "text" && !tabla.figura && tabla.items?.[0].includes("Kling"), "sin figura en el kit, la tabla queda como lista")
+
+  const uno = guionDeLectura({ laminas: [{ titulo: "Portada" }, { titulo: "Canva", items: ["Le pides el cambio."], fuente: "Fuente: Canva." }] }, base)
+  assert.ok(!("error" in uno))
+  const solo = parseInstagramResponse(uno.respuesta).slides[1]
+  assert.ok(solo.type === "text" && !solo.items && solo.body === "Le pides el cambio." && solo.fuente === "Fuente: Canva.", "un solo punto va al cuerpo y la fuente aparte")
+
+  const dudosa = guionDeLectura({ laminas: [{ titulo: "Uno", dudas: ["cifra borrosa"] }, { titulo: "Dos" }] }, base)
+  assert.ok(!("error" in dudosa) && dudosa.avisos.some((a) => a.includes("cifra borrosa")), "lo que no se leyó bien se avisa")
+  assert.ok("error" in guionDeLectura({ laminas: [{ titulo: "Sola" }] }, base), "una lámina sola no es un carrusel")
+
+  const normal = parseInstagramResponse({ slides: Array.from({ length: 9 }, (_, i) => ({ type: "text", title: `T${i}` })) })
+  assert.equal(normal.slides.length, 7, "lo que escribe el agente sigue con su tope")
+}
 assert.equal(proporcionValida(1080, 1350), true)
 assert.equal(proporcionValida(1080, 1920), false, "9:16 no entra en un carrusel")
 

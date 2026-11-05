@@ -1,5 +1,5 @@
 import { guardarVersion, versionesDe } from "../content/versiones"
-import { cifrasInventadas, parseFigura, type Figura, type ItemFigura } from "../marca/figuras"
+import { cifrasInventadas, figurasDelKit, parseFigura, type Figura, type ItemFigura, type TipoFigura } from "../marca/figuras"
 import { elegirDeBiblioteca, hayFotosEnBiblioteca, registrarUsos } from "../marca/imagenes"
 import { FORMATOS, kitActivo, type KitCargado } from "../marca/kit"
 import type { Hueco, Plantilla } from "../marca/kit-modelo"
@@ -81,6 +81,9 @@ export type Editable =
 
 /** Lo que cambia de una figura: el encabezado y, en orden, cada elemento. */
 export type CambioFigura = {
+  /** Solo para poner una figura en una lamina que no tiene. */
+  tipo?: TipoFigura
+  columnas?: string[]
   titulo?: string
   items?: Partial<Pick<ItemFigura, "texto" | "nota" | "cifra" | "valor" | "celdas">>[]
 }
@@ -113,6 +116,8 @@ export type Cambios = {
   hashtags?: string[]
   /** LinkedIn: el texto nuevo de cada parrafo, por numero ("" lo quita). */
   parrafos?: Record<string, string>
+  /** Vuelve a maquetar el carrusel sin tocar su texto: otro diseño, el mismo contenido. */
+  rehacer?: { pedido?: string; mas_fotos?: boolean }
 }
 
 export type Aplicado = { version: number | null; tocadas: number[]; avisos: string[]; motivo: string }
@@ -121,10 +126,11 @@ export type Aplicado = { version: number | null; tocadas: number[]; avisos: stri
 export type Disenos = Record<string, { variante?: VarianteLamina; foto?: FotoGuardada["origen"]; motivo?: string }>
 
 /** Si el cambio pide rediseñar alguna lamina: esos tardan y van como trabajo. */
-export const pideDiseno = (c: Cambios): boolean => Boolean(c.laminas?.some((l) => typeof l.diseno === "string" && l.diseno.trim()))
+export const pideDiseno = (c: Cambios): boolean => Boolean(c.rehacer) || Boolean(c.laminas?.some((l) => typeof l.diseno === "string" && l.diseno.trim()))
 
 type Fila = {
   id: string
+  status: string
   network: string
   payload: Record<string, unknown>
   published_at: string | null
@@ -141,7 +147,7 @@ const admiteFoto = (p: Plantilla, v?: VarianteLamina | null) => (v ? v.conFoto :
 async function filaDe(accountId: string, pieceId: string): Promise<Fila> {
   const { data } = await supabaseAdmin()
     .from("content_pieces")
-    .select("id, network, payload, published_at, content_angle_id, job_instagram_id, job_linkedin_id")
+    .select("id, status, network, payload, published_at, content_angle_id, job_instagram_id, job_linkedin_id")
     .eq("id", pieceId)
     .eq("account_id", accountId)
     .maybeSingle()
@@ -177,6 +183,8 @@ export async function modoDeEdicion(accountId: string, pieceId: string): Promise
 
 /** Por que un carrusel sin maqueta usable se cambia por guion, en palabras de la persona. */
 function porqueGuion(payload: Record<string, unknown>, kc: KitCargado | null): string {
+  if (payload.postPropio)
+    return "Es un post que se subió como imágenes: su texto se leyó de las láminas. Al cambiarlo se vuelve a maquetar con el kit y las imágenes originales quedan en el historial de versiones."
   if (payload.modoDiseno === "inteligencia")
     return "Es de diseño con inteligencia: al cambiar el texto se vuelve a maquetar con las plantillas del kit."
   if (!payload.maqueta) return "Es de antes de que Plogy Studio guardara cómo se maquetó: al cambiar el texto se vuelve a maquetar y puede cambiar alguna plantilla o foto."
@@ -229,12 +237,13 @@ export async function editableDe(accountId: string, pieceId: string): Promise<Ed
   const respuesta = await respuestaDe("jobs_instagram", f.job_instagram_id)
   const guion = parseInstagramResponse(respuesta)
   const cierre = ((respuesta ?? {}) as { cierre?: { title?: string; body?: string } | null }).cierre ?? null
+  const lectura = ((respuesta ?? {}) as { lectura?: { avisos?: unknown } }).lectura
   return {
     modo: "guion",
     pieceId,
     caption,
     hashtags,
-    porque: porqueGuion(f.payload, kc),
+    porque: [porqueGuion(f.payload, kc), ...textos(lectura?.avisos)].join(" "),
     cierre: cierre && (cierre.title || cierre.body) ? { title: cierre.title, body: cierre.body } : null,
     laminas: guion.slides.map((s, i) =>
       s.type === "photo_hook"
@@ -349,9 +358,12 @@ const REGLAS_CAMBIOS: Record<ModoEdicion, string[]> = {
     `- Si te piden fotos o imágenes en general, decide tú en qué láminas: primero las que se prestan, nunca encima de una figura.`,
     `- Donde el texto admite *resaltado*, se marca con asteriscos, como ya viene.`,
     REGLA_FIGURA,
+    `- Para poner una figura en una lámina que no tiene, manda "figura" con su forma completa, junto con "plantilla": la clave de una plantilla con hueco de figura. Tabla: {"tipo": "tabla", "columnas": ["…", "…"], "items": [{"celdas": ["…", "…"]}]}, hasta 6 filas y 36 caracteres por celda. Pastillas: {"tipo": "pastillas", "items": [{"texto": "…"}]}, hasta 10. Si quedan datos fuera de la figura, déjalos en "textos".`,
+    `- "diseno" solo cambia cómo se ve lo que ya hay: nunca agrega una figura, una tabla ni texto. Si la persona pide una tabla o un gráfico, usa "figura". Si un aviso dice que no se pudo, cuéntale ese motivo y no prometas volver a intentarlo igual.`,
   ],
   guion: [
     `- En cada lámina, solo los campos que cambian (hook en la portada; lead, title, body o items en las demás), con su texto nuevo completo. El cierre va aparte, en "cierre".`,
+    `- "rehacer": {"pedido": "<lo que se pidió, con sus palabras>", "mas_fotos": true} vuelve a maquetar el carrusel con las plantillas del kit sin cambiar su texto: mismas láminas, mismo contenido, otro diseño. Úsalo cuando pidan más fotos, más gráficos, más visual u otro diseño. Pon "mas_fotos" en true solo si pidieron fotos. No tiene "laminas" salvo que también pidan cambiar un texto. Tarda: di en una frase lo que vas a hacer, en futuro, y no digas que ya quedó.`,
     REGLA_FIGURA,
     `- Al aplicarlo, el carrusel se vuelve a maquetar: avísalo en una frase si puede cambiar el aspecto.`,
   ],
@@ -409,6 +421,9 @@ export function textoDeSelecciones(selecciones: Seleccion[]): string {
     })
     .join("\n")
 }
+
+/** Lo que se tolera perder al pasar a una plantilla: lo que suelta quien parte una frase. */
+const TEXTO_PERDIDO = 0.1
 
 const limpio = (t: unknown) => (typeof t === "string" ? t.trim() : null)
 const lista = (v: unknown) => (Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean) : null)
@@ -510,6 +525,21 @@ function figuraCambiada(vieja: Figura, c: CambioFigura, fuente: string): { figur
   const titulo = typeof c.titulo === "string" ? c.titulo.trim() || undefined : vieja.titulo
   const figura = parseFigura({ ...vieja, titulo, items })
   if (!figura || !figura.items.length) return { aviso: "quedaba sin elementos" }
+  const inventadas = figura.hipotetico ? [] : cifrasInventadas(figura, fuente)
+  if (inventadas.length) return { aviso: `traía cifras que no están en la noticia ni en el carrusel (${inventadas.join(", ")})` }
+  return { figura }
+}
+
+/**
+ * Una figura para una lamina que no tenia. Tiene que entrar entera: una tabla a la
+ * que se le cae una fila dice otra cosa, y ahi es mejor no ponerla y decirlo.
+ */
+function figuraNueva(c: CambioFigura, p: Plantilla, kc: KitCargado, fuente: string): { figura: Figura } | { aviso: string } {
+  if (!p.huecos.some((h) => h.tipo === "figura")) return { aviso: `la plantilla "${p.nombre}" no tiene dónde dibujarla: va junto con "plantilla", en una que tenga hueco de figura` }
+  const delKit = figurasDelKit(kc.kit.parciales)
+  const figura = parseFigura(c, delKit)
+  if (!figura) return { aviso: `no es una figura válida; el kit dibuja ${delKit.join(", ")}` }
+  if (Array.isArray(c.items) && figura.items.length < c.items.length) return { aviso: `traía ${c.items.length} elementos y en una ${figura.tipo} caben ${figura.items.length}` }
   const inventadas = figura.hipotetico ? [] : cifrasInventadas(figura, fuente)
   if (inventadas.length) return { aviso: `traía cifras que no están en la noticia ni en el carrusel (${inventadas.join(", ")})` }
   return { figura }
@@ -644,12 +674,20 @@ async function aplicarHuecos(
       if (perdido.cifras.length) avisos.push(`Al cambiar la plantilla, la lámina ${n} perdió estas cifras: ${perdido.cifras.join(", ")}.`)
     }
     if (c.figura && typeof c.figura === "object") {
-      if (!l.figura) avisos.push(`La lámina ${n} no tiene figura: la dejé fuera.`)
-      else {
-        fuente ??= await fuenteDeCifras(
-          f.content_angle_id,
-          laminas.flatMap((x) => [...Object.values(x.textos), ...Object.values(x.listas).flat()]).join(" ")
-        )
+      fuente ??= await fuenteDeCifras(
+        f.content_angle_id,
+        laminas.flatMap((x) => [...Object.values(x.textos), ...Object.values(x.listas).flat()]).join(" ")
+      )
+      if (!l.figura) {
+        const r = figuraNueva(c.figura, p, kc, fuente)
+        if ("aviso" in r) {
+          deshacer(`La figura de la lámina ${n} no se pudo poner: ${r.aviso}.`)
+          continue
+        }
+        l.figura = r.figura
+        delete l.variante
+        tocadas.add(n)
+      } else {
         const r = figuraCambiada(l.figura, c.figura, fuente)
         if ("aviso" in r) avisos.push(`La figura de la lámina ${n} ${r.aviso}: la dejé como estaba.`)
         else {
@@ -846,6 +884,37 @@ function indicesDeLaminas(bruto: unknown[]): number[] {
   })
 }
 
+/**
+ * Lo que no llego a dibujarse. Mira los huecos de la plantilla, no lo guardado: el
+ * reparto guarda textos en huecos que la plantilla no tiene y esos no se ven.
+ */
+export function textoPerdido(respuesta: Record<string, unknown>, payload: CarouselPayload, kc: KitCargado | null): string[] {
+  const maqueta = (payload as unknown as { maqueta?: MaquetaGuardada }).maqueta
+  if (!maqueta || !kc) return []
+  const { slides } = parseInstagramResponse(respuesta)
+  const dibujado = (l: MaquetaGuardada["laminas"][number]) => {
+    const huecos = new Set(kc.plantillas.find((p) => p.id === l.plantilla)?.huecos.map((h) => h.nombre) ?? [])
+    const de = <T,>(o: Record<string, T>) => Object.fromEntries(Object.entries(o).filter(([k]) => huecos.has(k)))
+    return [textoDeLamina({ textos: de(l.textos), listas: de(l.listas) }), ...(l.figura?.items.flatMap((x) => [x.texto, x.nota ?? "", x.cifra ?? "", ...(x.celdas ?? [])]) ?? [])].join(" ")
+  }
+  const faltaTexto: number[] = []
+  const faltaFuente: number[] = []
+  slides.forEach((s, i) => {
+    const l = maqueta.laminas[i]
+    if (!l) return
+    const visto = dibujado(l)
+    const propio = s.type === "photo_hook" ? (s.hook ?? "") : [s.lead, s.title, s.body, ...(s.items ?? [])].filter(Boolean).join(" ")
+    const q = quitado(propio, visto)
+    if (q.cifras.length || q.parteDePalabras > TEXTO_PERDIDO) faltaTexto.push(i + 1)
+    if (s.type === "text" && s.fuente && quitado(s.fuente, visto).parteDePalabras > 0.5) faltaFuente.push(i + 1)
+  })
+  const enLas = (n: number[]) => (n.length === 1 ? `la lámina ${n[0]}` : `las láminas ${n.join(", ")}`)
+  return [
+    ...(faltaTexto.length ? [`En ${enLas(faltaTexto)} el texto no entró entero en la plantilla: compáralas con la versión anterior.`] : []),
+    ...(faltaFuente.length ? [`La fuente de ${enLas(faltaFuente)} no tiene sitio en su plantilla y no salió.`] : []),
+  ]
+}
+
 async function aplicarGuion(accountId: string, f: Fila, cambios: Cambios): Promise<Omit<Aplicado, "version" | "motivo">> {
   const supabase = supabaseAdmin()
   if (!f.job_instagram_id) throw new Error("Esta pieza no conserva el guion del que salió.")
@@ -918,6 +987,8 @@ async function aplicarGuion(accountId: string, f: Fila, cambios: Cambios): Promi
     respuesta.caption = p.caption
     respuesta.hashtags = p.hashtags
   }
+  const rehacer = cambios.rehacer
+  if (rehacer) for (let n = 1; n <= indices.length + (cierre ? 1 : 0); n++) tocadas.add(n)
   if (!tocadas.size && !p.cambio) throw new Error(avisos[0] ?? "El cambio no tocaba nada del carrusel.")
   // El diseño libre tiene el texto viejo dibujado dentro: con texto nuevo ya no sirve.
   if (tocadas.size) delete respuesta.diseno_libre
@@ -929,9 +1000,22 @@ async function aplicarGuion(accountId: string, f: Fila, cambios: Cambios): Promi
   }
 
   try {
-    const payload = await rehacerDesdeGuion(accountId, f, respuesta, { caption: p.caption, hashtags: p.hashtags })
+    const payload = await rehacerDesdeGuion(accountId, f, respuesta, { caption: p.caption, hashtags: p.hashtags }, rehacer)
     const n = [...tocadas].sort((a, b) => a - b)
-    return { tocadas: n, avisos: [...avisos, ...apretadas(payload, n)] }
+    return {
+      tocadas: n,
+      avisos: [
+        ...avisos,
+        ...apretadas(payload, n),
+        ...(rehacer
+          ? [
+              ...textoPerdido(respuesta, payload, await kitActivo(accountId)),
+              ...(payload.avisosKit ?? []),
+              ...(f.status === "approved" ? ["Como cambió el diseño, hay que aprobarla otra vez antes de que salga."] : []),
+            ]
+          : []),
+      ],
+    }
   } catch (e) {
     await supabase.from("jobs_instagram").update({ respuesta: antes }).eq("id", f.job_instagram_id)
     throw new Error(`No se pudo volver a armar el carrusel: ${e instanceof Error ? e.message : String(e)}`)
@@ -947,7 +1031,9 @@ export async function rehacerDesdeGuion(
   accountId: string,
   f: Pick<Fila, "id" | "payload" | "job_instagram_id" | "content_angle_id">,
   respuesta: Record<string, unknown>,
-  pie: { caption?: string; hashtags?: string[] }
+  pie: { caption?: string; hashtags?: string[] },
+  /** Lo que se pidio para esta version, si se esta rehaciendo por el diseño. */
+  visual?: Cambios["rehacer"]
 ): Promise<CarouselPayload> {
   const supabase = supabaseAdmin()
   if (!f.job_instagram_id) throw new Error("Esta pieza no conserva el guion del que salió.")
@@ -968,11 +1054,18 @@ export async function rehacerDesdeGuion(
     respuesta,
     await noticiaDelAngulo(f.content_angle_id),
     // Se queda en el modo en que estaba, salvo el diseño libre: su diseño ya no sirve.
-    { ...estilo, diseno: f.payload.modoDiseno === "mecanico" ? "mecanico" : "plantillas" },
+    {
+      ...estilo,
+      diseno: f.payload.modoDiseno === "mecanico" ? "mecanico" : "plantillas",
+      pedidoVisual: pedidoDeDiseno(visual),
+      masFotos: visual?.mas_fotos === true,
+    },
     await nichosConocidos(accountId),
     Boolean(hermana)
   )
-  const payload = { ...carrusel, caption: pie.caption ?? carrusel.caption, hashtags: pie.hashtags ?? carrusel.hashtags }
+  // Las notas de un post subido siguen sirviendo para decidir cuando sale.
+  const notas = typeof f.payload.notasPost === "string" ? { notasPost: f.payload.notasPost } : {}
+  const payload = { ...carrusel, ...notas, caption: pie.caption ?? carrusel.caption, hashtags: pie.hashtags ?? carrusel.hashtags }
   const { error } = await supabase.from("content_pieces").update({ payload, publish_error: null }).eq("id", f.id)
   if (error) throw new Error(error.message)
   await registrarUsos(accountId, f.id, "instagram", carrusel.fotosBiblioteca)
@@ -982,6 +1075,14 @@ export async function rehacerDesdeGuion(
     await supabase.from("content_pieces").update({ payload: { ...h.payload, image: portadaFb } }).eq("id", h.id)
   }
   return payload
+}
+
+/** Lo que se pidio, como lo lee el maquetador. */
+export function pedidoDeDiseno(visual: Cambios["rehacer"]): string | undefined {
+  if (!visual) return undefined
+  const pedido = limpio(visual.pedido)?.slice(0, 500) ?? ""
+  const fotos = visual.mas_fotos ? "Prefiere plantillas con foto en todas las láminas donde se pueda, también en las de lista." : ""
+  return [pedido, fotos].filter(Boolean).join("\n") || undefined
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
