@@ -3,9 +3,9 @@ import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
 import { planPieces, type Brief, type Piece, type Script } from "../src/engine/video-campaigns/model"
 import { technicalReview } from "../src/engine/video-campaigns/quality"
-import { writerPrompt } from "../src/engine/video-campaigns/prompts"
+import { reviewPrompt, writerPrompt } from "../src/engine/video-campaigns/prompts"
 import { PREVIEW_BRAND, PREVIEW_BRIEF, PREVIEW_SCRIPT } from "../src/engine/video-campaigns/preview"
-import { needsRecipe, parseRecipe, recipeFindings, recipeIsCurrent, recipePrompt, RECIPE_RULE } from "../src/engine/video-campaigns/recipe"
+import { needsRecipe, parseRecipe, recipeFindings, recipeIsCurrent, recipePrompt, RECIPE_REVIEW_RULE, RECIPE_RULE } from "../src/engine/video-campaigns/recipe"
 
 const brief=():Brief=>structuredClone(PREVIEW_BRIEF)
 const reference={url:"https://www.tiktok.com/@ana/video/1/",author:"ana",platform:"TIKTOK" as const,caption:"",views:1,likes:1,comments:null,shares:null,publishedAt:null,capturedAt:"",selectedByUser:true}
@@ -88,6 +88,23 @@ test("el prompt incluye la ficha solo si está vigente y es réplica",()=>{
  assert.ok(w.system.includes(RECIPE_RULE));assert.match(w.prompt,/GREMIO/)
  const vieja=writerPrompt(b,{...p,transcript:transcript+" Cambió."},PREVIEW_BRAND)
  assert.ok(!vieja.system.includes(RECIPE_RULE));assert.doesNotMatch(vieja.prompt,/GREMIO/)
+})
+
+test("el revisor editorial recibe la ficha y no cuenta como cambio llenar sus corchetes",()=>{
+ const b=brief(),p=conFicha(),s=libreto(transcript);p.script=s
+ const r=reviewPrompt(b,p,PREVIEW_BRAND)
+ assert.ok(r.system.includes(RECIPE_REVIEW_RULE));assert.match(r.prompt,/GREMIO/)
+ const sin=reviewPrompt(b,{...replica(),script:s},PREVIEW_BRAND)
+ assert.ok(!sin.system.includes(RECIPE_REVIEW_RULE));assert.doesNotMatch(sin.prompt,/receta/)
+})
+
+test("la regla del escritor no choca con las revisiones técnicas de tiempo y apertura",()=>{
+ assert.match(RECIPE_RULE,/3,5 palabras por segundo/)
+ assert.match(RECIPE_RULE,/primer plano completo/)
+ assert.match(RECIPE_RULE,/changes/)
+ const p=conFicha(),s=libreto(transcript);s.shots[0].end=6;p.recipe!.anchors=["me van a odiar por revelar esto"]
+ const f=technicalReview(s,p,brief()).map(x=>x.rule)
+ assert.ok(!f.includes("voice_time"));assert.ok(!f.includes("hook"));assert.ok(!f.includes("hook_recipe"))
 })
 
 test("sin ficha el prompt y la revisión de una pieza quedan igual que antes",()=>{
