@@ -1,4 +1,5 @@
 import "server-only"
+import { CampaignActionError } from "./action-result"
 import { createHash } from "node:crypto"
 import { secretosDe } from "../secretos"
 import { supabaseAdmin } from "../supabase-admin"
@@ -8,17 +9,17 @@ import { transcriptText } from "./transcript"
 export async function jsonModel(accountId: string, system: string, prompt: string, options: { web?: boolean; model?: string } = {}): Promise<{ text: string; model: string; usage: { input: number; output: number } }> {
   const s=await secretosDe(accountId)
   const token=process.env.ANTHROPIC_API_KEY||s.claude_oauth_token?.replace(/\s+/g,"")
-  if(!token)throw new Error("Configura la conexión de Claude de esta cuenta en Plogy.")
+  if(!token)throw new CampaignActionError("Configura la conexión de Claude de esta cuenta en Plogy.")
   const model=options.model||s.model_contenido||"claude-sonnet-5"
   const headers: Record<string,string>={"content-type":"application/json","anthropic-version":"2023-06-01"}
   const oauth=!token.startsWith("sk-ant-api")&&!process.env.ANTHROPIC_API_KEY
   if(oauth){headers.authorization=`Bearer ${token}`;headers["anthropic-beta"]="oauth-2025-04-20"}else headers["x-api-key"]=token
   const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers,signal:AbortSignal.timeout(165000),body:JSON.stringify({model,max_tokens:8000,system:[...(oauth?[{type:"text",text:"You are Claude Code, Anthropic's official CLI for Claude."}]:[]),{type:"text",text:system}],messages:[{role:"user",content:prompt}],...(options.web?{tools:[{type:"web_search_20250305",name:"web_search",max_uses:4}]}:{})})})
   const body=await res.json()
-  if(!res.ok)throw new Error(`Claude no pudo completar el paso (HTTP ${res.status}). Revisa la conexión y el modelo de la cuenta.`)
-  if(body.stop_reason==="max_tokens")throw new Error("La respuesta se cortó por longitud. Reintenta con una pieza más acotada.")
+  if(!res.ok)throw new CampaignActionError(`Claude no pudo completar el paso (HTTP ${res.status}). Revisa la conexión y el modelo de la cuenta.`)
+  if(body.stop_reason==="max_tokens")throw new CampaignActionError("La respuesta se cortó por longitud. Reintenta con una pieza más acotada.")
   const output=(body.content||[]).filter((x:{type:string})=>x.type==="text").map((x:{text:string})=>x.text).join("\n")
-  if(!output)throw new Error("Claude no devolvió texto utilizable.")
+  if(!output)throw new CampaignActionError("Claude no devolvió texto utilizable.")
   return {text:output,model,usage:{input:Number(body.usage?.input_tokens||0)+Number(body.usage?.cache_read_input_tokens||0),output:Number(body.usage?.output_tokens||0)}}
 }
 // Solo escribe caché y presupuesto propios. Un inicio de corrida de resultado incierto nunca se relanza automáticamente.
