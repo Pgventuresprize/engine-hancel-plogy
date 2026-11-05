@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 
-import { idDeCuentaActual } from "@/lib/accounts"
+import { idDeCuentaAdvance } from "@/lib/accounts"
 import { supabaseAdmin } from "@/engine/supabase-admin"
 import { leerHoras } from "@/engine/studio/publicar"
 
@@ -34,7 +34,7 @@ export async function guardarPublicacion(campos: {
       .from("studio_settings")
       .upsert(
         {
-          account_id: await idDeCuentaActual(),
+          account_id: await idDeCuentaAdvance(),
           publicar_activo: campos.activo,
           publicar_horas: horas,
           publicar_redes: redes,

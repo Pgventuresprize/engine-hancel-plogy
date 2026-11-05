@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 
+import { registroAbiertoPlataforma } from "@/engine/admin/ajustes"
 import { asegurarEmpresaPropia } from "@/engine/empresas"
 import { authClient, usuarioActual } from "@/lib/supabase/auth"
 import { origenDeLaPeticion } from "@/lib/supabase/origen"
@@ -53,6 +54,7 @@ export async function iniciarSesion(_previo: LoginResult, form: FormData): Promi
   if (error) {
     // El motivo real no se enseña (ver arriba). Los casos que si sirven de
     // algo se traducen.
+    if (error.code === "user_banned") return { error: "Esta cuenta está bloqueada. Escríbenos si crees que es un error." }
     if (error.code === "email_not_confirmed") {
       return { error: "Todavía no confirmaste tu correo: abre el enlace que te mandamos.", sinConfirmar: true }
     }
@@ -131,9 +133,9 @@ export async function guardarContrasena(_previo: EnvioResult, form: FormData): P
   redirect("/")
 }
 
-/** Si el registro esta cerrado (`REGISTRO_ABIERTO=no`), solo se entra por invitacion. */
+/** Si el registro esta cerrado, solo se entra por invitacion. Se decide en /admin/accesos. */
 export async function registroAbierto(): Promise<boolean> {
-  return (process.env.REGISTRO_ABIERTO ?? "si").trim().toLowerCase() !== "no"
+  return registroAbiertoPlataforma()
 }
 
 /**

@@ -54,6 +54,7 @@ const PASOS: Record<string, { etiqueta: string; grupo: Grupo }> = {
   "estudio-ubicar": { etiqueta: "Ubicar en el estudio", grupo: "otros" },
   ideas: { etiqueta: "Ideas", grupo: "otros" },
   "video-guion": { etiqueta: "Guion de video", grupo: "otros" },
+  "video-campana": { etiqueta: "Campañas de video", grupo: "otros" },
   "chat-coordinador": { etiqueta: "Chat · Coordinador", grupo: "otros" },
   "chat-instagram": { etiqueta: "Chat · Instagram", grupo: "otros" },
   "chat-linkedin": { etiqueta: "Chat · LinkedIn", grupo: "otros" },
@@ -63,7 +64,7 @@ const PASOS: Record<string, { etiqueta: string; grupo: Grupo }> = {
   "probar-conexion": { etiqueta: "Probar conexión", grupo: "otros" },
 }
 
-const pasoDe = (paso: string | null) => PASOS[paso ?? ""] ?? { etiqueta: paso ?? "Sin paso", grupo: "otros" as Grupo }
+export const pasoDe = (paso: string | null) => PASOS[paso ?? ""] ?? { etiqueta: paso ?? "Sin paso", grupo: "otros" as Grupo }
 
 export type ConsumoDia = { dia: string } & Record<Grupo, number>
 

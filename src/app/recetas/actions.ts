@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 
-import { idDeCuentaActual } from "@/lib/accounts"
+import { idDeCuentaAdvance } from "@/lib/accounts"
 import { supabaseAdmin } from "@/engine/supabase-admin"
 import { correrRecetas } from "@/engine/studio/generar"
 import { getSettings } from "@/engine/schedule"
@@ -54,7 +54,7 @@ export async function guardarReceta(campos: CamposReceta): Promise<ActionResult>
 
 
   try {
-    const accountId = await idDeCuentaActual()
+    const accountId = await idDeCuentaAdvance()
     const supabase = supabaseAdmin()
 
     // El pilar tiene que ser de la cuenta: llega del cliente.
@@ -119,7 +119,7 @@ export async function borrarReceta(id: string): Promise<ActionResult> {
       .from("content_recipes")
       .delete()
       .eq("id", id)
-      .eq("account_id", await idDeCuentaActual())
+      .eq("account_id", await idDeCuentaAdvance())
     if (error) throw new Error(error.message)
     revalidatePath("/recetas")
     return { ok: true }
@@ -136,7 +136,7 @@ export async function borrarReceta(id: string): Promise<ActionResult> {
 export async function duplicarReceta(id: string): Promise<ActionResult> {
   if (!id) return { ok: false, error: "Falta el id." }
   try {
-    const accountId = await idDeCuentaActual()
+    const accountId = await idDeCuentaAdvance()
     const supabase = supabaseAdmin()
     const { data, error } = await supabase
       .from("content_recipes")
@@ -169,7 +169,7 @@ export async function alternarReceta(id: string, enabled: boolean): Promise<Acti
       .from("content_recipes")
       .update({ enabled, updated_at: new Date().toISOString() })
       .eq("id", id)
-      .eq("account_id", await idDeCuentaActual())
+      .eq("account_id", await idDeCuentaAdvance())
     if (error) throw new Error(error.message)
     revalidatePath("/recetas")
     return { ok: true }
@@ -193,7 +193,7 @@ export async function guardarPromptsEstudio(campos: {
       .from("studio_settings")
       .upsert(
         {
-          account_id: await idDeCuentaActual(),
+          account_id: await idDeCuentaAdvance(),
           ideas_prompt: campos.ideas_prompt.trim() || null,
           content_prompt: campos.content_prompt.trim() || null,
           updated_at: new Date().toISOString(),
@@ -221,7 +221,7 @@ export type GenerarResult =
 export async function generarAhora(recipeId: string): Promise<GenerarResult> {
   if (!recipeId) return { ok: false, error: "Falta la receta." }
   try {
-    const accountId = await idDeCuentaActual()
+    const accountId = await idDeCuentaAdvance()
     const { count } = await supabaseAdmin()
       .from("content_recipes")
       .select("id", { count: "exact", head: true })
