@@ -819,9 +819,10 @@ Si un logo no existe, déjalo fuera.`
 
 // -------------------------------------------------------------------- base
 
-const LENGUAJE = `Lenguaje de las plantillas:
+export const LENGUAJE = `Lenguaje de las plantillas:
 - {{t:nombre}}: texto de la pieza (se escapa; *así* sale como <span class="resalte">, **así** en <b>).
 - {{#items}}...{{.}}...{{i}}...{{/items}}: se repite por cada elemento de una lista; {{.}} es el texto y {{i}} su número (1, 2, 3).
+- {{^nombre}}...{{/nombre}}: al revés que {{?nombre}}, solo aparece si el hueco está vacío (o, con {{^foto}}, si la lámina no tiene foto).
 - {{?nombre}}...{{/nombre}}: solo aparece si el hueco tiene algo (o, con {{?foto}}, si la lámina tiene foto).
 - {{a:papel}}: un archivo del kit como data URI (logos: los papeles que se te dan). {{a:foto}} es la foto de la lámina.
 - {{p:nombre}}: un trozo común del kit (por ejemplo el marco).

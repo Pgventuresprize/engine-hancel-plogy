@@ -443,7 +443,7 @@ const POSIBILIDAD = /\b(puede que|pueda que|es probable que|probablemente|posibl
  * cantidad ("miles de") sigue siendo un dato aunque vaya rotulada. Si la
  * opinion se presenta como hecho, la frena el revisor con Claude.
  */
-const OPINION_ROTULADA = /\b(nuestra lectura|nuestra hipotesis|nuestra opinion|para nosotros|creemos|criterio de plogy)\b/
+const OPINION_ROTULADA = /\b(nuestra lectura|nuestra hipotesis|nuestra opinion|para nosotros|creemos|mi lectura|mi hipotesis|mi opinion|para mi|yo creo|creo que|criterio de)\b/
 
 /** Palabras que no dicen de que se habla: no sirven para saber si el respaldo es el mismo. */
 const VACIAS = new Set([

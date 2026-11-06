@@ -1,4 +1,5 @@
 import { ajustesDe } from "../agents/settings"
+import { ORIGEN_MARCA } from "./material"
 import { llamarClaude, parsearJSONDeClaude, type UsoClaude } from "../claude/messages"
 import { bloqueClasificacion } from "../marca/clasificacion"
 import { bloqueCriterioRevisor } from "./criterio"
@@ -246,7 +247,9 @@ export async function revisarConClaude(o: {
     try {
       const { hallazgos, descartados } = hallazgosDeRespuesta(parsearJSONDeClaude(r.texto), campos)
       if (descartados > 0) console.warn(`[revisor-claude] ${descartados} hallazgos sin cita en la pieza, descartados.`)
-      return { hallazgos, estado: { estado: "revisada", modelo }, uso }
+      // Con material propio, coincidir con el material no es copiar: es la marca.
+      const propio = o.input.raw_news.source === ORIGEN_MARCA
+      return { hallazgos: propio ? hallazgos.filter((h) => h.regla !== "criterio_copiado") : hallazgos, estado: { estado: "revisada", modelo }, uso }
     } catch (e) {
       error = e instanceof Error ? e.message : String(e)
     }

@@ -4,6 +4,7 @@ import { ChatApp } from "@/components/chat/chat-app"
 import { cuentaActual, cuentasDelUsuario } from "@/lib/accounts"
 import { estadoChat, noticiasConAngulo } from "@/lib/chat-data"
 import { nombreDe } from "@/lib/chat-nombre"
+import { debeHacerOnboarding } from "@/lib/onboarding"
 import { usuarioActual } from "@/lib/supabase/auth"
 
 export const dynamic = "force-dynamic"
@@ -18,6 +19,7 @@ export default async function InicioPage({ searchParams }: { searchParams: Promi
   if (!usuario) redirect("/login")
 
   const [cuenta, cuentas, { c }] = await Promise.all([cuentaActual(), cuentasDelUsuario(), searchParams])
+  if (await debeHacerOnboarding(cuenta)) redirect("/empezar")
   const abierta = c && /^[0-9a-f-]{36}$/i.test(c) ? c : null
   const [estado, noticias] = await Promise.all([estadoChat(cuenta.id, abierta), noticiasConAngulo(cuenta.id)])
 

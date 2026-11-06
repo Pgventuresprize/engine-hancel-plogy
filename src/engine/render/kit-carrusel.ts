@@ -5,6 +5,7 @@ import { elegirDeBiblioteca, hayFotosEnBiblioteca, type FotoElegida, type HuecoD
 import { piezasDelKit } from "../marca/kit-piezas"
 import { archivosComoDatos, armarLamina, CSS_SIN_PAGINACION, FORMATOS, medidasDe, type DatosLamina, type KitCargado } from "../marca/kit"
 import type { Fondo, Plantilla } from "../marca/kit-modelo"
+import { sinRepetidos } from "../marca/kit-modelo"
 import type { CarouselPayload, parseInstagramResponse } from "./carousel"
 import { terminosDeBusqueda } from "./keywords"
 import { maquetar } from "./kit-maqueta"
@@ -282,6 +283,7 @@ export async function generarCarruselKit(
           huecos,
           terminos: [antetitulo, ...terminos].filter(Boolean),
           evitar: evitarImagenes,
+          obligatoria: kc.kit.sistema.fotos_siempre,
         })
       : new Map<number, FotoElegida>()
 
@@ -318,8 +320,8 @@ export async function generarCarruselKit(
   }
 
   const total = repartidas.length
-  const datosDe = (r: Pick<LaminaRepartida, "lamina">, i: number): DatosLamina => ({
-    textos: r.lamina.textos,
+  const datosDe = (r: Pick<LaminaRepartida, "lamina" | "plantilla">, i: number): DatosLamina => ({
+    textos: sinRepetidos(r.lamina.textos, r.plantilla.huecos),
     listas: r.lamina.listas,
     n: i + 1,
     total,
@@ -394,7 +396,7 @@ export async function generarCarruselKit(
       kit: claveKit(kc),
       laminas: repartidas.map((r, i) => ({
         plantilla: r.plantilla.id,
-        textos: r.lamina.textos,
+        textos: sinRepetidos(r.lamina.textos, r.plantilla.huecos),
         listas: r.lamina.listas,
         figura: r.lamina.figura ?? null,
         // Una plantilla de respaldo sin foto deja la suya sin usar.

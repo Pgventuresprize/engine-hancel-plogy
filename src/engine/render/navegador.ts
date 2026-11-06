@@ -29,7 +29,11 @@ const RUTAS_LOCALES = [
 const enServidor = () =>
   process.platform === "linux" && Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME)
 
-async function lanzar(): Promise<Browser> {
+/**
+ * Un navegador nuevo, sin compartir. Lo usa quien necesita reglas de red propias
+ * (onboarding/capturar.ts); las laminas siguen pasando por `abrir`, que va sin red.
+ */
+export async function lanzar(): Promise<Browser> {
   const puppeteer = (await import("puppeteer-core")).default
   if (enServidor()) {
     const chromium = (await import("@sparticuz/chromium")).default

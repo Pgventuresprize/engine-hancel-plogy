@@ -10,6 +10,7 @@
  *   {{#items}}..{{/items}} se repite por cada elemento de una lista: {{.}} es el
  *                          texto del elemento y {{i}} su numero (1, 2, 3...)
  *   {{?fuente}}..{{/fuente}} solo aparece si el hueco (o la foto) tiene algo
+ *   {{^foto}}..{{/foto}} solo aparece si no lo tiene
  *   {{a:logo_oscuro}}     un archivo del kit como data URI; {{a:foto}} es la foto de la lamina
  *   {{p:marco}}           un trozo comun del kit (el marco con logo, contador y puntos)
  *   {{f:figura}}          la figura de la lamina (barras, tabla, pasos...: ver figuras.ts)
@@ -139,6 +140,8 @@ export type SistemaVisual = {
   reglas: { letra_minima: number; notas: string[] }
   /** Cuantas laminas de un carrusel del kit llevan foto, de media (contando portada y cierre). */
   fotos_por_carrusel?: number
+  /** Toda lamina que admite foto la lleva si la biblioteca tiene una: para las marcas con fotos propias. */
+  fotos_siempre?: boolean
 }
 
 export type Kit = {
@@ -331,6 +334,7 @@ export function parseSistema(bruto: unknown): SistemaVisual {
   const fotos = Number(o.fotos_por_carrusel)
   return {
     ...(fotos > 0 ? { fotos_por_carrusel: Math.min(20, Math.round(fotos * 10) / 10) } : {}),
+    ...(o.fotos_siempre === true ? { fotos_siempre: true } : {}),
     colores,
     fuentes,
     logos,
@@ -439,20 +443,20 @@ export function revisarPlantilla(
   const figuras = new Set(huecos.filter((h) => h.tipo === "figura").map((h) => h.nombre))
   const papeles = new Set([...ctx.papeles, "foto"])
   for (const [, marca] of html.matchAll(/\{\{([^}]*)\}\}/g)) {
-    const m = /^([tapf#?/s]):?(.*)$/.exec(marca.trim())
+    const m = /^([tapf#?^/s]):?(.*)$/.exec(marca.trim())
     const [clase, nombre] = m ? [m[1], m[2].trim()] : ["", marca]
     if (marca === "." || marca === "i") continue
     if (clase === "t" && (!nombres.has(nombre) || figuras.has(nombre)))
       errores.push(`{{t:${nombre}}} no es un hueco de texto declarado.`)
     else if (clase === "f" && !figuras.has(nombre)) errores.push(`{{f:${nombre}}} no es un hueco de figura declarado.`)
     else if (clase === "#" && !listas.has(nombre)) errores.push(`{{#${nombre}}} no es una lista declarada.`)
-    else if ((clase === "?" || clase === "/") && !nombres.has(nombre) && nombre !== "foto")
+    else if ((clase === "?" || clase === "^" || clase === "/") && !nombres.has(nombre) && nombre !== "foto")
       errores.push(`{{${clase}${nombre}}} no es un hueco declarado.`)
     else if (clase === "a" && !papeles.has(nombre)) errores.push(`{{a:${nombre}}} no es un archivo del kit.`)
     else if (clase === "p" && !ctx.parciales.includes(nombre))
       errores.push(`{{p:${nombre}}} no es un trozo comun del kit.`)
     else if (clase === "s" && !SISTEMA.includes(nombre)) errores.push(`{{s:${nombre}}} no existe.`)
-    else if (!"tapf#?/s".includes(clase)) errores.push(`{{${marca}}} no se entiende.`)
+    else if (!clase || !"tapf#?^/s".includes(clase)) errores.push(`{{${marca}}} no se entiende.`)
   }
   for (const h of huecos) {
     const marca = h.tipo === "lista" ? `{{#${h.nombre}}}` : h.tipo === "figura" ? `{{f:${h.nombre}}}` : `{{t:${h.nombre}}}`
@@ -505,6 +509,45 @@ const dosCifras = (n: number) => String(n).padStart(2, "0")
  * trozos comunes se insertan primero porque tambien llevan huecos. `figura` es
  * el HTML de la figura ya armado (figuras.ts), que va en {{f:...}}.
  */
+const plano = (t: string) =>
+  t
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+
+/**
+ * Quita un texto secundario que ya dice el titulo o el boton: la lamina lo repetiria dos
+ * veces. Lo que la plantilla exige se queda, porque sin el no se sostiene.
+ */
+export function sinRepetidos(textos: Record<string, string>, huecos: Hueco[]): Record<string, string> {
+  const principales = ["titulo", "cta"].map((k) => plano(textos[k] ?? "")).filter(Boolean)
+  return Object.fromEntries(
+    Object.entries(textos).filter(([k, v]) => {
+      if (k === "cta" && plano(v) === plano(textos.titulo ?? "") && !huecos.find((h) => h.nombre === k)?.obligatorio) return false
+      if (k === "titulo" || k === "cta" || huecos.find((h) => h.nombre === k)?.obligatorio) return true
+      const t = plano(v)
+      return !t || !principales.some((p) => p.includes(t))
+    })
+  )
+}
+
+const MAX_ANIDADO = 5
+
+/** Resuelve {{?x}} y {{^x}} de afuera hacia adentro: pueden ir una dentro de otra. */
+function resolverCondiciones(html: string, tiene: (nombre: string) => boolean): string {
+  let actual = html
+  for (let i = 0; i < MAX_ANIDADO; i++) {
+    const siguiente = actual
+      .replace(/\{\{\?(\w+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_, k: string, dentro: string) => (tiene(k) ? dentro : ""))
+      .replace(/\{\{\^(\w+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_, k: string, dentro: string) => (tiene(k) ? "" : dentro))
+    if (siguiente === actual) break
+    actual = siguiente
+  }
+  return actual
+}
+
 export function rellenarPlantilla(
   html: string,
   datos: DatosLamina,
@@ -520,8 +563,7 @@ export function rellenarPlantilla(
         (Boolean(figura) && new RegExp(`\\{\\{f:${nombre}\\}\\}`).test(html))
   const conParciales = html.replace(/\{\{p:(\w+)\}\}/g, (_, k: string) => parciales[k] ?? "")
   return (
-    conParciales
-      .replace(/\{\{\?(\w+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_, k: string, dentro: string) => (tiene(k) ? dentro : ""))
+    resolverCondiciones(conParciales, tiene)
       .replace(/\{\{#(\w+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_, k: string, dentro: string) =>
         (datos.listas[k] ?? [])
           .map((item, i) => dentro.replace(/\{\{\.\}\}/g, () => textoAHtml(item)).replace(/\{\{i\}\}/g, String(i + 1)))
@@ -538,6 +580,8 @@ export function rellenarPlantilla(
       .replace(/\{\{s:total2\}\}/g, dosCifras(datos.total))
       .replace(/\{\{s:n\}\}/g, String(datos.n))
       .replace(/\{\{s:total\}\}/g, String(datos.total))
+      // Una marca suelta nunca llega a la lamina. El texto de la pieza no las trae: va escapado.
+      .replace(/\{\{[?^/]\w+\}\}/g, "")
   )
 }
 

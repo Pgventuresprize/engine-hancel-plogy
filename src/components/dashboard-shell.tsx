@@ -1,3 +1,4 @@
+import { debeHacerOnboarding } from "@/lib/onboarding"
 import * as React from "react"
 import Link from "next/link"
 import { redirect } from "next/navigation"
@@ -40,6 +41,7 @@ export async function DashboardShell({
 
   // La cuenta primero: los conteos de nichos ya salen acotados a ella.
   const [cuenta, cuentas, admin] = await Promise.all([cuentaActual(), cuentasDelUsuario(), adminActual()])
+  if (await debeHacerOnboarding(cuenta)) redirect("/empezar")
 
   return (
     <SidebarProvider>

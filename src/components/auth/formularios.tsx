@@ -181,7 +181,7 @@ export function RegistroForm({ paises, paisInicial }: { paises: Pais[]; paisInic
           Tu marca empieza en blanco: subes tu kit, conectas tus servicios y los agentes trabajan para ti.
         </EncabezadoAcceso>
         <Campo id="nombre" etiqueta="Tu nombre" placeholder="Nombre y apellido" autoComplete="name" minLength={2} maxLength={120} autoFocus />
-        <Campo id="empresa" etiqueta="Nombre de tu empresa o marca" placeholder="Mi marca" autoComplete="organization" minLength={2} />
+        <Campo id="empresa" etiqueta="Nombre de tu marca" placeholder="Mi marca" autoComplete="organization" minLength={2} />
         <Campo id="email" etiqueta="Correo" type="email" placeholder="tu@correo.com" autoComplete="email" />
         <CampoCelular paises={paises} paisInicial={paisInicial} />
         <Campo id="password" etiqueta="Contraseña" type="password" autoComplete="new-password" minLength={8} placeholder="Mínimo 8 caracteres" />
@@ -208,10 +208,10 @@ export function BienvenidaForm({ email }: { email: string }) {
 
   return (
     <form action={enviar} className="flex flex-col gap-6">
-      <EncabezadoAcceso titulo="Crea tu empresa">
+      <EncabezadoAcceso titulo="Crea tu marca">
         {email} todavía no está en ninguna empresa. Crea la tuya, o pide a quien te invitó que te agregue.
       </EncabezadoAcceso>
-      <Campo id="empresa" etiqueta="Nombre de tu empresa o marca" placeholder="Mi marca" autoComplete="organization" minLength={2} autoFocus />
+      <Campo id="empresa" etiqueta="Nombre de tu marca" placeholder="Mi marca" autoComplete="organization" minLength={2} autoFocus />
       <Fallo resultado={resultado} />
       <Button type="submit" variant="brand" className="h-12 w-full" disabled={pendiente}>
         {pendiente ? "Creando…" : "Crear y entrar"}

@@ -1,4 +1,5 @@
 import { secretosDe } from "../secretos"
+import { clavePlataforma, esClavePlataforma, modeloPlataforma, puedeUsarPlataforma, sinSaldo } from "./plataforma"
 import { supabaseAdmin } from "../supabase-admin"
 import { contextoUso } from "./contexto"
 
@@ -32,6 +33,8 @@ const IDENTIDAD_CLAUDE_CODE = "You are Claude Code, Anthropic's official CLI for
 const SIN_TOKEN =
   "No hay token de Claude configurado. Pegalo en la pantalla de configuracion " +
   "(lo generas con `claude setup-token`)."
+
+const SIN_SALDO = "Se acabó el saldo de prueba de esta marca. Escríbenos para seguir."
 
 /** El timeout es generoso: una generacion larga (un carrusel) puede tardar. */
 const TIMEOUT_MS = 120_000
@@ -148,7 +151,8 @@ export async function tokenClaude(accountId: string): Promise<string | null> {
   // Se le quitan los espacios de adentro por si se guardo con los que mete la
   // terminal al partir la linea al copiarlo.
   const token = (await secretosDe(accountId)).claude_oauth_token?.replace(/\s+/g, "")
-  return token ? token : null
+  if (token) return token
+  return (await puedeUsarPlataforma(accountId)) ? clavePlataforma() : null
 }
 
 /**
@@ -178,10 +182,14 @@ async function anotarUso(
 }
 
 /** Las cabeceras y el sistema de una llamada: lo que no cambia entre vueltas. */
-function armarPeticion(opciones: LlamadaClaude, token: string) {
-  // La API key de consola va por su cabecera propia; el token de suscripcion,
-  // como Bearer con la beta de OAuth.
-  const esApiKey = token.startsWith("sk-ant-api")
+function armarPeticion(pedidas: LlamadaClaude, token: string) {
+  // Este es el unico punto por donde pasan todas las llamadas: asi ningun agente
+  // con Opus fijo en el codigo se cuela en el gasto de la plataforma.
+  const plataforma = esClavePlataforma(token)
+  const opciones = plataforma ? { ...pedidas, model: modeloPlataforma(pedidas.model, pedidas.paso) } : pedidas
+  // El token de suscripcion va como Bearer con la beta de OAuth. Lo demas son claves
+  // de consola, que traen varios prefijos (sk-ant-api, sk-ant-usr) y usan su cabecera.
+  const esApiKey = !token.startsWith("sk-ant-oat")
   const headers: Record<string, string> = {
     "anthropic-version": ANTHROPIC_VERSION,
     "content-type": "application/json",
@@ -232,13 +240,16 @@ function armarPeticion(opciones: LlamadaClaude, token: string) {
     // a partir de material ya recolectado, que es justo lo que no necesita
     // deliberacion larga.
     //
-    // La familia 5.5 no acepta "disabled": ahi apagarlo se dice
-    // "between_tools" (no piensa antes de responder). Opus 5.5 tampoco acepta
-    // eso y va sin el campo (ver arriba).
+    // Sonnet 5.5 no acepta "disabled": ahi apagarlo se dice "between_tools" (no
+    // piensa antes de responder). Haiku 5.5 no conoce "between_tools" y si acepta
+    // "disabled". Opus 5.5 no acepta ninguno y va sin el campo (ver arriba).
     ...(piensaSiempre
       ? {}
-      : { thinking: opciones.model.includes("-5-5") ? { type: "between_tools" } : { type: "disabled" } }),
-    ...(opciones.esfuerzo ? { output_config: { effort: opciones.esfuerzo } } : {}),
+      : { thinking: opciones.model.includes("sonnet-5-5") ? { type: "between_tools" } : { type: "disabled" } }),
+    // Sonnet 5.5 con "between_tools" no acepta mas que high.
+    ...(opciones.esfuerzo
+      ? { output_config: { effort: plataforma && /x?high|max/.test(opciones.esfuerzo) ? "high" : opciones.esfuerzo } }
+      : {}),
     system,
   }
   return { headers, cuerpo }
@@ -279,7 +290,7 @@ const textoDe = (bloques: BloqueApi[]): string =>
  */
 export async function llamarClaude(opciones: LlamadaClaude): Promise<ResultadoClaude> {
   const token = await tokenClaude(opciones.accountId)
-  if (!token) return { ok: false, error: SIN_TOKEN }
+  if (!token) return { ok: false, error: (await sinSaldo(opciones.accountId)) ? SIN_SALDO : SIN_TOKEN }
 
   const { headers, cuerpo } = armarPeticion(opciones, token)
   const inicio = Date.now()
@@ -355,7 +366,7 @@ export async function conversarConHerramientas(
   }
 ): Promise<ResultadoClaude> {
   const token = await tokenClaude(opciones.accountId)
-  if (!token) return { ok: false, error: SIN_TOKEN }
+  if (!token) return { ok: false, error: (await sinSaldo(opciones.accountId)) ? SIN_SALDO : SIN_TOKEN }
 
   const { headers, cuerpo } = armarPeticion(opciones, token)
   const tope = opciones.maxVueltas ?? MAX_VUELTAS

@@ -1,6 +1,7 @@
 import { ajustesDe } from "../agents/settings"
 import { llamarClaude, parsearJSONDeClaude, type UsoClaude } from "../claude/messages"
 import { supabaseAdmin } from "../supabase-admin"
+import { ORIGEN_MARCA } from "./material"
 import type { CriterioDecidido, LinkedinJobInput } from "./types"
 
 /**
@@ -66,6 +67,10 @@ export function parseCriterio(bruto: unknown, modelo = "", fecha = ""): Criterio
   }
 }
 
+const MATERIAL_PROPIO = `
+
+ESTE MATERIAL ES DE LA PROPIA MARCA, NO ES UNA NOTICIA. Aquí no aplica la regla de no coincidir con el material: el material es lo que la marca sabe y piensa. Deja "ya_dice_el_material" vacío. El criterio sale de este material y de la esencia de la marca: 2 ideas o acciones concretas para quien lee, dichas como las diría la marca. Si la marca es una persona, puede ser su opinión. No agregues hechos, cifras ni resultados que no estén aquí.`
+
 export function promptCriterio(input: LinkedinJobInput): string {
   const n = input.raw_news
   return `ÁNGULO
@@ -75,7 +80,7 @@ export function promptCriterio(input: LinkedinJobInput): string {
 NOTICIA
 - titulo: ${n.title}
 - fuente: ${n.source ?? "desconocida"}
-- contenido: ${n.full_content ?? n.snippet ?? "(sin contenido)"}`
+- contenido: ${n.full_content ?? n.snippet ?? "(sin contenido)"}${n.source === ORIGEN_MARCA ? MATERIAL_PROPIO : ""}`
 }
 
 /**

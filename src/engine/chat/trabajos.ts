@@ -35,6 +35,8 @@ export type PedidoPieza = {
   consulta: string
   /** False cuando sale de lo que sabe la marca y no hay nada que buscar. */
   investigar: boolean
+  /** El material es la propia marca (ver ORIGEN_MARCA). */
+  marca?: boolean
 }
 
 /** Un cambio en una pieza que ya existe: tipo 'editar', sin fase. Lo aplica la pasada. */

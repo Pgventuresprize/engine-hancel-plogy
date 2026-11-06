@@ -164,7 +164,7 @@ export async function registrarse(_previo: EnvioResult, form: FormData): Promise
   const repetida = String(form.get("repetida") ?? "")
 
   if (nombre.length < 2 || nombre.length > 120) return { error: "Escribe tu nombre." }
-  if (empresa.length < 2) return { error: "Ponle un nombre a tu empresa o marca." }
+  if (empresa.length < 2) return { error: "Ponle un nombre a tu marca." }
   if (!CORREO.test(email)) return { error: "Ese correo no es válido." }
   if (!pais) return { error: "Elige el país de tu celular." }
   if (!telefono) return { error: "Ese celular no es válido para el país que elegiste." }
@@ -208,7 +208,7 @@ export async function crearPrimeraEmpresa(_previo: EnvioResult, form: FormData):
   if (!usuario) redirect("/login")
 
   const nombre = String(form.get("empresa") ?? "").trim()
-  if (nombre.length < 2) return { error: "Ponle un nombre a tu empresa o marca." }
+  if (nombre.length < 2) return { error: "Ponle un nombre a tu marca." }
 
   const r = await asegurarEmpresaPropia(usuario.id, nombre)
   if (!r.ok) return { error: r.error }

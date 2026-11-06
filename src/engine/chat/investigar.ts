@@ -4,7 +4,7 @@ import { conContexto } from "../claude/contexto"
 import { llamarClaude } from "../claude/messages"
 import { leerCitadas } from "../content/analisis"
 import { investigarEnLaWeb, type Busqueda } from "../content/composio"
-import { estadoDelMaterial, MIN_MATERIAL } from "../content/material"
+import { estadoDelMaterial, MIN_MATERIAL, ORIGEN_MARCA } from "../content/material"
 import { guardarBusqueda } from "../redaccion/fuentes"
 import { nichoDeNoticia } from "../redaccion/nicho"
 import { supabaseAdmin } from "../supabase-admin"
@@ -73,7 +73,7 @@ export async function prepararMaterial(t: TrabajoChat, pedido: PedidoPieza): Pro
 
   let contenido = pedido.enfoque
   let link = `chat://${t.id}`
-  let fuente = "Pedido del chat"
+  let fuente = pedido.marca ? ORIGEN_MARCA : "Pedido del chat"
   let busqueda: (Busqueda & { ok: true }) | null = null
 
   if (pedido.investigar) {

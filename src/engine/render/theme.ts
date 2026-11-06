@@ -162,7 +162,7 @@ function rgba(hex: string, alfa: number): string {
 }
 
 /** Mezcla `a` con `b`; `t` = 0 es `a`, 1 es `b`. */
-function mezclar(a: string, b: string, t: number): string {
+export function mezclar(a: string, b: string, t: number): string {
   const [ra, ga, ba] = rgb(a)
   const [rb, gb, bb] = rgb(b)
   const canal = (x: number, y: number) => Math.round(x + (y - x) * t).toString(16).padStart(2, "0")
