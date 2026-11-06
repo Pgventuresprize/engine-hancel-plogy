@@ -17,6 +17,7 @@ import { VerificacionHumana } from "@/components/auth/verificacion-humana"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { PRIVACIDAD_URL, TERMINOS_URL } from "@/lib/legal"
 import type { Pais } from "@/lib/paises"
 
 /**
@@ -65,6 +66,31 @@ function CampoCelular({ paises, paisInicial }: { paises: Pais[]; paisInicial: st
         />
       </div>
     </div>
+  )
+}
+
+/**
+ * El texto viene de "Aviso y autorizaciones" y prueba la autorizacion ante la
+ * SIC: no se parafrasea. Si cambia, cambia tambien `VERSION_LEGAL`.
+ */
+function CasillaLegal() {
+  const enlace = "text-brand-text underline underline-offset-4"
+  return (
+    <label className="flex items-start gap-2 text-sm">
+      <input type="checkbox" name="acepta" required className="accent-primary mt-0.5 size-4 shrink-0" />
+      <span>
+        Acepto los{" "}
+        <a href={TERMINOS_URL} target="_blank" rel="noopener noreferrer" className={enlace}>
+          Términos y Condiciones
+        </a>{" "}
+        y autorizo el tratamiento de mis datos para prestar el servicio, según la{" "}
+        <a href={PRIVACIDAD_URL} target="_blank" rel="noopener noreferrer" className={enlace}>
+          Política de Tratamiento
+        </a>
+        . Entiendo que mis datos podrán pasar a la sociedad que se constituya para operar Plogy, según la Cláusula 9
+        de la Política.
+      </span>
+    </label>
   )
 }
 
@@ -160,6 +186,7 @@ export function RegistroForm({ paises, paisInicial }: { paises: Pais[]; paisInic
         <CampoCelular paises={paises} paisInicial={paisInicial} />
         <Campo id="password" etiqueta="Contraseña" type="password" autoComplete="new-password" minLength={8} placeholder="Mínimo 8 caracteres" />
         <Campo id="repetida" etiqueta="Repítela" type="password" autoComplete="new-password" minLength={8} />
+        <CasillaLegal />
         <VerificacionHumana reinicio={resultado} />
         <Fallo resultado={resultado} />
         <Button type="submit" variant="brand" className="h-12 w-full" disabled={pendiente}>

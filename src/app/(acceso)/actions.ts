@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache"
 import { registroAbiertoPlataforma } from "@/engine/admin/ajustes"
 import { asegurarEmpresaPropia } from "@/engine/empresas"
 import { authClient, usuarioActual } from "@/lib/supabase/auth"
+import { VERSION_LEGAL } from "@/lib/legal"
 import { celularInternacional } from "@/lib/paises"
 import { origenDeLaPeticion } from "@/lib/supabase/origen"
 import { CAPTCHA_FALLO, pasoElCaptcha } from "@/lib/turnstile"
@@ -148,7 +149,8 @@ export async function registroAbierto(): Promise<boolean> {
  * hasta entonces nadie sabe si el correo es de quien lo escribio. Su nombre
  * espera en `user_metadata`, junto al celular de contacto. No va en el campo
  * `phone` de Supabase: ese es para entrar por SMS. El nombre de la persona va
- * en `full_name`, que es donde lo busca `nombreDe`.
+ * en `full_name`, que es donde lo busca `nombreDe`. `aceptacion` es la prueba de
+ * lo que acepto: se arma aqui, nunca con lo que mande el navegador.
  */
 export async function registrarse(_previo: EnvioResult, form: FormData): Promise<EnvioResult> {
   if (!(await registroAbierto())) return { error: "Por ahora solo se entra por invitación." }
@@ -168,13 +170,20 @@ export async function registrarse(_previo: EnvioResult, form: FormData): Promise
   if (!telefono) return { error: "Ese celular no es válido para el país que elegiste." }
   if (password.length < MINIMO) return { error: `La contraseña tiene que tener al menos ${MINIMO} caracteres.` }
   if (password !== repetida) return { error: "Las dos contraseñas no coinciden." }
+  if (form.get("acepta") !== "on") return { error: "Para crear la cuenta debes aceptar los términos y la política de tratamiento." }
   if (!(await pasoElCaptcha(form))) return { error: CAPTCHA_FALLO }
 
   const supabase = await authClient()
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { emailRedirectTo: await volverA(), data: { full_name: nombre, empresa, telefono } },
+    options: { emailRedirectTo: await volverA(), data: {
+        full_name: nombre,
+        empresa,
+        telefono,
+        aceptacion: { fecha: new Date().toISOString(), formulario: "registro-studio", version: VERSION_LEGAL },
+      },
+    },
   })
   if (error) {
     if (error.code === "weak_password") return { error: "Esa contraseña es demasiado fácil de adivinar: usa una más larga o con más variedad." }
