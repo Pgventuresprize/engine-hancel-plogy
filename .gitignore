@@ -48,3 +48,4 @@ next-env.d.ts
 # El brand kit de Plogy completo (PNG de 4096 px). La app solo versiona lo
 # que usa: la fuente en src/app/fonts y el logo en plogy-studio-logo.tsx.
 plogy-brand-kit/
+scripts/.salida/

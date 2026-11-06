@@ -149,7 +149,7 @@ export async function registrarse(_previo: EnvioResult, form: FormData): Promise
   const password = String(form.get("password") ?? "")
   const repetida = String(form.get("repetida") ?? "")
 
-  if (empresa.length < 2) return { error: "Ponle un nombre a tu empresa o marca." }
+  if (empresa.length < 2) return { error: "Ponle un nombre a tu marca." }
   if (!CORREO.test(email)) return { error: "Ese correo no es válido." }
   if (password.length < MINIMO) return { error: `La contraseña tiene que tener al menos ${MINIMO} caracteres.` }
   if (password !== repetida) return { error: "Las dos contraseñas no coinciden." }
@@ -183,7 +183,7 @@ export async function crearPrimeraEmpresa(_previo: EnvioResult, form: FormData):
   if (!usuario) redirect("/login")
 
   const nombre = String(form.get("empresa") ?? "").trim()
-  if (nombre.length < 2) return { error: "Ponle un nombre a tu empresa o marca." }
+  if (nombre.length < 2) return { error: "Ponle un nombre a tu marca." }
 
   const r = await asegurarEmpresaPropia(usuario.id, nombre)
   if (!r.ok) return { error: r.error }

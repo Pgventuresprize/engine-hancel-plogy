@@ -188,7 +188,10 @@ export async function crearEmpresa(
     if (!count) break
     slug = `${base}-${i}`
   }
-  const { data, error } = await supabase.from("accounts").insert({ name: limpio, slug, plan }).select("id").single()
+  // Con el onboarding encendido, la cuenta nace pendiente y con la clave de la
+  // plataforma. Apagado, la fila es igual a las de siempre.
+  const nueva = onboardingActivo() ? { onboarding: "pendiente", clave_plataforma: true } : {}
+  const { data, error } = await supabase.from("accounts").insert({ name: limpio, slug, plan, ...nueva }).select("id").single()
   if (error || !data) return { ok: false, error: `No se pudo crear la empresa: ${error?.message ?? "sin respuesta"}` }
   const id = (data as { id: string }).id
   const [m, s] = await Promise.all([
@@ -205,6 +208,8 @@ export async function crearEmpresa(
   return { ok: true, slug }
 }
 
+export const onboardingActivo = () => process.env.ONBOARDING_ACTIVO?.trim().toLowerCase() === "si"
+
 /** Las redes con horario propio en `publish_schedule`. */
 const REDES_CON_HORARIO = ["linkedin", "instagram", "facebook"] as const
 
@@ -217,6 +222,22 @@ const REDES_CON_HORARIO = ["linkedin", "instagram", "facebook"] as const
  * lo que ya existe no se toca, asi que se puede llamar de nuevo sin miedo.
  */
 export async function asegurarConfiguracion(accountId: string): Promise<void> {
+  // Crear engine_settings reprograma un cron en la base, y dos registros a la vez chocan
+  // ahi ("tuple concurrently deleted"). Es idempotente: basta con volver a intentarlo.
+  for (let intento = 1; ; intento++) {
+    try {
+      return await escribirConfiguracion(accountId)
+    } catch (e) {
+      const choque = e instanceof Error && /concurrently/i.test(e.message)
+      if (!choque || intento >= MAX_INTENTOS_CONFIGURACION) throw e
+      await new Promise((r) => setTimeout(r, 200 * intento + Math.random() * 300))
+    }
+  }
+}
+
+const MAX_INTENTOS_CONFIGURACION = 8
+
+async function escribirConfiguracion(accountId: string): Promise<void> {
   const supabase = supabaseAdmin()
   const opciones = { ignoreDuplicates: true } as const
   const resultados = await Promise.all([

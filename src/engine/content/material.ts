@@ -17,6 +17,14 @@
  */
 export const MIN_MATERIAL = 1500
 
+/**
+ * La fuente de una pieza que nace de lo que la marca sabe y piensa, no de una
+ * noticia. Cambia una regla de fondo: con una noticia, el criterio no puede
+ * coincidir con el material; aqui el material ES la marca, y prohibirlo la
+ * obligaria a decir algo distinto de lo que dijo, es decir, a inventar.
+ */
+export const ORIGEN_MARCA = "La propia marca"
+
 /** Los mismos valores que ya guardaba `raw_news.content_fetch_status`. */
 export type EstadoMaterial = "success" | "partial" | "failed"
 

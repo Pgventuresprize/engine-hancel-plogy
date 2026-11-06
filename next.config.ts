@@ -19,6 +19,8 @@ const nextConfig: NextConfig = {
     // El chat dispara pasadas que dibujan carruseles y restaura versiones
     // redibujandolas desde su maqueta.
     "/api/chat/**": ["./node_modules/@sparticuz/chromium/bin/**"],
+    // El onboarding abre la web de la marca con un navegador de verdad.
+    "/api/onboarding": ["./node_modules/@sparticuz/chromium/bin/**"],
   },
   serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
   // Marca salio de Configuracion a su propia seccion: los enlaces viejos

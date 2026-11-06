@@ -26,7 +26,18 @@ async function leer(conversacionId: string): Promise<TrabajoChat[]> {
 
 const ahora = () => new Date().toISOString().slice(11, 19)
 
+/** Con PRUEBA_CLAVE=plogy las cuentas de prueba gastan el token de Plogy, no la clave de plataforma. */
+async function ponerClave() {
+  if (process.env.PRUEBA_CLAVE !== "plogy") return
+  const { data } = await supabase.from("accounts").select("id").eq("slug", "hancel").maybeSingle()
+  const { secretosDe } = await import("../src/engine/secretos")
+  const token = (await secretosDe((data as { id: string }).id)).claude_oauth_token?.replace(/\s+/g, "")
+  if (!token) throw new Error("La cuenta de Plogy no tiene token.")
+  process.env.CLAUDE_PLATAFORMA_KEY = token
+}
+
 async function main() {
+  await ponerClave()
   const [conversacionId, minutos] = process.argv.slice(2)
   if (!conversacionId) throw new Error("Uso: pasada-chat.ts <conversacion> [minutos]")
   const hasta = Date.now() + Number(minutos ?? 30) * 60_000

@@ -6,7 +6,7 @@ import { cuentasDelUsuario } from "@/lib/accounts"
 import { usuarioActual } from "@/lib/supabase/auth"
 
 export const metadata: Metadata = {
-  title: "Crea tu empresa · Plogy Studio",
+  title: "Crea tu marca · Plogy Studio",
 }
 
 /**

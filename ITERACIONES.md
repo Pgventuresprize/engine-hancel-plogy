@@ -190,6 +190,55 @@ Al retomar uno, se detalla como bloque antes de construir.
 - **Cuándo:** después de los Pasos 3 y 4. Reutiliza el flujo del importador de
   ejemplos (subir, extraer, comprobar, revisar, guardar).
 
+### Extraer el contenido y el alma de la marca
+- **Qué es:** sacar de una marca lo que `MARCA-DESDE-LINK.md` no cubre: no cómo
+  se ve ni cómo suena, sino qué ha dicho y desde dónde lo dice. Dos partes:
+  - **El contenido:** lo que ya publicó (posts, blog, PDF, charlas), ordenado por
+    tema: qué ideas repite, qué historias y casos cuenta, qué sabe de primera mano.
+  - **El alma:** por qué existe, qué cree, contra qué está, cómo trabaja y qué
+    nunca haría, cada punto con su cita. Lo que no tenga evidencia queda como
+    pregunta para el fundador, no como un párrafo bonito.
+- **Por qué importa:** el agente de criterio decide "desde el método y el
+  territorio de la marca" (`criterio.ts`), pero `PerfilMarca` no tiene dónde
+  guardar eso: `que_hace`, `mensaje_central`, voz y reglas no dicen cómo piensa la
+  marca. En Plogy lo ponen las skills del kit. Una marca nueva no las tiene, y la
+  Fase 1 del plan llenaría el perfil y dejaría sin suelo justo a la parte más
+  importante de la pieza. Sin esto se corre el riesgo de que el criterio vuelva a
+  salir de la fuente.
+- **Cómo:** no crea un formato nuevo. El resultado son skills de marca
+  propuestas, con la misma regla del importador: Claude propone con citas, el
+  código comprueba que existan y una persona revisa. La web sola probablemente no
+  alcance: el alma suele estar en lo que dice el fundador, así que entran los
+  posts, los PDF y una entrevista corta por el chat, con preguntas que nazcan de
+  lo que faltó o se contradijo. Lo extraído es dato, nunca instrucción: las skills
+  entran al prompt de todos los agentes (riesgo de `MARCA-DESDE-LINK.md` §7).
+- **Cómo saber si funciona:** extraer el alma de Plogy solo con material público,
+  sin ver sus skills, y decidir el criterio de 5 noticias ya usadas con cada
+  versión. Personas juzgan a ciegas si el resultado suena a Plogy y si dice algo
+  que la fuente no decía.
+- **Estado (2026-11-05):** pasó a plan propio como lo primero que hace una persona
+  nueva: ver `ONBOARDING.md`. Sin construir; sigue su Fase 0, la prueba con Plogy.
+
+### Lo que le falta al onboarding
+- **Qué es:** los 3 caminos de marca con vista previa para quien construye desde cero,
+  Instagram conectado como fuente, confirmar logo,
+  colores y fuentes sobre una lámina de muestra, cron que retome el trabajo si se cae la
+  pasada, y redibujar el post cuando el kit llega tarde.
+- **Por qué esperó:** el 2026-11-05 se priorizó que el recorrido completo funcionara y
+  no inventara nada, para abrir pruebas con gente.
+- **Cuándo:** según lo que se vea en esas pruebas. Lo primero es el cron: hoy el chat no
+  tiene uno, y si una pasada muere nadie la retoma.
+
+### Banco de plantillas por defecto
+- **Qué es:** un agente o un equipo de agentes que genere muchas plantillas para
+  miles de casos: rubros, tipos de marca, estilos, con foto y sin foto. Quedan como
+  defaults, y el generador por marca del onboarding parte de la más cercana en vez
+  de escribirlas desde cero.
+- **Por qué esperó:** pedido el 2026-11-05 junto con las plantillas generadas por
+  marca, que van primero porque de ahí sale el formato y el criterio de calidad.
+- **Cuándo:** después de abrir el onboarding. Bajaría el tiempo de diseño (hoy unos
+  112 s por marca) y el gasto por marca.
+
 ### Carruseles de Plogy como los del visor del kit
 - **Qué es:** que los carruseles de Plogy salgan visualmente como los de
   `PLOGY_Carousel_Agent_Kit\piezas\visor.html`, tal cual: su estética, su
@@ -224,7 +273,8 @@ Al retomar uno, se detalla como bloque antes de construir.
   cierre de comentar) deja la lámina sin plantilla en ese modo.
 - **Por qué esperó:** hoy cada marca sube su kit; las de fábrica son un
   trabajo de diseño aparte.
-- **Cuándo:** antes de abrir Plogy Studio a otras marcas.
+- **Cuándo:** antes de abrir Plogy Studio a otras marcas. **Desde 2026-11-05 es la
+  Fase 1 de `ONBOARDING.md`:** el primer post de una marca nueva sale de aquí.
 
 ### Diseño con inteligencia a pedido desde la ficha
 - **Qué es:** en la ficha, «Regenerar → Con inteligencia» solo redibuja desde
@@ -526,6 +576,9 @@ que costo.
 - **Qué es:** las marcas de Luciano y Juan Francisco como cuentas hijas de Plogy.
   Plan completo en `MARCAS.md`, sin construir.
 - **Cuándo:** después de cerrar el paso 1.
+- **Relación con `ONBOARDING.md` (2026-11-05):** ese plan cubre marcas personales
+  independientes y adelanta dos piezas de aquí: el método del Paso 0 y el Estratega.
+  Las cuentas hijas y su herencia siguen esperando.
 
 ### Biblioteca de skills de plataforma
 - **Qué es:** skills base que las empresas copian y adaptan.

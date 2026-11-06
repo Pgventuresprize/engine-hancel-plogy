@@ -405,6 +405,7 @@ export function PanelPieza(props: {
                   )
                 })}
               </div>
+              <AccionesDePost imagenes={vista.imagenes} caption={vista.caption} hashtags={vista.hashtags} />
               {vista.caption ? (
                 <details className={s.pcaption}>
                   <summary>Texto de la publicación</summary>
@@ -617,5 +618,51 @@ function VersionVieja({ v, marca }: { v: VersionVista; marca: string }) {
         </details>
       ) : null}
     </>
+  )
+}
+
+/** Lo que hace falta para subir el post a mano: las laminas y su texto. */
+function AccionesDePost(props: { imagenes: string[]; caption: string | null; hashtags: string[] }) {
+  const [aviso, setAviso] = React.useState<string | null>(null)
+
+  const descargar = async () => {
+    setAviso("Descargando…")
+    try {
+      for (const [i, url] of props.imagenes.entries()) {
+        const blob = await (await fetch(url)).blob()
+        const enlace = document.createElement("a")
+        enlace.href = URL.createObjectURL(blob)
+        enlace.download = `lamina-${String(i + 1).padStart(2, "0")}.png`
+        enlace.click()
+        URL.revokeObjectURL(enlace.href)
+      }
+      setAviso("Listo")
+    } catch {
+      setAviso("No se pudieron descargar")
+    }
+  }
+
+  const copiar = async () => {
+    const etiquetas = props.hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ")
+    try {
+      await navigator.clipboard.writeText([props.caption ?? "", etiquetas].filter(Boolean).join("\n\n"))
+      setAviso("Texto copiado")
+    } catch {
+      setAviso("No se pudo copiar")
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", margin: "10px 0", fontSize: 13 }}>
+      <button type="button" className={s.pacc} onClick={descargar}>
+        Descargar láminas
+      </button>
+      {props.caption ? (
+        <button type="button" className={s.pacc} onClick={copiar}>
+          Copiar texto
+        </button>
+      ) : null}
+      {aviso ? <span style={{ color: "var(--muted)" }}>{aviso}</span> : null}
+    </div>
   )
 }

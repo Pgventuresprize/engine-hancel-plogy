@@ -222,7 +222,8 @@ export async function maquetar(
   const laminas = automaticas.map((auto, i): LaminaKit => {
     const esCierre = auto.tipo === "cierre"
     const suya = (bruto.laminas ?? []).find((l) => (esCierre ? l.lamina === "cierre" : Number(l.lamina) === i + 1))
-    const p = typeof suya?.plantilla === "string" ? porClave.get(suya.plantilla) : undefined
+    // A veces responde con el tipo ("portada") en vez de la clave ("p1"): significan lo mismo.
+    const p = typeof suya?.plantilla === "string" ? (porClave.get(suya.plantilla) ?? [...porClave.values()].find((x) => x.tipo === suya.plantilla)) : undefined
     if (!suya) return descartar(i, "el maquetador no la devolvió", auto)
     if (!p) return descartar(i, `la plantilla ${String(suya.plantilla)} no existe`, auto)
     if (esCierre !== (p.tipo === "cierre") || (i === 0) !== (p.tipo === "portada"))
