@@ -1,3 +1,4 @@
+import { cuentasSuspendidas } from "../accounts"
 import { ajustesDe, type Agente } from "../agents/settings"
 import { conContexto } from "../claude/contexto"
 import { modeloDe } from "../agents/modelos"
@@ -82,6 +83,8 @@ async function procesarBuzon(
   // una vez por cuenta y no por trabajo: son dos consultas que se repetirian
   // diez veces por pasada sin cambiar de respuesta.
   const puede = new Map<string, boolean>()
+  // Una empresa suspendida no gasta: su trabajo espera en la cola hasta que vuelva.
+  const suspendidas = await cuentasSuspendidas([...new Set(jobs.map((j) => j.account_id))])
   for (const accountId of new Set(jobs.map((j) => j.account_id))) {
     const [ajustes, ajustesCuenta] = await Promise.all([
       ajustesDe(accountId, agent),
@@ -89,7 +92,7 @@ async function procesarBuzon(
     ])
     puede.set(
       accountId,
-      leToca(ajustes, ajustesCuenta.timezone, new Date(), disparo).corre
+      !suspendidas.has(accountId) && leToca(ajustes, ajustesCuenta.timezone, new Date(), disparo).corre
     )
   }
 

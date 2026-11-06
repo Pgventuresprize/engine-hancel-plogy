@@ -12,9 +12,13 @@ import {
 } from "@/app/(acceso)/actions"
 import { EncabezadoAcceso } from "@/components/auth/encabezado"
 import { CampoContrasena } from "@/components/auth/campo-contrasena"
+import { SelectorPais } from "@/components/auth/selector-pais"
+import { VerificacionHumana } from "@/components/auth/verificacion-humana"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { PRIVACIDAD_URL, TERMINOS_URL } from "@/lib/legal"
+import type { Pais } from "@/lib/paises"
 
 /**
  * Los formularios de acceso que no son el login: recuperar la contraseña,
@@ -37,6 +41,56 @@ function Campo({
       {/* Las contraseñas llevan el ojo para verlas, como en el login. */}
       {type === "password" ? <CampoContrasena {...comun} /> : <Input type={type} {...comun} />}
     </div>
+  )
+}
+
+/** El celular va en dos partes: el pais trae el indicativo y el numero va sin el. */
+function CampoCelular({ paises, paisInicial }: { paises: Pais[]; paisInicial: string }) {
+  return (
+    <div className="grid gap-2">
+      <Label htmlFor="telefono">Celular</Label>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <SelectorPais paises={paises} paisInicial={paisInicial} />
+        <Input
+          id="telefono"
+          name="telefono"
+          type="tel"
+          required
+          placeholder="300 000 0000"
+          autoComplete="tel-national"
+          inputMode="tel"
+          maxLength={20}
+          pattern="[\d\s\(\)\-]{4,20}"
+          title="Escribe el número sin el indicativo."
+          className="h-11 bg-white/85"
+        />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * El texto viene de "Aviso y autorizaciones" y prueba la autorizacion ante la
+ * SIC: no se parafrasea. Si cambia, cambia tambien `VERSION_LEGAL`.
+ */
+function CasillaLegal() {
+  const enlace = "text-brand-text underline underline-offset-4"
+  return (
+    <label className="flex items-start gap-2 text-sm">
+      <input type="checkbox" name="acepta" required className="accent-primary mt-0.5 size-4 shrink-0" />
+      <span>
+        Acepto los{" "}
+        <a href={TERMINOS_URL} target="_blank" rel="noopener noreferrer" className={enlace}>
+          Términos y Condiciones
+        </a>{" "}
+        y autorizo el tratamiento de mis datos para prestar el servicio, según la{" "}
+        <a href={PRIVACIDAD_URL} target="_blank" rel="noopener noreferrer" className={enlace}>
+          Política de Tratamiento
+        </a>
+        . Entiendo que mis datos podrán pasar a la sociedad que se constituya para operar Plogy, según la Cláusula 9
+        de la Política.
+      </span>
+    </label>
   )
 }
 
@@ -81,6 +135,7 @@ export function RecuperarForm() {
           Escribe tu correo y te mandamos un enlace para elegir una nueva.
         </EncabezadoAcceso>
         <Campo id="email" etiqueta="Correo" type="email" placeholder="tu@correo.com" autoComplete="email" autoFocus />
+        <VerificacionHumana reinicio={resultado} />
         <Fallo resultado={resultado} />
         <Button type="submit" variant="brand" className="h-12 w-full" disabled={pendiente}>
           {pendiente ? "Mandando…" : "Mandar el enlace"}
@@ -115,7 +170,7 @@ export function ContrasenaForm({ email, primera }: { email: string; primera: boo
   )
 }
 
-export function RegistroForm() {
+export function RegistroForm({ paises, paisInicial }: { paises: Pais[]; paisInicial: string }) {
   const [resultado, enviar, pendiente] = React.useActionState<EnvioResult, FormData>(registrarse, undefined)
   if (resultado && "ok" in resultado) return <Enviado texto={resultado.ok} />
 
@@ -125,10 +180,14 @@ export function RegistroForm() {
         <EncabezadoAcceso titulo="Crea tu cuenta">
           Tu marca empieza en blanco: subes tu kit, conectas tus servicios y los agentes trabajan para ti.
         </EncabezadoAcceso>
-        <Campo id="empresa" etiqueta="Nombre de tu marca" placeholder="Mi marca" autoComplete="organization" minLength={2} autoFocus />
+        <Campo id="nombre" etiqueta="Tu nombre" placeholder="Nombre y apellido" autoComplete="name" minLength={2} maxLength={120} autoFocus />
+        <Campo id="empresa" etiqueta="Nombre de tu marca" placeholder="Mi marca" autoComplete="organization" minLength={2} />
         <Campo id="email" etiqueta="Correo" type="email" placeholder="tu@correo.com" autoComplete="email" />
+        <CampoCelular paises={paises} paisInicial={paisInicial} />
         <Campo id="password" etiqueta="Contraseña" type="password" autoComplete="new-password" minLength={8} placeholder="Mínimo 8 caracteres" />
         <Campo id="repetida" etiqueta="Repítela" type="password" autoComplete="new-password" minLength={8} />
+        <CasillaLegal />
+        <VerificacionHumana reinicio={resultado} />
         <Fallo resultado={resultado} />
         <Button type="submit" variant="brand" className="h-12 w-full" disabled={pendiente}>
           {pendiente ? "Creando…" : "Crear cuenta"}

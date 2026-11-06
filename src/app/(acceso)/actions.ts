@@ -3,9 +3,13 @@
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 
+import { registroAbiertoPlataforma } from "@/engine/admin/ajustes"
 import { asegurarEmpresaPropia } from "@/engine/empresas"
 import { authClient, usuarioActual } from "@/lib/supabase/auth"
+import { VERSION_LEGAL } from "@/lib/legal"
+import { celularInternacional } from "@/lib/paises"
 import { origenDeLaPeticion } from "@/lib/supabase/origen"
+import { CAPTCHA_FALLO, pasoElCaptcha } from "@/lib/turnstile"
 
 /**
  * Entrar, salir, registrarse y recuperar la contraseña.
@@ -45,6 +49,7 @@ export async function iniciarSesion(_previo: LoginResult, form: FormData): Promi
   if (!email || !password) {
     return { error: "Escribe el correo y la contraseña." }
   }
+  if (!(await pasoElCaptcha(form))) return { error: CAPTCHA_FALLO }
 
   const supabase = await authClient()
   const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -52,6 +57,7 @@ export async function iniciarSesion(_previo: LoginResult, form: FormData): Promi
   if (error) {
     // El motivo real no se enseña (ver arriba). Los casos que si sirven de
     // algo se traducen.
+    if (error.code === "user_banned") return { error: "Esta cuenta está bloqueada. Escríbenos si crees que es un error." }
     if (error.code === "email_not_confirmed") {
       return { error: "Todavía no confirmaste tu correo: abre el enlace que te mandamos.", sinConfirmar: true }
     }
@@ -80,6 +86,7 @@ export async function cerrarSesion(): Promise<void> {
 export async function reenviarConfirmacion(_previo: EnvioResult, form: FormData): Promise<EnvioResult> {
   const email = String(form.get("email") ?? "").trim().toLowerCase()
   if (!CORREO.test(email)) return { error: "Escribe tu correo." }
+  if (!(await pasoElCaptcha(form))) return { error: CAPTCHA_FALLO }
 
   const supabase = await authClient()
   const { error } = await supabase.auth.resend({ type: "signup", email, options: { emailRedirectTo: await volverA() } })
@@ -91,6 +98,7 @@ export async function reenviarConfirmacion(_previo: EnvioResult, form: FormData)
 export async function pedirRecuperacion(_previo: EnvioResult, form: FormData): Promise<EnvioResult> {
   const email = String(form.get("email") ?? "").trim().toLowerCase()
   if (!CORREO.test(email)) return { error: "Ese correo no es válido." }
+  if (!(await pasoElCaptcha(form))) return { error: CAPTCHA_FALLO }
 
   const supabase = await authClient()
   const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: await volverA() })
@@ -129,9 +137,9 @@ export async function guardarContrasena(_previo: EnvioResult, form: FormData): P
   redirect("/")
 }
 
-/** Si el registro esta cerrado (`REGISTRO_ABIERTO=no`), solo se entra por invitacion. */
+/** Si el registro esta cerrado, solo se entra por invitacion. Se decide en /admin/accesos. */
 export async function registroAbierto(): Promise<boolean> {
-  return (process.env.REGISTRO_ABIERTO ?? "si").trim().toLowerCase() !== "no"
+  return registroAbiertoPlataforma()
 }
 
 /**
@@ -139,26 +147,43 @@ export async function registroAbierto(): Promise<boolean> {
  *
  * La empresa no se crea aqui sino al confirmar el correo (`/auth/confirm`):
  * hasta entonces nadie sabe si el correo es de quien lo escribio. Su nombre
- * espera en `user_metadata`.
+ * espera en `user_metadata`, junto al celular de contacto. No va en el campo
+ * `phone` de Supabase: ese es para entrar por SMS. El nombre de la persona va
+ * en `full_name`, que es donde lo busca `nombreDe`. `aceptacion` es la prueba de
+ * lo que acepto: se arma aqui, nunca con lo que mande el navegador.
  */
 export async function registrarse(_previo: EnvioResult, form: FormData): Promise<EnvioResult> {
   if (!(await registroAbierto())) return { error: "Por ahora solo se entra por invitación." }
 
+  const nombre = String(form.get("nombre") ?? "").trim()
   const empresa = String(form.get("empresa") ?? "").trim()
   const email = String(form.get("email") ?? "").trim().toLowerCase()
+  const pais = String(form.get("pais") ?? "")
+  const telefono = celularInternacional(pais, String(form.get("telefono") ?? ""))
   const password = String(form.get("password") ?? "")
   const repetida = String(form.get("repetida") ?? "")
 
+  if (nombre.length < 2 || nombre.length > 120) return { error: "Escribe tu nombre." }
   if (empresa.length < 2) return { error: "Ponle un nombre a tu marca." }
   if (!CORREO.test(email)) return { error: "Ese correo no es válido." }
+  if (!pais) return { error: "Elige el país de tu celular." }
+  if (!telefono) return { error: "Ese celular no es válido para el país que elegiste." }
   if (password.length < MINIMO) return { error: `La contraseña tiene que tener al menos ${MINIMO} caracteres.` }
   if (password !== repetida) return { error: "Las dos contraseñas no coinciden." }
+  if (form.get("acepta") !== "on") return { error: "Para crear la cuenta debes aceptar los términos y la política de tratamiento." }
+  if (!(await pasoElCaptcha(form))) return { error: CAPTCHA_FALLO }
 
   const supabase = await authClient()
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { emailRedirectTo: await volverA(), data: { empresa } },
+    options: { emailRedirectTo: await volverA(), data: {
+        full_name: nombre,
+        empresa,
+        telefono,
+        aceptacion: { fecha: new Date().toISOString(), formulario: "registro-studio", version: VERSION_LEGAL },
+      },
+    },
   })
   if (error) {
     if (error.code === "weak_password") return { error: "Esa contraseña es demasiado fácil de adivinar: usa una más larga o con más variedad." }

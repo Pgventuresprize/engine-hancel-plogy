@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache"
 import { supabaseAdmin } from "@/engine/supabase-admin"
 import { crearVideo, escribirGuion } from "@/engine/videos/guion"
 import { exportarVideo, idDeDisenoCanva } from "@/engine/videos/publicar"
-import { idDeCuentaActual } from "@/lib/accounts"
+import { idDeCuentaAdvance } from "@/lib/accounts"
 
 /**
  * Las acciones de Video studio. Todas se acotan a la cuenta abierta: el id del
@@ -24,7 +24,7 @@ const fallo = (error: unknown): ResultadoVideo => {
 }
 
 async function videoDeLaCuenta(id: string) {
-  const accountId = await idDeCuentaActual()
+  const accountId = await idDeCuentaAdvance()
   const { data } = await supabaseAdmin()
     .from("video_items")
     .select("id, status, cartridge_id, export_status")
@@ -37,7 +37,7 @@ async function videoDeLaCuenta(id: string) {
 /** El agente toma una idea segun la configuracion y escribe su guion. */
 export async function generarGuionAhora(): Promise<ResultadoVideo> {
   try {
-    const r = await crearVideo(await idDeCuentaActual())
+    const r = await crearVideo(await idDeCuentaAdvance())
     if (!r.ok) return fallo(r.error)
     return r.guion ? listo("Guion listo en Escenas.") : fallo(`Se tomó la idea pero el guion falló: ${r.error}`)
   } catch (e) {
@@ -160,7 +160,7 @@ export async function guardarAjustesVideo(c: CamposVideo): Promise<ResultadoVide
       .from("video_settings")
       .upsert(
         {
-          account_id: await idDeCuentaActual(),
+          account_id: await idDeCuentaAdvance(),
           modo: c.modo,
           horas,
           pillar_id: c.pillarId || null,

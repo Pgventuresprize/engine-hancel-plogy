@@ -17,7 +17,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { BotIcon, CalendarDaysIcon, ChefHatIcon, MessageSquareIcon, ClapperboardIcon, FileTextIcon, FingerprintIcon, GalleryHorizontalEndIcon, KanbanIcon, LayersIcon, LightbulbIcon, SendIcon, SettingsIcon } from "lucide-react"
+import { BotIcon, CalendarDaysIcon, ChefHatIcon, MessageSquareIcon, ClapperboardIcon, FileTextIcon, FingerprintIcon, GalleryHorizontalEndIcon, KanbanIcon, LayersIcon, LightbulbIcon, SendIcon, SettingsIcon, ShieldCheckIcon } from "lucide-react"
 
 import { AGENTES } from "@/lib/agentes-catalogo"
 
@@ -25,11 +25,14 @@ export function AppSidebar({
   email,
   cuentas,
   cuenta,
+  esAdmin = false,
   ...props
 }: {
   email: string
   cuentas: Cuenta[]
   cuenta: Cuenta
+  /** Solo para quien esta en `platform_admins`; a los demas ni se les anuncia. */
+  esAdmin?: boolean
 } & React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
   // El estudio, la publicacion y los videos son del plan advance; una empresa
@@ -173,6 +176,7 @@ export function AppSidebar({
   ]
   const SOLO_ADVANCE = ["/calendario", "/capas", "/ideas", "/estudio/pilares", "/recetas", "/publicacion", "/videos"]
   const navMain = todo.filter((item) => advance || !SOLO_ADVANCE.includes(item.url))
+  if (esAdmin) navMain.push({ title: "Administración", url: "/admin", icon: <ShieldCheckIcon />, isActive: false, items: [] })
 
   return (
     <Sidebar variant="inset" {...props}>
